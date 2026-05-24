@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import api from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function SetPassword() {
   const navigate = useNavigate();
+  const { refetch } = useAuth();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') || '';
 
@@ -45,6 +47,7 @@ export default function SetPassword() {
     setLoading(true);
     try {
       await api.post('/auth/set-password', { token, password });
+      await refetch();
       navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || 'Something went wrong. Please try again.');
