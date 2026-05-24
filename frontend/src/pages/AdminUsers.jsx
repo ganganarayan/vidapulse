@@ -1,0 +1,510 @@
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import api from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
+
+/**
+ * AdminUsers — /admin/users
+ *
+ * Paginated list of all subscriber accounts.
+ * Admins can:
+ *   - Search by name or email
+ *   - Click "Enter Account" to start an impersonation session
+ *   - View the impersonation audit log
+ *
+ * Impersonation flow:
+ *   1. Admin clicks "Enter Account" → confirmation modal opens
+ *   2. Admin enters a reason (required) and confirms
+ *   3. POST /api/admin/impersonate/:userId → backend returns impersonation JWT
+ *   4. startImpersonation(token, targetUser) stores token + loads subscriber data
+ *   5. Window navigates to /dashboard (now viewed as the subscriber)
+ *   6. ImpersonationBanner shows at top of every page
+ */
+
+const PLAN_COLORS = {
+  free          : 'bg-gray-600 text-gray-200',
+  starter       : 'bg-blue-700 text-blue-100',
+  pro           : 'bg-amber-600 text-amber-100',
+  admin_lifetime: 'bg-purple-700 text-purple-100',
+};
+
+function PlanChip({ plan }) {
+  const cls = PLAN_COLORS[plan] ?? 'bg-gray-600 text-gray-200';
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wide ${cls}`}>
+      {plan?.replace('_', ' ') ?? '—'}
+    </span>
+  );
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatRelative(iso) {
+  if (!iso) return 'Never';
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)   return 'Just now';
+  if (mins < 60)  return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)   return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30)  return `${days}d ago`;
+  return formatDate(iso);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Confirmation modal — shown before starting an impersonation session
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ImpersonateModal({ targetUser, onConfirm, onCancel, loading }) {
+  const [reason, setReason] = useState('');
+  const reasonRef = useRef(null);
+
+  useEffect(() => {
+    setTimeout(() => reasonRef.current?.focus(), 50);
+  }, []);
+
+  const valid = reason.trim().length >= 3;
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (!valid || loading) return;
+    onConfirm(reason.trim());
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+      onClick={e => { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div className="bg-gray-800 border border-gray-700 rounded-xl w-full max-w-md shadow-2xl">
+
+        {/* Header */}
+        <div className="flex items-start justify-between p-6 pb-4">
+          <div>
+            <h2 className="text-lg font-bold text-white">Enter Account</h2>
+            <p className="text-gray-400 text-sm mt-1">
+              You are about to view VidaPulse as this user. All actions will be logged.
+            </p>
+          </div>
+          <button
+            onClick={onCancel}
+            className="text-gray-500 hover:text-gray-300 ml-4 flex-shrink-0"
+            aria-label="Close"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Target user card */}
+        <div className="mx-6 mb-4 p-3 bg-gray-700/60 border border-gray-600 rounded-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-amber-600 flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-bold text-sm">
+                {(targetUser.name || targetUser.email || '?')[0].toUpperCase()}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-white font-medium text-sm truncate">
+                {targetUser.name || '(no name)'}
+              </p>
+              <p className="text-gray-400 text-xs truncate">{targetUser.email}</p>
+            </div>
+            <div className="ml-auto flex-shrink-0">
+              <PlanChip plan={targetUser.plan} />
+            </div>
+          </div>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="px-6 pb-6">
+          <label className="block text-sm text-gray-300 mb-1.5">
+            Reason <span className="text-red-400">*</span>
+            <span className="text-gray-500 ml-1 font-normal">(required for audit log)</span>
+          </label>
+          <textarea
+            ref={reasonRef}
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder="e.g. Customer support request #12345 — user cannot see their analytics"
+            rows={3}
+            maxLength={500}
+            className="
+              w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2
+              text-white text-sm placeholder-gray-500
+              focus:outline-none focus:border-amber-500
+              resize-none
+            "
+          />
+          <p className="text-gray-500 text-xs mt-1 text-right">{reason.length}/500</p>
+
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={loading}
+              className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-gray-300 border border-gray-600 hover:border-gray-400 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!valid || loading}
+              className="
+                flex-1 px-4 py-2 rounded-lg text-sm font-semibold
+                bg-red-600 text-white hover:bg-red-500
+                disabled:opacity-50 disabled:cursor-not-allowed
+                transition-colors flex items-center justify-center gap-2
+              "
+            >
+              {loading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Entering…
+                </>
+              ) : (
+                'Enter Account'
+              )}
+            </button>
+          </div>
+
+          {/* Security note */}
+          <p className="mt-3 text-xs text-gray-500 text-center">
+            This session will expire in 2 hours and will be visible to the account owner.
+          </p>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main page
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function AdminUsers() {
+  const navigate            = useNavigate();
+  const [searchParams]      = useSearchParams();
+  const { startImpersonation } = useAuth();
+
+  const [users,       setUsers]       = useState([]);
+  const [pagination,  setPagination]  = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [fetchError,  setFetchError]  = useState('');
+  const [search,      setSearch]      = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [page,        setPage]        = useState(1);
+
+  // Impersonation modal state
+  const [modalUser,       setModalUser]       = useState(null);   // target user row
+  const [modalLoading,    setModalLoading]    = useState(false);
+  const [modalError,      setModalError]      = useState('');
+
+  // "Session expired" notice from api.js redirect param
+  const [expiredNotice, setExpiredNotice] = useState(
+    searchParams.get('impersonation_expired') === '1'
+  );
+
+  // ── Load users ──────────────────────────────────────────────────────────
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    setFetchError('');
+    try {
+      const params = new URLSearchParams({ page, limit: 25 });
+      if (search) params.set('search', search);
+      const { data } = await api.get(`/admin/users?${params}`);
+      setUsers(data.users);
+      setPagination(data.pagination);
+    } catch (err) {
+      setFetchError(err.response?.data?.message ?? 'Failed to load users');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, search]);
+
+  useEffect(() => { loadUsers(); }, [loadUsers]);
+
+  // Search with debounce
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setPage(1);
+      setSearch(searchInput);
+    }, 300);
+    return () => clearTimeout(id);
+  }, [searchInput]);
+
+  // ── Impersonation ───────────────────────────────────────────────────────
+
+  async function handleConfirmImpersonate(reason) {
+    if (!modalUser) return;
+    setModalLoading(true);
+    setModalError('');
+    try {
+      const { data } = await api.post(`/admin/impersonate/${modalUser.id}`, { reason });
+      // Store token + set context state
+      await startImpersonation(data.impersonation_token, data.target_user);
+      // Navigate into the subscriber's dashboard
+      window.location.href = '/dashboard';
+    } catch (err) {
+      setModalError(err.response?.data?.message ?? 'Failed to start impersonation session');
+      setModalLoading(false);
+    }
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white">
+
+      {/* Top nav */}
+      <header className="border-b border-gray-800 bg-gray-900/95 backdrop-blur-sm sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="text-gray-400 hover:text-white transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            </button>
+            <span className="text-amber-500 text-xl font-bold">▶</span>
+            <span className="text-white font-semibold">VidaPulse</span>
+            <span className="text-gray-600 mx-1">/</span>
+            <span className="text-gray-300">User Accounts</span>
+          </div>
+          <nav className="flex items-center gap-2 text-sm">
+            <button
+              onClick={() => navigate('/admin/onboarding')}
+              className="px-3 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            >
+              Onboarding
+            </button>
+            <button
+              onClick={() => navigate('/admin/webhook')}
+              className="px-3 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            >
+              Webhooks
+            </button>
+          </nav>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+
+        {/* Impersonation expired notice */}
+        {expiredNotice && (
+          <div className="mb-6 flex items-start gap-3 px-4 py-3 bg-amber-900/30 border border-amber-700/50 rounded-lg">
+            <svg className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            <div className="flex-1">
+              <p className="text-amber-300 font-medium text-sm">Impersonation session expired</p>
+              <p className="text-amber-400/70 text-xs mt-0.5">Your 2-hour session timed out. You've been returned to your admin account.</p>
+            </div>
+            <button
+              onClick={() => setExpiredNotice(false)}
+              className="text-amber-500 hover:text-amber-300 flex-shrink-0"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Page header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-white">User Accounts</h1>
+          <p className="text-gray-400 text-sm mt-1">
+            Enter any account for customer support. All access is logged and visible to the account owner.
+          </p>
+        </div>
+
+        {/* Toolbar */}
+        <div className="flex items-center gap-3 mb-5">
+          <div className="relative flex-1 max-w-sm">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder="Search by name or email…"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+          {pagination && (
+            <span className="text-gray-400 text-sm">
+              {pagination.total.toLocaleString()} user{pagination.total !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+
+        {/* Error state */}
+        {fetchError && (
+          <div className="p-4 bg-red-900/30 border border-red-700/50 rounded-lg text-red-300 text-sm mb-6">
+            {fetchError}
+          </div>
+        )}
+
+        {/* Table */}
+        <div className="bg-gray-800/50 border border-gray-700 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left font-medium">User</th>
+                  <th className="px-4 py-3 text-left font-medium">Plan</th>
+                  <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">Videos</th>
+                  <th className="px-4 py-3 text-left font-medium hidden md:table-cell">Joined</th>
+                  <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Last seen</th>
+                  <th className="px-4 py-3 text-right font-medium">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700/50">
+                {loading ? (
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <tr key={i} className="animate-pulse">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-gray-700" />
+                          <div className="space-y-1.5">
+                            <div className="h-3 w-28 bg-gray-700 rounded" />
+                            <div className="h-2.5 w-36 bg-gray-700 rounded" />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3"><div className="h-5 w-14 bg-gray-700 rounded" /></td>
+                      <td className="px-4 py-3 hidden sm:table-cell"><div className="h-3 w-6 bg-gray-700 rounded" /></td>
+                      <td className="px-4 py-3 hidden md:table-cell"><div className="h-3 w-20 bg-gray-700 rounded" /></td>
+                      <td className="px-4 py-3 hidden lg:table-cell"><div className="h-3 w-16 bg-gray-700 rounded" /></td>
+                      <td className="px-4 py-3"><div className="h-7 w-24 bg-gray-700 rounded ml-auto" /></td>
+                    </tr>
+                  ))
+                ) : users.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                      {search ? 'No users match your search.' : 'No users found.'}
+                    </td>
+                  </tr>
+                ) : (
+                  users.map(user => (
+                    <tr key={user.id} className="hover:bg-gray-700/30 transition-colors">
+                      {/* User */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center flex-shrink-0">
+                            <span className="text-gray-200 text-xs font-bold">
+                              {(user.name || user.email || '?')[0].toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-white font-medium truncate">
+                              {user.name || <span className="text-gray-500 italic">No name</span>}
+                            </p>
+                            <p className="text-gray-400 text-xs truncate">{user.email}</p>
+                          </div>
+                          {!user.is_active && (
+                            <span className="ml-1 px-1.5 py-0.5 bg-red-900/60 text-red-400 text-xs rounded">
+                              Deactivated
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Plan */}
+                      <td className="px-4 py-3">
+                        <PlanChip plan={user.plan} />
+                      </td>
+
+                      {/* Videos */}
+                      <td className="px-4 py-3 hidden sm:table-cell text-gray-300">
+                        {user.video_count}
+                      </td>
+
+                      {/* Joined */}
+                      <td className="px-4 py-3 hidden md:table-cell text-gray-400 text-xs">
+                        {formatDate(user.created_at)}
+                      </td>
+
+                      {/* Last seen */}
+                      <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">
+                        {formatRelative(user.last_seen_at)}
+                      </td>
+
+                      {/* Action */}
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => { setModalUser(user); setModalError(''); }}
+                          disabled={!user.is_active}
+                          className="
+                            px-3 py-1.5 rounded-lg text-xs font-semibold
+                            border border-gray-600 text-gray-300
+                            hover:border-red-500 hover:text-red-400 hover:bg-red-900/20
+                            disabled:opacity-40 disabled:cursor-not-allowed
+                            transition-all duration-150
+                          "
+                        >
+                          Enter Account
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {pagination && pagination.total_pages > 1 && (
+            <div className="px-4 py-3 border-t border-gray-700 flex items-center justify-between text-sm">
+              <span className="text-gray-400">
+                Page {pagination.page} of {pagination.total_pages}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage(p => p - 1)}
+                  disabled={!pagination.has_prev || loading}
+                  className="px-3 py-1.5 rounded-lg border border-gray-600 text-gray-300 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  ← Prev
+                </button>
+                <button
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={!pagination.has_next || loading}
+                  className="px-3 py-1.5 rounded-lg border border-gray-600 text-gray-300 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Modal error (displayed inside the table area if modal is closed but there was an error) */}
+        {modalError && !modalUser && (
+          <p className="mt-3 text-red-400 text-sm">{modalError}</p>
+        )}
+      </main>
+
+      {/* Impersonation confirmation modal */}
+      {modalUser && (
+        <ImpersonateModal
+          targetUser={modalUser}
+          onConfirm={handleConfirmImpersonate}
+          onCancel={() => { setModalUser(null); setModalError(''); setModalLoading(false); }}
+          loading={modalLoading}
+          error={modalError}
+        />
+      )}
+    </div>
+  );
+}

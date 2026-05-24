@@ -1,0 +1,75 @@
+# VidaPulse
+
+> Video analytics platform for coaches, course creators, educators, and digital marketers who use video to drive engagement, sales, or learning.
+
+VidaPulse lets you track viewer engagement on any video without re-hosting it. Paste a YouTube, Amazon S3, Google Drive, Dropbox, Loom, Zoom, or direct MP4/HLS link — VidaPulse wraps it with an analytics player and delivers second-level heatmaps, unique viewer tracking, UTM attribution, device and geographic breakdowns, and a one-line embed script you drop onto any webpage.
+
+## Core capabilities
+
+- **Engagement heatmaps**: second-by-second view of which parts viewers watch, skip, or replay. Distinguishes first-time watches from replays.
+- **Unique viewer tracking**: persistent viewer IDs across browser sessions using localStorage UUIDs — no PII collected, no cookies set by the tracker.
+- **Multi-platform video support**: YouTube, Amazon S3, Google Drive, Azure Blob Storage, Dropbox, OneDrive, Loom, Zoom recordings, direct MP4 links, HLS streams.
+- **Custom embed**: one `<script>` tag works on any website, CMS, or landing page builder (Kajabi, Thinkific, ClickFunnels, WordPress, Webflow, custom HTML).
+- **UTM and source tracking**: automatically captures utm_source, utm_medium, utm_campaign, utm_term, utm_content, and document.referrer for every viewer session.
+- **Geographic and device insights**: country, city, browser, OS, screen resolution — no third-party geolocation service required.
+- **Viewer-level analytics**: individual viewer session history, watch patterns, and session count (Pro plan).
+- **Audience segmentation and conversion tracking** (Pro plan).
+- **Domain security controls**: restrict embed playback to authorised domains only.
+- **Custom player controls**: enable or disable seek bar, speed controls, mute button, autoplay, click-to-play — per video.
+
+## Pricing
+
+- **Free forever**: 1 video. Total plays, play rate, unique visitors, domain tracking. No credit card. No expiry.
+- **Starter — $10/month**: up to 10 videos. All Free features plus geographic data, device and browser breakdown, average time watched.
+- **Pro — $19/month**: unlimited videos. All Starter features plus second-level engagement heatmaps, viewer-level analytics, audience segmentation, conversion tracking, events, reports, alerts, priority support.
+
+## Target users
+
+- **Online coaches** running video sales letters (VSLs), webinar replays, and course preview videos
+- **Course creators** on Kajabi, Thinkific, Teachable, Podia, or custom platforms
+- **Educators** delivering video lessons, onboarding videos, or recorded training
+- **Digital marketers** running video-based sales funnels and ad campaigns
+- **B2B sales teams** using personalised video demos and follow-up videos
+
+## How it works
+
+1. Paste any supported video URL into the VidaPulse dashboard
+2. Copy the generated `<script>` embed tag
+3. Paste the tag onto any webpage that shows the video
+4. All viewer interactions (play, pause, seek, rewatch, exit) are captured and flow into the VidaPulse dashboard in real time
+
+No video migration, no storage costs, no platform lock-in.
+
+## Technical summary
+
+- Backend: Node.js / Express on Railway.app, PostgreSQL database
+- Analytics ingestion: public CORS-enabled API endpoint, responds before DB work for sendBeacon support
+- Viewer identification: UUID in localStorage — no PII, no cookies set by the tracker script
+- Embed tracker: vanilla JavaScript (no dependencies), ~5 KB, works with native `<video>` elements, YouTube IFrame API, and Vimeo postMessage
+- Heatmap storage: second-bucket aggregation, batch upsert via PostgreSQL UNNEST
+- All data stored on VidaPulse's own infrastructure — not shared with third parties
+
+## Key pages
+
+- Landing page: https://vidapulse.in/
+- App login: https://app.vidapulse.in/login
+- Pricing: https://vidapulse.in/#pricing
+- Features: https://vidapulse.in/#features
+- Support: support@vidapulse.in
+
+## Frequently asked questions
+
+**What is VidaPulse?**
+VidaPulse is a video analytics SaaS that tracks viewer engagement — heatmaps, session data, viewer identity, UTM attribution — on any video hosted anywhere. You don't move your video. You add a script tag and analytics begins.
+
+**Does VidaPulse host videos?**
+No. VidaPulse never stores your video files. Your video stays on YouTube, S3, Google Drive, or wherever it already lives. VidaPulse only collects viewer interaction events.
+
+**Is the free plan really free forever?**
+Yes. The free plan has no trial period and no expiry date. It supports 1 video with basic analytics indefinitely.
+
+**How is VidaPulse different from YouTube Analytics?**
+YouTube Analytics only works for videos uploaded to YouTube and only shows aggregate data. VidaPulse works with any video source, shows second-level engagement heatmaps, identifies individual viewers across sessions, tracks UTM parameters, and embeds on your own website rather than sending viewers to YouTube.
+
+**Who owns the viewer data?**
+You do. VidaPulse stores viewer analytics data in your account. Data is not sold or shared with third parties. The embed tracker collects no personally identifiable information.

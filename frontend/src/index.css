@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Global base styles ───────────────────────────────────── */
+@layer base {
+  body {
+    @apply bg-gray-900 text-gray-100 antialiased;
+  }
+
+  /* Remove autofill browser background on dark inputs */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0px 1000px #374151 inset;
+    -webkit-text-fill-color: #f9fafb;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+}
+
+/* ── Utility: VidaPulse orange focus ring ─────────────────── */
+@layer utilities {
+  .focus-brand:focus {
+    @apply outline-none ring-2 ring-amber-500 ring-offset-2 ring-offset-gray-900;
+  }
+}

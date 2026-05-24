@@ -1,0 +1,311 @@
+'use strict';
+
+/**
+ * User routes — /api/user/*
+ *
+ * Module 6 endpoints: presence heartbeat, in-app notifications, preferences.
+ *
+ *   POST /api/user/heartbeat            — set is_online=TRUE, update last_seen_at
+ *   GET  /api/user/notifications        — unread in_app_notifications (limit 20)
+ *   PUT  /api/user/notifications/:id/read — mark one notification read
+ *   PUT  /api/user/notifications/read-all — mark all unread notifications read
+ *   PUT  /api/user/preferences          — update user preferences (insight_emails_enabled etc.)
+ */
+
+const express      = require('express');
+const { z }        = require('zod');
+const router       = express.Router();
+const { pool }     = require('../config/database');
+const logger       = require('../config/logger');
+const { requireAuth } = require('../middleware/requireAuth');
+
+// ─────────────────────────────────────────────────────────────────────────
+// GET /api/user/me
+//
+// Returns the authenticated user's full profile.
+// Called by the frontend AuthProvider on app load to hydrate user context.
+//
+// Includes: plan details, video count, onboarding state, preferences.
+// Uses req.user.id from requireAuth (fresh DB lookup already done).
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get('/me', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+          u.id,
+          u.email,
+          u.name,
+          u.role,
+          u.onboarding_completed,
+          u.wow_moment_seen,
+          u.first_video_id,
+          u.created_at,
+          p.name          AS plan,
+          p.video_limit,
+          p.display_name  AS plan_display_name,
+          (
+            SELECT COUNT(*)
+            FROM   videos v
+            WHERE  v.user_id   = u.id
+              AND  v.is_active = TRUE
+          )               AS video_count,
+          up.theme,
+          up.timezone,
+          up.email_notifications,
+          up.insight_emails_enabled
+       FROM   users u
+       LEFT   JOIN plans           p  ON p.id  = u.plan_id
+       LEFT   JOIN user_preferences up ON up.user_id = u.id
+       WHERE  u.id = $1`,
+      [req.user.id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const u = rows[0];
+    return res.json({
+      user: {
+        id                  : u.id,
+        email               : u.email,
+        name                : u.name,
+        role                : u.role,
+        plan                : u.plan,
+        plan_display_name   : u.plan_display_name,
+        video_limit         : u.video_limit,
+        video_count         : parseInt(u.video_count, 10),
+        onboarding_completed: u.onboarding_completed,
+        wow_moment_seen     : u.wow_moment_seen,
+        first_video_id      : u.first_video_id,
+        created_at          : u.created_at,
+        preferences         : {
+          theme                  : u.theme,
+          timezone               : u.timezone,
+          email_notifications    : u.email_notifications,
+          insight_emails_enabled : u.insight_emails_enabled,
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// POST /api/user/heartbeat
+//
+// Called by the frontend every 30 seconds while the user has a tab open.
+// MUST respond in < 50ms — DB update is fire-and-forget (non-blocking).
+//
+// Sets: users.is_online = TRUE, last_seen_at = NOW(), last_seen_screen
+// The online_cleanup job (every 3 min) clears is_online for idle users.
+//
+// Body (optional): { screen: 'dashboard' | 'video_analytics' | 'settings' | ... }
+// ─────────────────────────────────────────────────────────────────────────
+
+router.post('/heartbeat', requireAuth, (req, res) => {
+  // Respond immediately — DO NOT await the DB update
+  res.json({ ok: true });
+
+  // Fire-and-forget presence update
+  const screen = typeof req.body?.screen === 'string'
+    ? req.body.screen.slice(0, 100)
+    : null;
+
+  pool.query(
+    `UPDATE users
+     SET is_online        = TRUE,
+         last_seen_at     = NOW(),
+         last_seen_screen = $1,
+         updated_at       = NOW()
+     WHERE id = $2`,
+    [screen, req.user.id]
+  ).catch(err => logger.error(`[user/heartbeat] DB update failed for user ${req.user.id}: ${err.message}`));
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// GET /api/user/notifications
+//
+// Returns up to 20 unread in_app_notifications for the authenticated user,
+// newest first. The frontend notification bell polls this every 30 seconds.
+//
+// Response:
+//   {
+//     notifications: [ { id, video_id, insight_type, template_key, headline,
+//                         dashboard_url, teaser_variable_1, teaser_variable_2,
+//                         created_at } ],
+//     unread_count: number
+//   }
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get('/notifications', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id,
+              video_id,
+              insight_type,
+              template_key,
+              headline,
+              dashboard_url,
+              teaser_variable_1,
+              teaser_variable_2,
+              created_at
+       FROM   in_app_notifications
+       WHERE  user_id  = $1
+         AND  is_read  = FALSE
+       ORDER  BY created_at DESC
+       LIMIT  20`,
+      [req.user.id]
+    );
+
+    return res.json({
+      notifications: rows,
+      unread_count : rows.length,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// PUT /api/user/notifications/:id/read
+//
+// Marks a single notification as read. The frontend calls this when the user
+// clicks a notification in the slide-out panel.
+// Silently succeeds even if the notification doesn't belong to the user
+// (no information leak — 200 either way).
+// ─────────────────────────────────────────────────────────────────────────
+
+router.put('/notifications/:id/read', requireAuth, async (req, res, next) => {
+  try {
+    const notifId = parseInt(req.params.id, 10);
+    if (isNaN(notifId)) {
+      return res.status(400).json({ error: 'Invalid notification ID' });
+    }
+
+    await pool.query(
+      `UPDATE in_app_notifications
+       SET is_read = TRUE, read_at = NOW()
+       WHERE id = $1 AND user_id = $2`,
+      [notifId, req.user.id]
+    );
+
+    return res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// PUT /api/user/notifications/read-all
+//
+// Marks ALL unread notifications for the user as read.
+// Called when the user opens the notification panel.
+// ─────────────────────────────────────────────────────────────────────────
+
+router.put('/notifications/read-all', requireAuth, async (req, res, next) => {
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE in_app_notifications
+       SET is_read = TRUE, read_at = NOW()
+       WHERE user_id = $1 AND is_read = FALSE`,
+      [req.user.id]
+    );
+
+    return res.json({ ok: true, marked_read: rowCount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// PUT /api/user/preferences
+//
+// Updates user preferences. Currently supports:
+//   insight_emails_enabled — toggle whether divineleads sends insight emails
+//   theme                  — 'dark' | 'light'
+//   timezone               — IANA timezone string
+//   email_notifications    — boolean (general notification toggle)
+//
+// Only fields present in the request body are updated (partial update).
+// Returns the full updated preferences object.
+// ─────────────────────────────────────────────────────────────────────────
+
+const preferencesSchema = z.object({
+  insight_emails_enabled: z.boolean().optional(),
+  theme                 : z.enum(['dark', 'light']).optional(),
+  timezone              : z.string().max(100).optional(),
+  email_notifications   : z.boolean().optional(),
+}).strict();
+
+router.put('/preferences', requireAuth, async (req, res, next) => {
+  try {
+    const parseResult = preferencesSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error  : 'Validation failed',
+        fields : parseResult.error.flatten().fieldErrors,
+      });
+    }
+
+    const updates = parseResult.data;
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        error  : 'No fields to update',
+        message: 'Provide at least one preference field',
+      });
+    }
+
+    // Build dynamic SET clause — only update fields provided
+    const setClauses = [];
+    const values     = [];
+    let   paramIdx   = 1;
+
+    if (typeof updates.insight_emails_enabled !== 'undefined') {
+      setClauses.push(`insight_emails_enabled = $${paramIdx++}`);
+      values.push(updates.insight_emails_enabled);
+    }
+    if (typeof updates.theme !== 'undefined') {
+      setClauses.push(`theme = $${paramIdx++}`);
+      values.push(updates.theme);
+    }
+    if (typeof updates.timezone !== 'undefined') {
+      setClauses.push(`timezone = $${paramIdx++}`);
+      values.push(updates.timezone);
+    }
+    if (typeof updates.email_notifications !== 'undefined') {
+      setClauses.push(`email_notifications = $${paramIdx++}`);
+      values.push(updates.email_notifications);
+    }
+
+    setClauses.push(`updated_at = NOW()`);
+    values.push(req.user.id);  // for WHERE user_id = $N
+
+    await pool.query(
+      `UPDATE user_preferences
+       SET ${setClauses.join(', ')}
+       WHERE user_id = $${paramIdx}`,
+      values
+    );
+
+    // Return full updated preferences
+    const { rows: [prefs] } = await pool.query(
+      `SELECT insight_emails_enabled,
+              theme,
+              timezone,
+              email_notifications
+       FROM   user_preferences
+       WHERE  user_id = $1`,
+      [req.user.id]
+    );
+
+    logger.debug(`[user/preferences] Updated for user ${req.user.id}: ${JSON.stringify(updates)}`);
+    return res.json({ preferences: prefs });
+  } catch (err) {
+    next(err);
+  }
+});
+
+module.exports = router;

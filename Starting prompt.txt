@@ -1,0 +1,97 @@
+"Build VidaPulse from scratch — a video analytics SaaS for coaches, creators and educators. Tech stack: React frontend, Node.js backend, PostgreSQL database via Supabase, deployable on Bolt.new.
+
+
+
+Core features to build:
+
+
+
+1. Video URL resolver — accepts Google Drive, YouTube, Dropbox, HLS, direct MP4, OneDrive links, zoom recording shared links, loom video shared links, any 3rd party cloud storage video file share link, playlists and converts to playable format
+
+
+
+2. Custom video player — toggle switch in the settings of the subscriber panel, seek bar, elapsed or remaining time also ON or OFF of elapsed or remaining time, play speed (0.5x, 0.75x, 1x, 1.5x, 1.75x, 2x), click to play/pause, each video shows a play sign in the center, mute button left + play button right, both little below the above play sign of the video,  autoplay muted. All these features the subscriber should be able to toggle ON or OFF.
+
+
+
+3. Analytics engine — tracks play, pause, unmute, play rate, exact heatmap of how long played and when dropped, watch time seconds, device, browser, geography, referrer, UTM params, domain
+
+
+
+4. Dashboard — shows total plays, unique viewers, play rate, avg % watched, engagement heatmap, viewers tab, domains tab, devices tab, geography tab
+
+
+
+5. Embed code generator — one script tag embed like Wistia
+
+
+
+6. Auth — signup, login, forgot password
+
+
+
+7. Pricing — Forever free (1 video), Starter $10/month (10 videos), Pro $19/month (unlimited), Razorpay for INR + USD
+
+
+
+8. when the video file link is pasted, you should read the file header and pick the total duration of the video and save it in the video bar.
+
+
+
+9. toggle for light & dark mode on top right of the subscriber panel.
+
+
+
+10. the landing page will be hosted under my platform - divineleads.guru as a white label account. all subscriber lead data details will be stored here, whenever subscriber creates the account. the linked domain will be vidapulse.in. i will have automations to send whatsapp & emails to the subscribers from this platform.  
+
+
+
+11. the bolt.new will have the database & the app backend under app.vidapulse.in. if that is not possible, ask me possible options. i will send subscriber data from my platform to app.vidapulse.in through some webhook at the signup each subscriber when logs in will have their username in the url. I will have 3 thank you pages, one for each plan. and a login button after they have signed up either free or paid. after they click login they should be able to login to the app.
+
+
+
+12. i am attaching screenshots of the existing landing page, pick all the details you need. add more as per the instructions here.
+
+
+
+13. while signup i will ask details of what they do, like are they a coach, creator, or they want to promote their product thru video marketing like webinar replay analytics, B2B Sales demo tracking, digital marketing agencies runnilng video funnels for their clients for my understanding which market segment and what they need.
+
+
+
+14. add debugging info in each module, till i finalize the design.
+
+
+
+15. i ganganarayan.rns@gmail.com will be the admin. i should have full access for lifetime. on top right, i should see an admin button to get into admin panel and by default it will log me into the app dashboard. the admin button should not be seen to any other users.
+
+
+
+16. in the admin panel, i am attaching the snap of that too, all the plan details and their expiry dates should be changeable by admin. once the plan expires, it should redirect to payment page to renew the subscription. i will also send reminders via whatsapp and email to renew 3 days before the expiry. last snap is admin panel, not complete, but you get an idea.
+
+
+
+17. create a help documentation of how to use the app. should be visible to any subscriber on top right with a video icon of same colour as mentioned below. the help documentation should be editable only in the admin panel, have placeholders for adding video tutorials.
+
+
+
+18. when a subscriber adds a video, it should be seen only in their account and should not reflect in any other account. not even in the admin account. 
+
+
+
+19. from the admin panel, admin should be able to login to any subscriber dashboard for debugging or making any admin level changes to support subscribers
+
+
+
+20. any time a subscriber gets a video view, a unique viewer id should be created per viewer and all the analytics should be tied to that viewer id.
+
+
+
+21. engagement heatmap should be done like wistia. i am attaching a snap here. a little variation to avoid copyrights. the last snap.
+
+
+
+Design reference: orange (#F59E0B) and dark/charcoal theme, clean minimal SaaS look.
+
+
+
+Before writing any code — ask me clarifying questions about anything unclear. Then start with the database schema first, get my approval, then build module by module."

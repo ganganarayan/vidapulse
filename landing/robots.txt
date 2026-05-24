@@ -1,0 +1,58 @@
+# robots.txt — vidapulse.in
+# All pages are public and indexable.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+
+# ── AI / LLM crawlers — explicitly allowed ──────────────────────
+# These bots power AI search features in ChatGPT, Perplexity,
+# Claude, Google AI Overviews, Bing Copilot, and Apple Intelligence.
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: bingbot
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: YouBot
+Allow: /
+
+# ── Sitemap ──────────────────────────────────────────────────────
+Sitemap: https://vidapulse.in/sitemap.xml
