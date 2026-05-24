@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import InsightsSection      from './InsightsSection';
 import HeatmapSection       from './HeatmapSection';
 import ViewerStoriesSection from './ViewerStoriesSection';
@@ -193,6 +193,12 @@ export default function VideoAnalyticsView({
   const hasPlays = plays > 0;
   const judgment = getJudgment(video);
 
+  // Secondary metrics from session aggregates
+  const playRatePct    = parseFloat(video?.play_rate_pct    ?? 0);
+  const completedViews = parseInt(video?.completed_views     ?? 0, 10);
+  const totalWatchSecs = parseInt(video?.total_watch_seconds_sum ?? 0, 10);
+  const totalWatchMins = Math.round(totalWatchSecs / 60);
+
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col">
 
@@ -212,11 +218,18 @@ export default function VideoAnalyticsView({
         </button>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-amber-500">▶</span>
+            <span className="text-amber-500 select-none">{'▶︎'}</span>
             <span className="font-bold text-amber-500 tracking-tight">VidaPulse</span>
           </div>
           {user && <PlanBadge plan={user.plan} displayName={user.plan_display_name} />}
           <NotificationBell />
+          <Link
+            to="/account"
+            className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
+            title="Settings"
+          >
+            <SettingsNavIcon />
+          </Link>
         </div>
       </header>
 
@@ -240,12 +253,12 @@ export default function VideoAnalyticsView({
           </p>
         </div>
 
-        {/* ── 3 Metric cards ──────────────────────────────────────── */}
+        {/* ── 6 Metric cards (2 rows of 3) ────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+          {/* Row 1 — Primary KPIs */}
           <MetricCard
             label="Total Plays"
             value={plays}
-            displayValue={plays}
             format={n => n.toLocaleString()}
             visible={stage >= 3}
             accent="amber"
@@ -253,7 +266,6 @@ export default function VideoAnalyticsView({
           <MetricCard
             label="Unique Viewers"
             value={viewers}
-            displayValue={viewers}
             format={n => n.toLocaleString()}
             visible={stage >= 4}
             accent="indigo"
@@ -261,10 +273,31 @@ export default function VideoAnalyticsView({
           <MetricCard
             label="Avg. Watch"
             value={hasPlays ? avgWatch : null}
-            displayValue={hasPlays ? avgWatch : null}
             format={n => `${n.toFixed(0)}%`}
             visible={stage >= 5}
             accent="emerald"
+          />
+          {/* Row 2 — Engagement depth */}
+          <MetricCard
+            label="Play Rate"
+            value={hasPlays ? playRatePct : null}
+            format={n => `${n.toFixed(0)}%`}
+            visible={stage >= 5}
+            accent="violet"
+          />
+          <MetricCard
+            label="Completions"
+            value={hasPlays ? completedViews : null}
+            format={n => n.toLocaleString()}
+            visible={stage >= 5}
+            accent="rose"
+          />
+          <MetricCard
+            label="Total Watch Time"
+            value={hasPlays ? totalWatchMins : null}
+            format={n => n >= 60 ? `${(n / 60).toFixed(1)} hr` : `${n} min`}
+            visible={stage >= 5}
+            accent="sky"
           />
         </div>
 
@@ -317,6 +350,9 @@ function MetricCard({ label, value, format, visible, accent }) {
     amber  : 'border-t-amber-500/60',
     indigo : 'border-t-indigo-500/60',
     emerald: 'border-t-emerald-500/60',
+    violet : 'border-t-violet-500/60',
+    rose   : 'border-t-rose-500/60',
+    sky    : 'border-t-sky-500/60',
   };
 
   return (
@@ -701,6 +737,17 @@ function CloseIcon() {
     >
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function SettingsNavIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
   );
 }

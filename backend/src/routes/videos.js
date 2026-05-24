@@ -327,7 +327,29 @@ router.get('/:id', requireAuth, async (req, res, next) => {
       }
     }
 
-    return res.json({ video });
+    // Attach extra session-aggregate stats (non-fatal if sessions table is empty)
+    let extraStats = { play_rate_pct: 0, completed_views: 0, total_watch_seconds_sum: 0 };
+    try {
+      const { rows: [stats] } = await pool.query(
+        `SELECT
+           COALESCE(
+             ROUND(
+               COUNT(CASE WHEN play_count > 0 THEN 1 END)::numeric
+               / NULLIF(COUNT(*), 0) * 100, 1
+             ), 0
+           )::float                            AS play_rate_pct,
+           COUNT(CASE WHEN reached_end THEN 1 END)::int AS completed_views,
+           COALESCE(SUM(total_watch_seconds), 0)::bigint AS total_watch_seconds_sum
+         FROM analytics_sessions
+         WHERE video_id = $1`,
+        [video.id]
+      );
+      if (stats) extraStats = stats;
+    } catch (err) {
+      logger.warn(`[videos] extra stats query failed for ${video.id}: ${err.message}`);
+    }
+
+    return res.json({ video: { ...video, ...extraStats } });
   } catch (err) {
     next(err);
   }
