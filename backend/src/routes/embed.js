@@ -64,16 +64,17 @@ router.get('/:videoId', async (req, res) => {
 
     // Load player settings (non-fatal — falls back to defaults)
     const DEFAULTS = {
-      autoplay: false, autoplay_muted: true, show_controls: true,
+      autoplay: false, autoplay_muted: true,
       show_seek_bar: true, show_play_pause_btn: true, show_playback_speed: true,
-      show_fullscreen_btn: true, resume_playback: false, loop: false, accent_color: '#F59E0B',
+      show_fullscreen_btn: true, show_volume_control: true,
+      resume_playback: false, loop: false, accent_color: '#F59E0B',
     };
     let playerSettings = { ...DEFAULTS };
     try {
       const { rows: [ps] } = await pool.query(
-        `SELECT autoplay, autoplay_muted, show_controls, show_seek_bar,
+        `SELECT autoplay, autoplay_muted, show_seek_bar,
                 show_play_pause_btn, show_playback_speed, show_fullscreen_btn,
-                resume_playback, loop, accent_color
+                show_volume_control, resume_playback, loop, accent_color
          FROM   video_player_settings WHERE video_id = $1`,
         [videoId]
       );
@@ -95,17 +96,18 @@ router.get('/:videoId', async (req, res) => {
 function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
   const { id, title, source_type } = video;
 
-  // Individual player settings (show_controls removed — every control has its own toggle)
-  const autoplay       = ps.autoplay           ?? false;
-  const showPlayPause  = ps.show_play_pause_btn ?? true;
-  const showSeekBar    = ps.show_seek_bar       ?? true;
-  const showSpeed      = ps.show_playback_speed ?? true;
-  const showFullscreen = ps.show_fullscreen_btn ?? true;
-  const resumePlay     = ps.resume_playback     ?? false;
-  const loopVideo      = ps.loop               ?? false;
+  // Individual player settings — every control has its own toggle
+  const autoplay          = ps.autoplay            ?? false;
+  const showPlayPause     = ps.show_play_pause_btn  ?? true;
+  const showSeekBar       = ps.show_seek_bar        ?? true;
+  const showSpeed         = ps.show_playback_speed  ?? true;
+  const showFullscreen    = ps.show_fullscreen_btn  ?? true;
+  const showVolumeControl = ps.show_volume_control  ?? true;
+  const resumePlay        = ps.resume_playback      ?? false;
+  const loopVideo         = ps.loop                ?? false;
 
   // Show the control bar only if at least one individual control is enabled
-  const anyControls = showPlayPause || showSeekBar || showSpeed || showFullscreen;
+  const anyControls = showPlayPause || showSeekBar || showSpeed || showFullscreen || showVolumeControl;
 
   let playerHtml  = '';
   let extraScript = '';
@@ -198,12 +200,18 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
   // ── HLS / MP4 / S3 / Azure (direct video) ───────────────────────────
   else if (['hls_stream','mp4_direct','amazon_s3','azure_blob'].includes(source_type)) {
     const isHls = source_type === 'hls_stream';
-    const hasBar = showSeekBar || showSpeed || showFullscreen;
+    const hasBar = showSeekBar || showSpeed || showFullscreen || showVolumeControl;
 
-    // ── Bottom bar (seek / speed / fullscreen — no play/pause here)
-    const skBar = showSeekBar
-      ? `<input type="range" id="vp-seek" min="0" max="1000" value="0">
-         <span id="vp-time">0:00</span>` : '';
+    // ── Bottom bar: left group (vol + seek + times) | right group (speed + fullscreen)
+    const volHtml = showVolumeControl
+      ? `<button class="vp-btn" id="vp-vol-btn" title="Mute">
+           <svg id="vp-vol-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+         </button>
+         <input type="range" id="vp-vol" min="0" max="100" value="100">` : '';
+    const skHtml = showSeekBar
+      ? `<span id="vp-cur">0:00</span>
+         <input type="range" id="vp-seek" min="0" max="1000" value="0">
+         <span id="vp-rem">-0:00</span>` : '';
     const spSel = showSpeed
       ? `<select id="vp-speed">
            <option value="0.5">0.5×</option><option value="1" selected>1×</option>
@@ -214,6 +222,8 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
       ? `<button class="vp-btn" id="vp-fs" title="Fullscreen">
            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
          </button>` : '';
+    const leftGroup  = (volHtml || skHtml) ? `<div id="vp-left">${volHtml}${skHtml}</div>`  : '';
+    const rightGroup = (spSel || fsBtn)    ? `<div id="vp-right">${spSel}${fsBtn}</div>` : '';
 
     // ── Center overlay: [🔇 Unmute] [▶ Big Play/Pause]  (only if toggle is on)
     const centerHtml = showPlayPause
@@ -239,7 +249,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         ${isHls ? '' : `<source src="${esc(videoUrl)}" />`}
       </video>
       ${centerHtml}
-      ${hasBar ? `<div id="vp-bar">${skBar}${spSel}${fsBtn}</div>` : ''}`;
+      ${hasBar ? `<div id="vp-bar">${leftGroup}${rightGroup}</div>` : ''}`;
 
     extraStyles = `
       /* ── Center overlay ─────────────────────────────── */
@@ -259,13 +269,13 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         display:flex;align-items:center;justify-content:center;
         box-shadow:0 4px 24px rgba(0,0,0,.5);
         transition:transform .15s,background .15s;
-        padding-left:4px; /* optical centre for play triangle */
+        padding-left:4px;
       }
       #vp-play-c.vp-pause-mode{padding-left:0;}
       #vp-play-c:hover{background:rgba(245,158,11,1);transform:scale(1.08);}
       #vp-play-c:active{transform:scale(.96);}
 
-      /* Unmute circle */
+      /* Unmute circle (center overlay) */
       #vp-mute-c{
         width:46px;height:46px;border-radius:50%;
         background:rgba(0,0,0,.55);border:2px solid rgba(255,255,255,.35);
@@ -281,15 +291,43 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         position:absolute;bottom:0;left:0;right:0;
         padding:10px 12px 12px;
         background:linear-gradient(transparent,rgba(0,0,0,.85));
-        display:flex;align-items:center;gap:10px;
+        display:flex;align-items:center;gap:8px;
         opacity:0;transition:opacity .25s;pointer-events:none;
       }
       #player-wrap.vp-paused #vp-bar,
       #player-wrap.vp-active #vp-bar{opacity:1;pointer-events:auto;}
 
+      /* Left group: volume + seek + times; Right group: speed + fullscreen */
+      #vp-left{display:flex;align-items:center;gap:6px;flex:1;min-width:0;}
+      #vp-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+
       .vp-btn{background:none;border:none;color:#fff;cursor:pointer;
         padding:4px;display:flex;align-items:center;flex-shrink:0;}
       .vp-btn:hover{color:#f59e0b;}
+
+      /* Volume slider */
+      #vp-vol{
+        width:56px;-webkit-appearance:none;appearance:none;
+        height:4px;border-radius:2px;flex-shrink:0;
+        background:linear-gradient(to right,#f59e0b var(--vol,100%),rgba(255,255,255,.25) var(--vol,100%));
+        cursor:pointer;outline:none;
+      }
+      #vp-vol::-webkit-slider-thumb{
+        -webkit-appearance:none;width:11px;height:11px;
+        border-radius:50%;background:#f59e0b;cursor:pointer;
+        box-shadow:0 1px 4px rgba(0,0,0,.5);
+      }
+      #vp-vol::-moz-range-thumb{
+        width:11px;height:11px;border-radius:50%;
+        background:#f59e0b;cursor:pointer;border:none;
+      }
+
+      /* Time labels */
+      #vp-cur,#vp-rem{
+        color:rgba(255,255,255,.8);font-size:11px;white-space:nowrap;
+        flex-shrink:0;font-family:sans-serif;
+      }
+      #vp-rem{color:rgba(255,255,255,.55);}
 
       /* Seek bar */
       #vp-seek{
@@ -307,10 +345,8 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         width:13px;height:13px;border-radius:50%;
         background:#f59e0b;cursor:pointer;border:none;
       }
-      #vp-time{
-        color:rgba(255,255,255,.8);font-size:11px;white-space:nowrap;
-        flex-shrink:0;font-family:sans-serif;min-width:32px;
-      }
+
+      /* Speed selector */
       #vp-speed{
         background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.2);
         color:#fff;font-size:11px;padding:3px 5px;border-radius:4px;
@@ -335,14 +371,17 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
       function fmt(s){s=Math.floor(s||0);var m=Math.floor(s/60);return m+':'+('0'+(s%60)).slice(-2);}
 
       function attachVideoEvents(v){
-        var pw   = document.getElementById('player-wrap');
-        var playC= document.getElementById('vp-play-c');
-        var muteC= document.getElementById('vp-mute-c');
-        var sk   = document.getElementById('vp-seek');
-        var tm   = document.getElementById('vp-time');
-        var sp   = document.getElementById('vp-speed');
-        var fs   = document.getElementById('vp-fs');
-        var hideT= null;
+        var pw     = document.getElementById('player-wrap');
+        var playC  = document.getElementById('vp-play-c');
+        var muteC  = document.getElementById('vp-mute-c');
+        var sk     = document.getElementById('vp-seek');
+        var curTm  = document.getElementById('vp-cur');
+        var remTm  = document.getElementById('vp-rem');
+        var sp     = document.getElementById('vp-speed');
+        var fs     = document.getElementById('vp-fs');
+        var volBtn = document.getElementById('vp-vol-btn');
+        var volSl  = document.getElementById('vp-vol');
+        var hideT  = null;
 
         /* ── UI show/hide ───────────────────────────── */
         function setUI(show){
@@ -399,13 +438,39 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         muteC&&muteC.addEventListener('click',function(e){
           e.stopPropagation();
           v.muted=!v.muted;
-          syncMuteIcon();
+          if(!v.muted&&v.volume===0)v.volume=0.5;
+          syncMuteIcon();syncVolIcon();
           setUI(true);
+        });
+
+        /* ── Volume control (bottom bar) ──────────────── */
+        var VOL_MUTED_SVG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
+        var VOL_LOW_SVG  ='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+        var VOL_HIGH_SVG ='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
+        function syncVolIcon(){
+          if(!volBtn)return;
+          if(v.muted||v.volume===0){volBtn.innerHTML=VOL_MUTED_SVG;volBtn.title='Unmute';}
+          else if(v.volume<0.5){volBtn.innerHTML=VOL_LOW_SVG;volBtn.title='Mute';}
+          else{volBtn.innerHTML=VOL_HIGH_SVG;volBtn.title='Mute';}
+          if(volSl){var pct=v.muted?0:v.volume*100;volSl.value=pct;volSl.style.setProperty('--vol',pct+'%');}
+        }
+        volBtn&&volBtn.addEventListener('click',function(e){
+          e.stopPropagation();
+          v.muted=!v.muted;
+          if(!v.muted&&v.volume===0)v.volume=0.5;
+          syncVolIcon();syncMuteIcon();setUI(true);
+        });
+        volSl&&volSl.addEventListener('input',function(){
+          var val=parseFloat(volSl.value)/100;
+          v.volume=val;v.muted=(val===0);
+          volSl.style.setProperty('--vol',volSl.value+'%');
+          syncVolIcon();syncMuteIcon();
         });
 
         /* Sync initial state */
         syncPlayIcon();
         syncMuteIcon();
+        syncVolIcon();
         syncPausedClass(); /* adds vp-paused if starting stopped */
 
         /* ── Video state events ─────────────────────── */
@@ -424,7 +489,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
           syncPlayIcon();
           syncPausedClass();
         });
-        v.addEventListener('volumechange',syncMuteIcon);
+        v.addEventListener('volumechange',function(){syncMuteIcon();syncVolIcon();});
 
         /* ── Seek bar ───────────────────────────────── */
         if(sk){
@@ -435,7 +500,8 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
               sk.style.setProperty('--pct',p+'%');
               sk.value=(v.currentTime/v.duration)*1000;
             }
-            if(tm)tm.textContent=fmt(v.currentTime);
+            if(curTm)curTm.textContent=fmt(v.currentTime);
+            if(remTm){var rem=(v.duration||0)-(v.currentTime||0);remTm.textContent='-'+fmt(rem);}
           }
           v.addEventListener('timeupdate',function(){if(!dragging)updateSeek();});
           v.addEventListener('loadedmetadata',updateSeek);
@@ -443,7 +509,11 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
           sk.addEventListener('touchstart',function(){dragging=true;},{passive:true});
           sk.addEventListener('input',function(){
             sk.style.setProperty('--pct',(sk.value/10)+'%');
-            if(tm&&v.duration)tm.textContent=fmt((sk.value/1000)*v.duration);
+            if(v.duration){
+              var ct=(sk.value/1000)*v.duration;
+              if(curTm)curTm.textContent=fmt(ct);
+              if(remTm)remTm.textContent='-'+fmt(v.duration-ct);
+            }
           });
           function commitSeek(){dragging=false;if(v.duration)v.currentTime=(sk.value/1000)*v.duration;}
           sk.addEventListener('change',commitSeek);

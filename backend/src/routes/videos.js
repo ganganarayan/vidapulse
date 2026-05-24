@@ -655,21 +655,22 @@ router.get('/:id/heatmap', requireAuth, planGate('heatmap'), async (req, res, ne
 // ─────────────────────────────────────────────────────────────────────────
 
 const PLAYER_DEFAULTS = {
-  autoplay           : false,
-  autoplay_muted     : true,
-  show_seek_bar      : true,
-  show_play_pause_btn: true,
-  show_playback_speed: true,
-  show_fullscreen_btn: true,
-  resume_playback    : false,
-  loop               : false,
-  accent_color       : '#F59E0B',
+  autoplay            : false,
+  autoplay_muted      : true,
+  show_seek_bar       : true,
+  show_play_pause_btn : true,
+  show_playback_speed : true,
+  show_fullscreen_btn : true,
+  show_volume_control : true,
+  resume_playback     : false,
+  loop                : false,
+  accent_color        : '#F59E0B',
 };
 
 const PLAYER_COLS = [
   'autoplay', 'autoplay_muted', 'show_seek_bar',
   'show_play_pause_btn', 'show_playback_speed', 'show_fullscreen_btn',
-  'resume_playback', 'loop', 'accent_color',
+  'show_volume_control', 'resume_playback', 'loop', 'accent_color',
 ];
 
 async function fetchPlayerSettings(videoId) {
@@ -712,15 +713,16 @@ router.get('/:id/player-settings', requireAuth, async (req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────
 
 const playerSettingsSchema = z.object({
-  autoplay           : z.boolean().optional(),
-  autoplay_muted     : z.boolean().optional(),
-  show_seek_bar      : z.boolean().optional(),
-  show_play_pause_btn: z.boolean().optional(),
-  show_playback_speed: z.boolean().optional(),
-  show_fullscreen_btn: z.boolean().optional(),
-  resume_playback    : z.boolean().optional(),
-  loop               : z.boolean().optional(),
-  accent_color       : z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  autoplay            : z.boolean().optional(),
+  autoplay_muted      : z.boolean().optional(),
+  show_seek_bar       : z.boolean().optional(),
+  show_play_pause_btn : z.boolean().optional(),
+  show_playback_speed : z.boolean().optional(),
+  show_fullscreen_btn : z.boolean().optional(),
+  show_volume_control : z.boolean().optional(),
+  resume_playback     : z.boolean().optional(),
+  loop                : z.boolean().optional(),
+  accent_color        : z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 });
 
 router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
@@ -745,8 +747,8 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
       `INSERT INTO video_player_settings
          (video_id, autoplay, autoplay_muted, show_seek_bar,
           show_play_pause_btn, show_playback_speed, show_fullscreen_btn,
-          resume_playback, loop, accent_color)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          show_volume_control, resume_playback, loop, accent_color)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT (video_id) DO UPDATE SET
          autoplay            = EXCLUDED.autoplay,
          autoplay_muted      = EXCLUDED.autoplay_muted,
@@ -754,6 +756,7 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
          show_play_pause_btn = EXCLUDED.show_play_pause_btn,
          show_playback_speed = EXCLUDED.show_playback_speed,
          show_fullscreen_btn = EXCLUDED.show_fullscreen_btn,
+         show_volume_control = EXCLUDED.show_volume_control,
          resume_playback     = EXCLUDED.resume_playback,
          loop                = EXCLUDED.loop,
          accent_color        = EXCLUDED.accent_color,
@@ -762,7 +765,8 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
         req.params.id,
         merged.autoplay, merged.autoplay_muted,
         merged.show_seek_bar, merged.show_play_pause_btn, merged.show_playback_speed,
-        merged.show_fullscreen_btn, merged.resume_playback, merged.loop, merged.accent_color,
+        merged.show_fullscreen_btn, merged.show_volume_control,
+        merged.resume_playback, merged.loop, merged.accent_color,
       ]
     );
 
