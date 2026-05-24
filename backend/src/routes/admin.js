@@ -695,21 +695,21 @@ router.get('/impersonation-log', async (req, res, next) => {
 
 router.get('/analytics-diag', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    // Global totals across all videos
+    // ── 1. Global totals ─────────────────────────────────────────────────
     const { rows: [totals] } = await pool.query(`
       SELECT
         COUNT(*)                                          AS total_sessions,
-        SUM(play_count)                                   AS total_play_events,
+        COALESCE(SUM(play_count), 0)                      AS total_play_events,
         COUNT(*) FILTER (WHERE play_count > 0)            AS sessions_with_play,
         COUNT(DISTINCT viewer_id)                         AS distinct_viewers
       FROM analytics_sessions
     `);
 
-    // Per-video summary
+    // ── 2. Per-video summary ──────────────────────────────────────────────
     const { rows: videos } = await pool.query(`
       SELECT v.id, v.title, v.total_plays, v.unique_viewers, v.avg_watch_pct,
              COUNT(s.id)                                  AS session_rows,
-             SUM(s.play_count)                            AS session_play_sum,
+             COALESCE(SUM(s.play_count), 0)               AS session_play_sum,
              COUNT(s.id) FILTER (WHERE s.play_count > 0)  AS sessions_with_play
       FROM   videos v
       LEFT JOIN analytics_sessions s ON s.video_id = v.id
@@ -719,7 +719,7 @@ router.get('/analytics-diag', requireAuth, requireAdmin, async (req, res, next) 
       LIMIT  20
     `);
 
-    // Most recent 20 sessions (newest first)
+    // ── 3. Most recent 20 sessions ────────────────────────────────────────
     const { rows: recent } = await pool.query(`
       SELECT s.id, s.video_id, s.play_count, s.max_watch_pct,
              s.total_watch_seconds, s.started_at, s.ended_at,
@@ -729,19 +729,61 @@ router.get('/analytics-diag', requireAuth, requireAdmin, async (req, res, next) 
       LIMIT  20
     `);
 
-    // Viewer table count
+    // ── 4. Viewer count ───────────────────────────────────────────────────
     const { rows: [vcount] } = await pool.query(
       `SELECT COUNT(*) AS total_viewers FROM viewers`
     );
 
+    // ── 5. Ping-handler smoke test ────────────────────────────────────────
+    // Directly run the same UPDATE the /ping endpoint runs against the
+    // most recent session. If this fails or returns play_count=0 → DB bug.
+    // If it works → embed JS is not sending the ping at all.
+    let pingTest = { ran: false };
+    if (recent.length > 0) {
+      const s = recent[0];
+      try {
+        const { rows: [before] } = await pool.query(
+          `SELECT play_count FROM analytics_sessions WHERE id = $1`, [s.id]
+        );
+        const { rows: [updated] } = await pool.query(
+          `UPDATE analytics_sessions SET
+             play_count          = play_count + 1,
+             max_watch_pct       = GREATEST(max_watch_pct, 5),
+             total_watch_seconds = GREATEST(total_watch_seconds, 3)
+           WHERE id = $1
+           RETURNING play_count`,
+          [s.id]
+        );
+        // Roll back the test increment immediately
+        await pool.query(
+          `UPDATE analytics_sessions SET
+             play_count          = play_count - 1,
+             max_watch_pct       = $2,
+             total_watch_seconds = $3
+           WHERE id = $1`,
+          [s.id, before.play_count === 0 ? 0 : s.max_watch_pct, s.total_watch_seconds]
+        );
+        pingTest = {
+          ran           : true,
+          session_id    : s.id,
+          play_count_before: parseInt(before.play_count, 10),
+          play_count_after : parseInt(updated.play_count, 10),
+          db_update_works  : parseInt(updated.play_count, 10) === parseInt(before.play_count, 10) + 1,
+        };
+      } catch (e) {
+        pingTest = { ran: true, error: e.message };
+      }
+    }
+
     return res.json({
       totals: {
-        total_sessions   : parseInt(totals.total_sessions,    10),
-        total_play_events: parseInt(totals.total_play_events, 10) || 0,
+        total_sessions    : parseInt(totals.total_sessions,     10),
+        total_play_events : parseInt(totals.total_play_events,  10) || 0,
         sessions_with_play: parseInt(totals.sessions_with_play, 10),
-        distinct_viewers : parseInt(totals.distinct_viewers,  10),
-        total_viewers_row: parseInt(vcount.total_viewers,     10),
+        distinct_viewers  : parseInt(totals.distinct_viewers,   10),
+        total_viewers_row : parseInt(vcount.total_viewers,      10),
       },
+      ping_db_smoke_test: pingTest,
       videos,
       recent_sessions: recent,
     });

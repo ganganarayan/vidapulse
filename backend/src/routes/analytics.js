@@ -253,7 +253,13 @@ router.post('/ping', async (req, res) => {
   // Always respond 200 so sendBeacon doesn't log errors in the browser
   res.json({ ok: true });
 
-  if (!session_id || !video_id) return; // silently drop malformed pings
+  // Diagnostic log — shows every ping and whether it has valid IDs
+  logger.info(`[analytics/ping] event=${event} sid=${session_id ? session_id.slice(0,8) : 'MISSING'} vid=${video_id ? video_id.slice(0,8) : 'MISSING'} max_pct=${max_pct} secs=${watch_seconds}`);
+
+  if (!session_id || !video_id) {
+    logger.warn(`[analytics/ping] dropped — missing session_id or video_id. body=${JSON.stringify(req.body).slice(0, 200)}`);
+    return;
+  }
 
   // Rate limit per session_id — blocks replay attacks and tracker loops
   if (!_checkPingRate(session_id)) {
@@ -278,7 +284,10 @@ router.post('/ping', async (req, res) => {
          AND  s.video_id = $2`,
       [session_id, video_id]
     );
-    if (!ctx) return; // unknown session / video mismatch — silently drop
+    if (!ctx) {
+      logger.warn(`[analytics/ping] session not found or video mismatch — sid=${session_id.slice(0,8)} vid=${video_id.slice(0,8)}`);
+      return;
+    }
 
     const isPlay = event === 'play';
     const isEnd  = event === 'end';
