@@ -59,7 +59,25 @@ router.get('/:videoId', async (req, res) => {
     const apiBase  = `${req.protocol}://${req.get('host')}`;
     const videoUrl = video.playable_url || video.original_url;
 
-    res.type('html').send(buildEmbedPage(video, videoUrl, apiBase));
+    // Load player settings (non-fatal — falls back to defaults)
+    const DEFAULTS = {
+      autoplay: false, autoplay_muted: true, show_controls: true,
+      show_seek_bar: true, show_play_pause_btn: true, show_playback_speed: true,
+      show_fullscreen_btn: true, resume_playback: false, loop: false, accent_color: '#F59E0B',
+    };
+    let playerSettings = { ...DEFAULTS };
+    try {
+      const { rows: [ps] } = await pool.query(
+        `SELECT autoplay, autoplay_muted, show_controls, show_seek_bar,
+                show_play_pause_btn, show_playback_speed, show_fullscreen_btn,
+                resume_playback, loop, accent_color
+         FROM   video_player_settings WHERE video_id = $1`,
+        [videoId]
+      );
+      if (ps) playerSettings = { ...DEFAULTS, ...ps };
+    } catch (_) { /* use defaults */ }
+
+    res.type('html').send(buildEmbedPage(video, videoUrl, apiBase, playerSettings));
 
   } catch (err) {
     logger.error(`[embed] ${err.message}`, { videoId });
@@ -71,8 +89,15 @@ router.get('/:videoId', async (req, res) => {
 // HTML builders
 // ─────────────────────────────────────────────────────────────────────────
 
-function buildEmbedPage(video, videoUrl, apiBase) {
+function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
   const { id, title, source_type } = video;
+  // Player settings with safe defaults
+  const autoplay     = ps.autoplay     ?? false;
+  const showControls = ps.show_controls ?? true;
+  const showSeekBar  = ps.show_seek_bar ?? true;
+  const showSpeed    = ps.show_playback_speed ?? true;
+  const resumePlay   = ps.resume_playback ?? false;
+  const loopVideo    = ps.loop ?? false;
 
   let playerHtml  = '';
   let extraScript = '';
@@ -164,7 +189,10 @@ function buildEmbedPage(video, videoUrl, apiBase) {
   // ── HLS / MP4 / S3 / Azure (direct video) ───────────────────────────
   else if (['hls_stream','mp4_direct','amazon_s3','azure_blob'].includes(source_type)) {
     const isHls = source_type === 'hls_stream';
-    playerHtml = `<video id="vp-vid" controls preload="metadata"
+    playerHtml = `<video id="vp-vid" preload="metadata"
+      ${showControls ? 'controls' : ''}
+      ${autoplay ? 'autoplay muted' : ''}
+      ${loopVideo ? 'loop' : ''}
       style="width:100%;height:100%;background:#000">
       ${isHls ? '' : `<source src="${esc(videoUrl)}" />`}
       Your browser does not support video playback.
@@ -194,6 +222,10 @@ function buildEmbedPage(video, videoUrl, apiBase) {
       `}
 
       function attachVideoEvents(v){
+        /* Resume playback — seek to stored position on first load */
+        var resumePos=loadPos();
+        if(resumePos>0){v.currentTime=resumePos;}
+
         v.addEventListener('play',function(){
           if(!on){on=true;t0=v.currentTime;ping('play');}
         });
@@ -229,6 +261,7 @@ function buildEmbedPage(video, videoUrl, apiBase) {
   const trackerCore = `
     var API=${JSON.stringify(apiBase+'/api')};
     var VID=${JSON.stringify(id)};
+    var RESUME=${JSON.stringify(resumePlay)};
 
     /* Persistent viewer cookie */
     var k='_vp_'+VID.slice(0,8),ck=localStorage.getItem(k);
@@ -264,11 +297,17 @@ function buildEmbedPage(video, videoUrl, apiBase) {
         headers:{'Content-Type':'application/json'},body:body});}
     }
 
+    /* Resume playback helper */
+    var rpKey='_vp_pos_'+VID.slice(0,8);
+    function savePos(t){if(RESUME&&t>5)localStorage.setItem(rpKey,t);}
+    function loadPos(){return RESUME?parseFloat(localStorage.getItem(rpKey)||'0'):0;}
+
     window.addEventListener('beforeunload',function(){
       if(on&&typeof t0!=='undefined'){
         var now=(typeof player!=='undefined'&&player.getCurrentTime)
           ?player.getCurrentTime()
           :(document.getElementById('vp-vid')?document.getElementById('vp-vid').currentTime:t0);
+        savePos(now);
         secs+=now-t0;ivs.push([t0,now]);
       }
       ping('end');

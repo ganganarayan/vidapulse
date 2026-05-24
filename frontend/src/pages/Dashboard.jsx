@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -81,7 +81,7 @@ export default function Dashboard() {
             }}
           />
         ) : (
-          <VideoList videos={videos} user={user} />
+          <VideoList videos={videos} setVideos={setVideos} user={user} />
         )}
       </main>
     </AppLayout>
@@ -92,11 +92,40 @@ export default function Dashboard() {
 // VideoList
 // ─────────────────────────────────────────────────────────────────────────
 
-function VideoList({ videos, user }) {
+// ── Duration formatter ─────────────────────────────────────────────────
+
+function fmtDuration(secs) {
+  if (!secs || secs <= 0) return null;
+  const s = Math.round(secs);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+const SOURCE_LABELS = {
+  youtube     : 'YouTube',
+  vimeo       : 'Vimeo',
+  loom        : 'Loom',
+  zoom        : 'Zoom',
+  google_drive: 'Google Drive',
+  dropbox     : 'Dropbox',
+  mp4_direct  : 'Direct MP4',
+  hls_stream  : 'HLS Stream',
+  amazon_s3   : 'Amazon S3',
+  azure_blob  : 'Azure Blob',
+  other       : 'Video',
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// VideoList
+// ─────────────────────────────────────────────────────────────────────────
+
+function VideoList({ videos, setVideos, user }) {
   const navigate = useNavigate();
   return (
-    <div className="max-w-4xl w-full mx-auto px-6 py-8">
-      {/* Video limit banner */}
+    <div className="max-w-5xl w-full mx-auto px-6 py-8">
       {user?.video_limit !== null && (
         <div className="mb-5">
           <VideoLimitBanner
@@ -106,13 +135,15 @@ function VideoList({ videos, user }) {
           />
         </div>
       )}
-
       <div className="flex flex-col gap-3">
         {videos.map(video => (
           <VideoCard
             key={video.id}
             video={video}
             onClick={() => navigate(`/dashboard/videos/${video.id}`)}
+            onTitleUpdate={(newTitle) =>
+              setVideos(prev => prev.map(v => v.id === video.id ? { ...v, title: newTitle } : v))
+            }
           />
         ))}
       </div>
@@ -120,79 +151,182 @@ function VideoList({ videos, user }) {
   );
 }
 
-function VideoCard({ video, onClick }) {
-  const SOURCE_LABELS = {
-    youtube     : 'YouTube',
-    vimeo       : 'Vimeo',
-    loom        : 'Loom',
-    zoom        : 'Zoom',
-    google_drive: 'Google Drive',
-    dropbox     : 'Dropbox',
-    mp4_direct  : 'Direct MP4',
-    hls_stream  : 'HLS stream',
-    amazon_s3   : 'Amazon S3',
-    azure_blob  : 'Azure Blob',
-    other       : 'Video',
-  };
-  const sourceLabel = SOURCE_LABELS[video.source_type] ?? 'Video';
+// ─────────────────────────────────────────────────────────────────────────
+// VideoCard — redesigned with thumbnail, duration, embed btn, edit pencil
+// ─────────────────────────────────────────────────────────────────────────
 
-  const avgWatch = video.avg_watch_pct != null
-    ? `${parseFloat(video.avg_watch_pct).toFixed(0)}%`
-    : '—';
+function VideoCard({ video, onClick, onTitleUpdate }) {
+  const [showEmbed,   setShowEmbed]   = useState(false);
+  const [showEdit,    setShowEdit]    = useState(false);
+  const [embedCopied, setEmbedCopied] = useState(false);
+
+  const sourceLabel = SOURCE_LABELS[video.source_type] ?? 'Video';
+  const duration    = fmtDuration(video.duration_seconds);
+  const avgWatch    = video.avg_watch_pct != null
+    ? `${parseFloat(video.avg_watch_pct).toFixed(0)}%` : '—';
+  const playRate    = video.play_rate_pct != null
+    ? `${parseFloat(video.play_rate_pct).toFixed(0)}%` : '0%';
+
+  function handleEmbedCopy(e) {
+    e.stopPropagation();
+    const origin  = window.location.origin;
+    const snippet = `<iframe\n  src="${origin}/embed/${video.id}"\n  width="560"\n  height="315"\n  frameborder="0"\n  allow="autoplay; fullscreen; picture-in-picture"\n  allowfullscreen>\n</iframe>`;
+    navigator.clipboard.writeText(snippet)
+      .then(() => { setEmbedCopied(true); setTimeout(() => setEmbedCopied(false), 2500); })
+      .catch(() => {});
+  }
 
   return (
-    <button
-      onClick={onClick}
-      className="w-full text-left bg-gray-800 border border-gray-700 rounded-xl p-4
-                 hover:border-gray-600 hover:bg-gray-750 transition-colors"
-    >
-      <div className="flex items-center gap-4">
-        {/* Platform icon */}
-        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gray-700 flex items-center justify-center">
-          <VideoIcon className="text-gray-400" />
-        </div>
+    <>
+      <div className="bg-gray-800 border border-gray-700 rounded-xl hover:border-gray-600 transition-colors">
+        <div className="flex items-center gap-3 px-4 py-3">
 
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-100 truncate">{video.title}</p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {sourceLabel} · Added {new Date(video.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-          </p>
-        </div>
+          {/* Thumbnail with duration */}
+          <button
+            onClick={onClick}
+            className="flex-shrink-0 relative w-24 h-14 rounded-lg bg-gray-700 flex items-center justify-center overflow-hidden group/thumb"
+          >
+            {video.thumbnail_url
+              ? <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
+              : <VideoIcon className="text-gray-500" />
+            }
+            {/* Hover play overlay */}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 transition-opacity flex items-center justify-center">
+              <span className="text-white text-lg select-none">{'▶︎'}</span>
+            </div>
+            {/* Duration badge */}
+            {duration && (
+              <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[10px] font-medium px-1 py-0.5 rounded leading-none pointer-events-none">
+                {duration}
+              </span>
+            )}
+          </button>
 
-        {/* Stats */}
-        <div className="flex-shrink-0 hidden sm:flex items-center gap-5 text-sm">
-          <div className="text-right">
-            <p className="font-semibold text-gray-200">{video.total_plays ?? 0}</p>
-            <p className="text-xs text-gray-500">plays</p>
+          {/* Title + meta — clicks to navigate */}
+          <button onClick={onClick} className="flex-1 min-w-0 text-left">
+            <p className="font-semibold text-gray-100 truncate">{video.title}</p>
+            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+              <span>{sourceLabel}</span>
+              <span className="text-gray-700">·</span>
+              <span>{video.total_plays ?? 0} plays</span>
+              <span className="text-gray-700">·</span>
+              <span>{video.unique_viewers ?? 0} viewers</span>
+              <span className="text-gray-700">·</span>
+              <span>{avgWatch} avg</span>
+            </p>
+          </button>
+
+          {/* Metric columns */}
+          <div className="hidden lg:flex items-center gap-6 flex-shrink-0">
+            <div className="text-center">
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Play Rate</p>
+              <p className="text-sm font-bold text-gray-200 mt-0.5">{playRate}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Engagement</p>
+              <p className="text-sm font-bold text-gray-200 mt-0.5">{avgWatch}</p>
+            </div>
           </div>
-          <div className="text-right">
-            <p className="font-semibold text-gray-200">{video.unique_viewers ?? 0}</p>
-            <p className="text-xs text-gray-500">viewers</p>
+
+          {/* Action icons */}
+          <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+            {/* Embed copy */}
+            <button
+              onClick={handleEmbedCopy}
+              title="Copy embed code"
+              className={`p-1.5 rounded-lg transition-colors
+                ${embedCopied
+                  ? 'text-emerald-400 bg-emerald-500/10'
+                  : 'text-gray-500 hover:text-gray-300 hover:bg-gray-700'}`}
+            >
+              {embedCopied ? <CheckSmIcon /> : <EmbedIcon />}
+            </button>
+
+            {/* Edit title */}
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowEdit(true); }}
+              title="Edit video name"
+              className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-700 transition-colors"
+            >
+              <PencilIcon />
+            </button>
           </div>
-          <div className="text-right">
-            <p className="font-semibold text-gray-200">{avgWatch}</p>
-            <p className="text-xs text-gray-500">avg watch</p>
-          </div>
-          <InsightBadge status={video.insight_status} />
         </div>
       </div>
-    </button>
+
+      {/* Edit name modal */}
+      {showEdit && (
+        <EditNameModal
+          video={video}
+          onSave={(newTitle) => { onTitleUpdate(newTitle); setShowEdit(false); }}
+          onClose={() => setShowEdit(false)}
+        />
+      )}
+    </>
   );
 }
 
-function InsightBadge({ status }) {
-  const map = {
-    pending   : { label: 'Pending',    cls: 'bg-gray-700 text-gray-400' },
-    generating: { label: 'Analysing',  cls: 'bg-amber-500/10 text-amber-300' },
-    complete  : { label: 'Insights ready', cls: 'bg-emerald-500/10 text-emerald-300' },
-    failed    : { label: 'Error',      cls: 'bg-red-500/10 text-red-300' },
-  };
-  const { label, cls } = map[status] ?? map.pending;
+// ─────────────────────────────────────────────────────────────────────────
+// EditNameModal — inline video rename
+// ─────────────────────────────────────────────────────────────────────────
+
+function EditNameModal({ video, onSave, onClose }) {
+  const [title,   setTitle]   = useState(video.title);
+  const [saving,  setSaving]  = useState(false);
+  const [error,   setError]   = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 50); }, []);
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  async function handleSave(e) {
+    e.preventDefault();
+    const trimmed = title.trim();
+    if (!trimmed || trimmed === video.title) { onClose(); return; }
+    setSaving(true);
+    setError('');
+    try {
+      await api.patch(`/videos/${video.id}`, { title: trimmed });
+      onSave(trimmed);
+    } catch (err) {
+      setError(err.response?.data?.message ?? 'Could not save. Try again.');
+      setSaving(false);
+    }
+  }
+
   return (
-    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${cls}`}>
-      {label}
-    </span>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6">
+        <h2 className="text-base font-bold text-gray-50 mb-4">Rename video</h2>
+        <form onSubmit={handleSave}>
+          <input
+            ref={inputRef}
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            maxLength={500}
+            className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+          />
+          {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
+          <div className="flex gap-2 mt-4 justify-end">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving || !title.trim()}
+              className="px-4 py-2 text-sm font-medium bg-amber-500 hover:bg-amber-400 text-gray-900 rounded-lg transition-colors disabled:opacity-50">
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -437,12 +571,44 @@ function ArrowRightIcon() {
 
 function VideoIcon({ className = '' }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
       className={className}
     >
       <polygon points="23 7 16 12 23 17 23 7" />
       <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+    </svg>
+  );
+}
+
+function EmbedIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    >
+      <polyline points="16 18 22 12 16 6" />
+      <polyline points="8 6 2 12 8 18" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    >
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+function CheckSmIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+    >
+      <polyline points="20 6 9 17 4 12" />
     </svg>
   );
 }

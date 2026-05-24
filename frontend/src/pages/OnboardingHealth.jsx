@@ -296,7 +296,7 @@ function AdminShell({ title, children, onBack }) {
           <h1 className="text-sm font-semibold text-gray-300">{title}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-amber-500">▶</span>
+          <span className="text-amber-500 select-none">{'▶︎'}</span>
           <span className="font-bold text-amber-500 tracking-tight text-sm">VidaPulse</span>
           <span className="ml-2 px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10
                            text-emerald-300 border border-emerald-500/20 rounded-full">

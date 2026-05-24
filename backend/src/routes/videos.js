@@ -116,6 +116,7 @@ router.get('/', requireAuth, async (req, res, next) => {
               original_url,
               source_type,
               thumbnail_url,
+              duration_seconds,
               total_plays,
               unique_viewers,
               avg_watch_pct,
@@ -644,6 +645,130 @@ router.get('/:id/heatmap', requireAuth, planGate('heatmap'), async (req, res, ne
       duration_seconds: video.duration_seconds,
       total_viewers   : video.unique_viewers,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Player settings helpers
+// ─────────────────────────────────────────────────────────────────────────
+
+const PLAYER_DEFAULTS = {
+  autoplay           : false,
+  autoplay_muted     : true,
+  show_controls      : true,
+  show_seek_bar      : true,
+  show_play_pause_btn: true,
+  show_playback_speed: true,
+  show_fullscreen_btn: true,
+  resume_playback    : false,
+  loop               : false,
+  accent_color       : '#F59E0B',
+};
+
+const PLAYER_COLS = [
+  'autoplay', 'autoplay_muted', 'show_controls', 'show_seek_bar',
+  'show_play_pause_btn', 'show_playback_speed', 'show_fullscreen_btn',
+  'resume_playback', 'loop', 'accent_color',
+];
+
+async function fetchPlayerSettings(videoId) {
+  try {
+    const { rows: [row] } = await pool.query(
+      `SELECT ${PLAYER_COLS.join(', ')}
+       FROM   video_player_settings
+       WHERE  video_id = $1`,
+      [videoId]
+    );
+    return row ? { ...PLAYER_DEFAULTS, ...row } : { ...PLAYER_DEFAULTS };
+  } catch (_) {
+    return { ...PLAYER_DEFAULTS };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// GET /api/videos/:id/player-settings
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get('/:id/player-settings', requireAuth, async (req, res, next) => {
+  try {
+    const { rows: [video] } = await pool.query(
+      `SELECT id FROM videos WHERE id=$1 AND user_id=$2 AND is_active=TRUE`,
+      [req.params.id, req.user.id]
+    );
+    if (!video) return res.status(404).json({ error: 'Video not found' });
+    const settings = await fetchPlayerSettings(req.params.id);
+    return res.json({ settings });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// PATCH /api/videos/:id/player-settings
+//
+// Upserts ALL player settings in one shot.
+// The frontend always sends the full settings object on any toggle change.
+// ─────────────────────────────────────────────────────────────────────────
+
+const playerSettingsSchema = z.object({
+  autoplay           : z.boolean().optional(),
+  autoplay_muted     : z.boolean().optional(),
+  show_controls      : z.boolean().optional(),
+  show_seek_bar      : z.boolean().optional(),
+  show_play_pause_btn: z.boolean().optional(),
+  show_playback_speed: z.boolean().optional(),
+  show_fullscreen_btn: z.boolean().optional(),
+  resume_playback    : z.boolean().optional(),
+  loop               : z.boolean().optional(),
+  accent_color       : z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+});
+
+router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
+  try {
+    const parseResult = playerSettingsSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: 'Validation failed', fields: parseResult.error.flatten().fieldErrors });
+    }
+
+    const { rows: [video] } = await pool.query(
+      `SELECT id FROM videos WHERE id=$1 AND user_id=$2 AND is_active=TRUE`,
+      [req.params.id, req.user.id]
+    );
+    if (!video) return res.status(404).json({ error: 'Video not found' });
+
+    // Merge incoming with current defaults, then upsert the full row
+    const existing = await fetchPlayerSettings(req.params.id);
+    const merged   = { ...existing, ...parseResult.data };
+
+    await pool.query(
+      `INSERT INTO video_player_settings
+         (video_id, user_id, autoplay, autoplay_muted, show_controls, show_seek_bar,
+          show_play_pause_btn, show_playback_speed, show_fullscreen_btn,
+          resume_playback, loop, accent_color)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       ON CONFLICT (video_id) DO UPDATE SET
+         autoplay            = EXCLUDED.autoplay,
+         autoplay_muted      = EXCLUDED.autoplay_muted,
+         show_controls       = EXCLUDED.show_controls,
+         show_seek_bar       = EXCLUDED.show_seek_bar,
+         show_play_pause_btn = EXCLUDED.show_play_pause_btn,
+         show_playback_speed = EXCLUDED.show_playback_speed,
+         show_fullscreen_btn = EXCLUDED.show_fullscreen_btn,
+         resume_playback     = EXCLUDED.resume_playback,
+         loop                = EXCLUDED.loop,
+         accent_color        = EXCLUDED.accent_color,
+         updated_at          = NOW()`,
+      [
+        req.params.id, req.user.id,
+        merged.autoplay, merged.autoplay_muted, merged.show_controls,
+        merged.show_seek_bar, merged.show_play_pause_btn, merged.show_playback_speed,
+        merged.show_fullscreen_btn, merged.resume_playback, merged.loop, merged.accent_color,
+      ]
+    );
+
+    return res.json({ settings: merged });
   } catch (err) {
     next(err);
   }

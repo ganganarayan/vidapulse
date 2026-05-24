@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import api              from '../../lib/api';
 import InsightsSection      from './InsightsSection';
 import HeatmapSection       from './HeatmapSection';
 import ViewerStoriesSection from './ViewerStoriesSection';
@@ -159,6 +160,7 @@ export default function VideoAnalyticsView({
   animateIn           = false,
   onAnimationComplete = null,
   onBack              = null,
+  onRefresh           = null,
 }) {
   const navigate = useNavigate();
   const handleBack = onBack ?? (() => navigate('/dashboard'));
@@ -223,6 +225,15 @@ export default function VideoAnalyticsView({
           </div>
           {user && <PlanBadge plan={user.plan} displayName={user.plan_display_name} />}
           <NotificationBell />
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
+              title="Refresh analytics"
+            >
+              <RefreshIcon />
+            </button>
+          )}
           <Link
             to="/account"
             className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
@@ -328,7 +339,10 @@ export default function VideoAnalyticsView({
 
         {/* ── Analytics sections ──────────────────────────────────── */}
         {stage >= 7 && (
-          <AnalyticsSections video={video} user={user} />
+          <>
+            <AnalyticsSections video={video} user={user} />
+            <PlayerSettingsSection videoId={video?.id} />
+          </>
         )}
 
       </div>
@@ -600,6 +614,101 @@ function AnalyticsSections({ video, user }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// PlayerSettingsSection — per-video player controls toggles
+// ─────────────────────────────────────────────────────────────────────────
+
+const DEFAULTS = {
+  autoplay: false, autoplay_muted: true, show_controls: true,
+  show_seek_bar: true, show_play_pause_btn: true, show_playback_speed: true,
+  show_fullscreen_btn: true, resume_playback: false, loop: false,
+};
+
+function PlayerSettingsSection({ videoId }) {
+  const [settings, setSettings] = React.useState(null);
+  const [saving,   setSaving]   = React.useState(false);
+  const [open,     setOpen]     = React.useState(false);
+
+  React.useEffect(() => {
+    if (!videoId || !open) return;
+    api.get(`/videos/${videoId}/player-settings`)
+      .then(r => setSettings(r.data.settings))
+      .catch(() => setSettings({ ...DEFAULTS }));
+  }, [videoId, open]);
+
+  async function toggle(key) {
+    const next = { ...settings, [key]: !settings[key] };
+    setSettings(next);
+    setSaving(true);
+    try {
+      const { data } = await api.patch(`/videos/${videoId}/player-settings`, next);
+      setSettings(data.settings);
+    } catch (_) {}
+    finally { setSaving(false); }
+  }
+
+  const ROWS = [
+    { key: 'autoplay',            label: 'Autoplay',            desc: 'Start playing when the page loads' },
+    { key: 'show_controls',       label: 'Show Controls',       desc: 'Play / pause and volume controls' },
+    { key: 'show_seek_bar',       label: 'Seek Bar',            desc: 'Allow viewers to scrub through the video' },
+    { key: 'show_play_pause_btn', label: 'Play / Pause Button', desc: 'Show the play and pause button' },
+    { key: 'show_playback_speed', label: 'Playback Speed',      desc: 'Let viewers choose 0.5×, 1×, 1.25×, 1.5×, 2×' },
+    { key: 'show_fullscreen_btn', label: 'Fullscreen Button',   desc: 'Show the fullscreen toggle' },
+    { key: 'resume_playback',     label: 'Resume Playback',     desc: 'Remember where viewers left off last time' },
+    { key: 'loop',                label: 'Loop',                desc: 'Replay the video automatically when it ends' },
+  ];
+
+  return (
+    <div className="mt-8">
+      <div className="h-px bg-gray-800 mb-8" />
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-2 text-sm font-semibold text-gray-400 hover:text-gray-200 transition-colors mb-4"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500">
+          <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+        </svg>
+        Player Settings
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`ml-1 transition-transform ${open ? 'rotate-180' : ''}`}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+        {saving && <span className="ml-2 w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />}
+      </button>
+
+      {open && (
+        <div className="bg-gray-800 border border-gray-700 rounded-xl divide-y divide-gray-700/60">
+          {settings === null ? (
+            <div className="px-5 py-6 flex items-center gap-2 text-gray-500 text-sm">
+              <span className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              Loading settings…
+            </div>
+          ) : (
+            ROWS.map(({ key, label, desc }) => (
+              <div key={key} className="flex items-center justify-between px-5 py-3.5">
+                <div>
+                  <p className="text-sm font-medium text-gray-200">{label}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+                </div>
+                <button
+                  onClick={() => toggle(key)}
+                  className={`relative inline-flex flex-shrink-0 h-5 w-9 rounded-full transition-colors duration-200
+                    ${settings[key] ? 'bg-amber-500' : 'bg-gray-600'}`}
+                  role="switch"
+                  aria-checked={settings[key]}
+                >
+                  <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 mt-0.5
+                    ${settings[key] ? 'translate-x-4' : 'translate-x-0.5'}`}
+                  />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Shared UI pieces
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -670,6 +779,18 @@ function CloseIcon() {
     >
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function RefreshIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    >
+      <polyline points="23 4 23 10 17 10" />
+      <polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
     </svg>
   );
 }

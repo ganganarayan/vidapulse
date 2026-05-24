@@ -110,6 +110,12 @@ export default function VideoDetail() {
     setViewState('revealing');
   }, []);
 
+  const handleRefresh = useCallback(() => {
+    api.get(`/videos/${id}`)
+      .then(res => setVideo(res.data.video))
+      .catch(() => {});
+  }, [id]);
+
   // ── Render ─────────────────────────────────────────────────────────────
 
   if (viewState === 'initialising') {
@@ -147,6 +153,7 @@ export default function VideoDetail() {
       video={video}
       user={user}
       onBack={() => navigate('/dashboard')}
+      onRefresh={handleRefresh}
     />
   );
 }
@@ -360,13 +367,14 @@ function DashboardReveal({ video, user, onRevealComplete }) {
 // ReadyDashboard — static view for return visits (no entry animation)
 // ─────────────────────────────────────────────────────────────────────────
 
-function ReadyDashboard({ video, user, onBack }) {
+function ReadyDashboard({ video, user, onBack, onRefresh }) {
   return (
     <VideoAnalyticsView
       video={video}
       user={user}
       animateIn={false}
       onBack={onBack}
+      onRefresh={onRefresh}
     />
   );
 }
