@@ -249,7 +249,8 @@ function ProcessingScreen({ video, videoId, onVideoUpdate, onComplete }) {
     <div className="min-h-screen bg-gray-900 flex flex-col">
       {/* Minimal header */}
       <header className="border-b border-gray-800 px-6 py-3 flex items-center gap-2">
-        <span className="text-amber-500 text-xl">▶</span>
+        {/* ▶︎ = U+25B6 + U+FE0E: variation selector-15 forces text (not emoji) rendering */}
+        <span className="text-amber-500 text-xl select-none">{'▶︎'}</span>
         <span className="text-lg font-bold text-amber-500 tracking-tight">VidaPulse</span>
       </header>
 

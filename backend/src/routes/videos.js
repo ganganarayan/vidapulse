@@ -24,11 +24,18 @@ const { emitEvent }              = require('../services/behavioralEventService')
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Sources that can be embedded via iframe without any server-side URL
- * resolution. For these, processing is considered immediately complete
- * and playable_url = original_url.
+ * Sources that need no server-side URL resolution — the original URL IS the
+ * playable URL. Processing is considered immediately complete for all of these.
+ *
+ * IFRAME_SOURCES   — embedded via <iframe> (YouTube, Vimeo, …)
+ * DIRECT_SOURCES   — played directly by the browser (<video> or HLS.js)
+ *
+ * Both sets are marked processing_status = 'completed' on creation.
+ * Only sources outside both sets (dropbox, onedrive, other) are queued for
+ * async resolution by a background worker.
  */
-const IFRAME_SOURCES = new Set(['youtube', 'vimeo', 'loom', 'zoom', 'google_drive']);
+const IFRAME_SOURCES  = new Set(['youtube', 'vimeo', 'loom', 'zoom', 'google_drive']);
+const DIRECT_SOURCES  = new Set(['hls_stream', 'mp4_direct', 'amazon_s3', 'azure_blob']);
 
 /**
  * Detect the source_type ENUM value from a video URL.
@@ -185,11 +192,13 @@ router.post('/', requireAuth, videoLimitGate, async (req, res, next) => {
     const sourceType     = detectSourceType(url);
     const videoTitle     = (title?.trim()) || generateDefaultTitle(url);
 
-    // Iframe-embeddable sources need no server-side processing —
-    // mark as completed immediately so the frontend can proceed without waiting.
+    // Sources that need no server-side processing — mark as completed
+    // immediately so the frontend skips the animation and shows the dashboard.
     const isIframe         = IFRAME_SOURCES.has(sourceType);
-    const processingStatus = isIframe ? 'completed' : 'pending';
-    const playableUrl      = isIframe ? url : null;
+    const isDirect         = DIRECT_SOURCES.has(sourceType);
+    const isReadyNow       = isIframe || isDirect;
+    const processingStatus = isReadyNow ? 'completed' : 'pending';
+    const playableUrl      = isReadyNow ? url : null;
     const usingIframe      = isIframe;
 
     // ── Insert video ──────────────────────────────────────────────────────
@@ -289,7 +298,36 @@ router.get('/:id', requireAuth, async (req, res, next) => {
       return res.status(404).json({ error: 'Video not found' });
     }
 
-    return res.json({ video: rows[0] });
+    let video = rows[0];
+
+    // Self-heal: if a directly-playable source is stuck in 'pending' (created
+    // before DIRECT_SOURCES was introduced), promote it to 'completed' now so
+    // the frontend skips the processing animation on this and every future visit.
+    if (
+      video.processing_status === 'pending' &&
+      (IFRAME_SOURCES.has(video.source_type) || DIRECT_SOURCES.has(video.source_type))
+    ) {
+      const { rows: [healed] } = await pool.query(
+        `UPDATE videos
+         SET processing_status = 'completed',
+             playable_url      = COALESCE(playable_url, original_url),
+             updated_at        = NOW()
+         WHERE id = $1
+         RETURNING id, title, description, original_url, source_type, playable_url,
+                   thumbnail_url, duration_seconds, total_plays, unique_viewers,
+                   avg_watch_pct, processing_status, processing_error,
+                   insight_status, insight_generated_at, story_status, story_generated_at,
+                   primary_drop_off_second, primary_drop_off_pct,
+                   is_archived, created_at, updated_at`,
+        [video.id]
+      );
+      if (healed) {
+        logger.info(`[videos] self-healed processing_status for ${video.id} (${video.source_type})`);
+        video = healed;
+      }
+    }
+
+    return res.json({ video });
   } catch (err) {
     next(err);
   }
