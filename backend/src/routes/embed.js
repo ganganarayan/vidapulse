@@ -295,8 +295,14 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
       if(!sid)return;
       var body=JSON.stringify({session_id:sid,video_id:VID,event:ev,
         max_pct:maxP,watch_seconds:secs,intervals:ivs});
-      if(navigator.sendBeacon){navigator.sendBeacon(API+'/analytics/ping',body);}
-      else{fetch(API+'/analytics/ping',{method:'POST',keepalive:true,
+      /* sendBeacon must use a Blob with explicit JSON type —
+         passing a plain string sends as text/plain which Express
+         cannot parse, silently dropping every analytics event. */
+      if(navigator.sendBeacon){
+        try{navigator.sendBeacon(API+'/analytics/ping',new Blob([body],{type:'application/json'}));}
+        catch(e){fetch(API+'/analytics/ping',{method:'POST',keepalive:true,
+          headers:{'Content-Type':'application/json'},body:body});}
+      }else{fetch(API+'/analytics/ping',{method:'POST',keepalive:true,
         headers:{'Content-Type':'application/json'},body:body});}
     }
 

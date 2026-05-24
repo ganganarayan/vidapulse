@@ -34,6 +34,17 @@ router.use((req, res, next) => {
   next();
 });
 
+// ── Body parsing: accept both application/json AND text/plain ─────────────
+// navigator.sendBeacon() can send text/plain in some environments;
+// parse it as JSON so req.body is always a plain object.
+router.use(express.text({ type: 'text/plain', limit: '64kb' }));
+router.use((req, res, next) => {
+  if (typeof req.body === 'string' && req.body.trim().startsWith('{')) {
+    try { req.body = JSON.parse(req.body); } catch (_) {}
+  }
+  next();
+});
+
 // ── In-memory rate limiters ───────────────────────────────────────────────
 // /session: max 20 new sessions per IP per minute (blocks fake-viewer inflation)
 // /ping:    max 30 pings per session_id per minute (blocks replay/loop abuse)
