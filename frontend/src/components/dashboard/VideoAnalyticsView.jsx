@@ -336,11 +336,80 @@ function MetricCard({ label, value, format, visible, accent }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// generateEmbedSnippet — builds the self-contained tracker script string.
+// Called once per modal open so the apiBase is always current.
+// ─────────────────────────────────────────────────────────────────────────
+
+function generateEmbedSnippet(videoId, apiBase) {
+  return `<!-- VidaPulse tracker — paste before </body> on every page that shows this video -->
+<script>
+(function(vid,api){
+  /* 1. Persistent viewer cookie */
+  var k='_vp_'+vid.slice(0,8),ck=localStorage.getItem(k);
+  if(!ck){
+    ck=([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,function(c){
+      return(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16);
+    });
+    localStorage.setItem(k,ck);
+  }
+
+  /* 2. Create analytics session */
+  var sid=null;
+  var dv=window.innerWidth<768?'mobile':window.innerWidth<1024?'tablet':'desktop';
+  fetch(api+'/analytics/session',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({video_id:vid,viewer_cookie:ck,
+      page_url:location.href,referrer:document.referrer,device_type:dv,
+      screen_width:screen.width,screen_height:screen.height,
+      user_agent:navigator.userAgent})
+  }).then(function(r){return r.json();}).then(function(d){sid=d.session_id;});
+
+  /* 3. Send ping helper */
+  function ping(ev,max,secs,ivs){
+    if(!sid)return;
+    var body=JSON.stringify({session_id:sid,video_id:vid,event:ev,
+      max_pct:max,watch_seconds:secs,intervals:ivs});
+    if(navigator.sendBeacon){navigator.sendBeacon(api+'/analytics/ping',body);}
+    else{fetch(api+'/analytics/ping',{method:'POST',keepalive:true,
+      headers:{'Content-Type':'application/json'},body:body});}
+  }
+
+  /* 4. Hook into <video data-vp="VIDEO_ID"> or first <video> on the page */
+  document.addEventListener('DOMContentLoaded',function(){
+    var el=document.querySelector('[data-vp="'+vid+'"]')||document.querySelector('video');
+    if(!el)return;
+    var on=false,t0=0,maxP=0,secs=0,ivs=[];
+    el.addEventListener('play',function(){
+      if(!on){on=true;t0=el.currentTime;ping('play',maxP,secs,ivs);}
+    });
+    el.addEventListener('pause',function(){
+      if(on){on=false;var e=el.currentTime;ivs.push([t0,e]);secs+=e-t0;
+        maxP=Math.max(maxP,el.duration?e/el.duration*100:0);ping('pause',maxP,secs,ivs);}
+    });
+    el.addEventListener('ended',function(){
+      if(on){on=false;var e=el.currentTime;ivs.push([t0,e]);secs+=e-t0;}
+      maxP=100;ping('end',100,secs,ivs);
+    });
+    setInterval(function(){
+      if(on&&el.duration){maxP=Math.max(maxP,el.currentTime/el.duration*100);}
+    },10000);
+    window.addEventListener('beforeunload',function(){
+      if(on){var e=el.currentTime;ivs.push([t0,e]);secs+=e-t0;}
+      ping('end',maxP,secs,ivs);
+    });
+  });
+})('${videoId}','${apiBase}/api');
+</script>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // ActionBar — copy link + embed code CTA
 // ─────────────────────────────────────────────────────────────────────────
 
 function ActionBar({ video }) {
-  const [copied, setCopied] = useState(false);
+  const [copied,      setCopied]      = useState(false);
+  const [embedOpen,   setEmbedOpen]   = useState(false);
+  const [embedCopied, setEmbedCopied] = useState(false);
 
   function handleCopy() {
     const text = video?.original_url ?? '';
@@ -350,28 +419,176 @@ function ActionBar({ video }) {
       .catch(() => {});
   }
 
-  return (
-    <div className="flex flex-wrap gap-3 items-center">
-      <button
-        onClick={handleCopy}
-        className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700
-                   border border-gray-700 text-sm text-gray-200 font-medium
-                   rounded-lg transition-colors"
-      >
-        {copied ? <CheckSmallIcon className="text-emerald-400" /> : <CopyIcon />}
-        {copied ? 'Copied!' : 'Copy video link'}
-      </button>
+  function handleEmbedOpen() {
+    setEmbedCopied(false);
+    setEmbedOpen(true);
+  }
 
-      {/* Embed code — will be fully built in Step 8 (embed module) */}
-      <button
-        className="flex items-center gap-2 px-4 py-2 bg-gray-800/50 border border-gray-700/50
-                   text-sm text-gray-500 font-medium rounded-lg cursor-default"
-        disabled
-        title="Embed code — available soon"
-      >
-        <CodeIcon />
-        Get embed code
-      </button>
+  function handleEmbedCopy() {
+    const snippet = generateEmbedSnippet(
+      video?.id ?? '',
+      typeof window !== 'undefined' ? window.location.origin : ''
+    );
+    navigator.clipboard.writeText(snippet)
+      .then(() => { setEmbedCopied(true); setTimeout(() => setEmbedCopied(false), 3000); })
+      .catch(() => {});
+  }
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-3 items-center">
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700
+                     border border-gray-700 text-sm text-gray-200 font-medium
+                     rounded-lg transition-colors"
+        >
+          {copied ? <CheckSmallIcon className="text-emerald-400" /> : <CopyIcon />}
+          {copied ? 'Copied!' : 'Copy video link'}
+        </button>
+
+        <button
+          onClick={handleEmbedOpen}
+          className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20
+                     border border-amber-500/30 text-sm text-amber-300 font-medium
+                     rounded-lg transition-colors"
+        >
+          <CodeIcon />
+          Get embed code
+        </button>
+      </div>
+
+      {/* Embed code modal */}
+      {embedOpen && (
+        <EmbedModal
+          video={video}
+          copied={embedCopied}
+          onCopy={handleEmbedCopy}
+          onClose={() => setEmbedOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// EmbedModal — shows the tracking snippet with copy-to-clipboard
+// ─────────────────────────────────────────────────────────────────────────
+
+function EmbedModal({ video, copied, onCopy, onClose }) {
+  const snippet = generateEmbedSnippet(
+    video?.id ?? '',
+    typeof window !== 'undefined' ? window.location.origin : ''
+  );
+
+  // Close on backdrop click
+  function handleBackdrop(e) {
+    if (e.target === e.currentTarget) onClose();
+  }
+
+  // Close on Escape
+  React.useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4
+                 bg-black/60 backdrop-blur-sm"
+      onClick={handleBackdrop}
+    >
+      <div className="w-full max-w-2xl bg-gray-900 border border-gray-700
+                      rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4
+                        border-b border-gray-800 flex-shrink-0">
+          <div>
+            <h2 className="text-base font-bold text-gray-50">Embed tracking code</h2>
+            <p className="text-xs text-gray-500 mt-0.5 truncate max-w-sm">
+              {video?.title ?? 'Your video'}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300
+                       hover:bg-gray-800 transition-colors"
+            aria-label="Close"
+          >
+            <CloseIcon />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 overflow-y-auto flex-1">
+
+          {/* Instructions */}
+          <ol className="text-sm text-gray-400 mb-5 flex flex-col gap-2 list-decimal list-inside">
+            <li>
+              Paste the snippet below just before the{' '}
+              <code className="text-amber-400 bg-gray-800 px-1 py-0.5 rounded text-xs">&lt;/body&gt;</code>{' '}
+              tag on any page where this video appears.
+            </li>
+            <li>
+              Add{' '}
+              <code className="text-amber-400 bg-gray-800 px-1 py-0.5 rounded text-xs">
+                data-vp=&quot;{video?.id ?? 'VIDEO_ID'}&quot;
+              </code>{' '}
+              to your{' '}
+              <code className="text-amber-400 bg-gray-800 px-1 py-0.5 rounded text-xs">&lt;video&gt;</code>{' '}
+              element so the tracker can find it. If you have only one video on the page, this step is optional.
+            </li>
+            <li>
+              That&apos;s it — plays, watch time, and heatmap data will appear in this dashboard automatically.
+            </li>
+          </ol>
+
+          {/* Code block */}
+          <div className="relative">
+            <pre
+              className="bg-gray-950 border border-gray-800 rounded-xl
+                         p-4 text-xs text-gray-300 font-mono leading-relaxed
+                         overflow-x-auto whitespace-pre-wrap break-all"
+            >
+              {snippet}
+            </pre>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-800 flex items-center
+                        justify-between gap-3 flex-shrink-0">
+          <p className="text-xs text-gray-600">
+            Works with any{' '}
+            <code className="text-gray-500">&lt;video&gt;</code>{' '}
+            element · No page-reload needed
+          </p>
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200
+                         bg-gray-800 hover:bg-gray-700 border border-gray-700
+                         rounded-lg transition-colors"
+            >
+              Close
+            </button>
+            <button
+              onClick={onCopy}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium
+                         rounded-lg transition-colors
+                         bg-amber-500 hover:bg-amber-400 text-gray-900"
+            >
+              {copied
+                ? <><CheckSmallIcon className="text-gray-900" /> Copied!</>
+                : <><CopyIcon /> Copy snippet</>
+              }
+            </button>
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }
@@ -473,6 +690,17 @@ function CodeIcon() {
     >
       <polyline points="16 18 22 12 16 6" />
       <polyline points="8 6 2 12 8 18" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    >
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   );
 }

@@ -149,32 +149,46 @@ async function start() {
   logger.info('');
 
   try {
-    // Step 1: Verify database is reachable
-    logger.info('[server] Step 1/3 — Testing database connection...');
-    await testConnection();
-
-    // Step 2: Apply any pending schema migrations
-    logger.info('[server] Step 2/3 — Running database migrations...');
-    await runMigrations();
-
-    // Step 3: Start listening for requests
-    logger.info('[server] Step 3/4 — Starting HTTP server...');
+    // ── Step 1: Bind the HTTP port immediately ────────────────────────────
+    // IMPORTANT: app.listen() MUST run before the DB connection test.
+    //
+    // Railway starts the healthcheck the moment the container boots and
+    // marks the deploy failed if /api/health doesn't return 2xx within
+    // the healthcheckTimeout window. If we wait for DB + migrations first
+    // the process may crash (or simply not be listening) before the first
+    // health probe fires, causing a "service unavailable" failure.
+    //
+    // With listen-first the health endpoint responds immediately:
+    //   • 503 { database.connected: false } while DB/migrations are running
+    //   • 200 { database.connected: true  } once everything is ready
+    // Railway retries until it sees 200, or the window expires.
+    logger.info('[server] Step 1/4 — Starting HTTP server...');
     await new Promise((resolve) => {
       app.listen(env.PORT, () => {
-        logger.info('');
-        logger.info('[server] ✓ Server is live!');
-        logger.info(`[server]   Health check : http://localhost:${env.PORT}/api/health`);
-        logger.info(`[server]   Webhook URL  : ${env.APP_URL}/api/webhook/create-user`);
-        logger.info('');
+        logger.info(`[server] ✓ Listening on port ${env.PORT} — health check is now reachable`);
         resolve();
       });
     });
 
-    // Step 4: Start background workers (after server is live and DB is confirmed ready)
+    // ── Step 2: Verify database is reachable ──────────────────────────────
+    logger.info('[server] Step 2/4 — Testing database connection...');
+    await testConnection();
+
+    // ── Step 3: Apply any pending schema migrations ───────────────────────
+    logger.info('[server] Step 3/4 — Running database migrations...');
+    await runMigrations();
+
+    // ── Step 4: Start background workers ─────────────────────────────────
     logger.info('[server] Step 4/4 — Starting background workers...');
     webhookSender.start();
     scheduledJobs.start();
+
+    logger.info('');
+    logger.info('[server] ✓ Fully operational!');
+    logger.info(`[server]   Health check : http://localhost:${env.PORT}/api/health`);
+    logger.info(`[server]   Webhook URL  : ${env.APP_URL}/api/webhook/create-user`);
     logger.info('[server] ✓ Workers started — webhook sender (30 s/60 s) · scheduled jobs (3 m/15 m/1 h)');
+    logger.info('');
 
   } catch (err) {
     logger.error('[server] ✗ FATAL: Startup failed!');

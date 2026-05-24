@@ -4,6 +4,7 @@
  * Auth routes — all endpoints under /api/auth
  *
  * Public (no JWT required):
+ *   POST   /api/auth/bootstrap       — one-time admin setup (disabled once any admin exists)
  *   POST   /api/auth/login
  *   POST   /api/auth/set-password
  *   POST   /api/auth/forgot-password
@@ -79,6 +80,119 @@ const resetSchema = z.object({
   password: z.string()
     .min(8,  'Password must be at least 8 characters')
     .max(128, 'Password too long'),
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/auth/bootstrap
+//
+// One-time admin account creation.
+// Disabled permanently once any admin user exists in the DB.
+// Secured with WEBHOOK_SECRET so it cannot be called by strangers.
+//
+// Body : { email, name, secret }
+// Returns: { set_password_url }  — open this URL to set your password
+//
+// The set_password_url uses the request's own host (req.get('host'))
+// so it works on any domain — Railway test URL or production domain.
+// ─────────────────────────────────────────────────────────────
+
+router.post('/bootstrap', async (req, res, next) => {
+  try {
+    const { email, name, secret } = req.body ?? {};
+
+    if (!email || !secret) {
+      return res.status(400).json({ error: 'email and secret are required' });
+    }
+
+    // Constant-time secret comparison to prevent timing attacks
+    let secretMatch = false;
+    try {
+      secretMatch = crypto.timingSafeEqual(
+        Buffer.from(secret.padEnd(env.WEBHOOK_SECRET.length)),
+        Buffer.from(env.WEBHOOK_SECRET)
+      ) && secret.length === env.WEBHOOK_SECRET.length;
+    } catch { secretMatch = false; }
+
+    if (!secretMatch) {
+      return res.status(403).json({ error: 'Invalid secret' });
+    }
+
+    // Block if any admin already exists — endpoint is one-time only
+    const { rows: existing } = await pool.query(
+      `SELECT id FROM users WHERE role = 'admin' LIMIT 1`
+    );
+    if (existing.length > 0) {
+      return res.status(403).json({
+        error: 'Bootstrap disabled — an admin account already exists. Use /login.',
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Reject if email is already registered (shouldn't happen on fresh DB)
+    const { rows: emailCheck } = await pool.query(
+      `SELECT id FROM users WHERE email = $1`, [normalizedEmail]
+    );
+    if (emailCheck.length > 0) {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: plans } = await client.query(
+        `SELECT id FROM plans WHERE name = 'free' AND is_active = TRUE LIMIT 1`
+      );
+      if (!plans.length) throw new Error('Free plan not found in database');
+
+      const { rows: [user] } = await client.query(
+        `INSERT INTO users (email, name, plan_id, role, password_set, created_via)
+         VALUES ($1, $2, $3, 'admin', FALSE, 'bootstrap')
+         RETURNING id`,
+        [normalizedEmail, (name || 'Admin').trim(), plans[0].id]
+      );
+
+      await client.query(
+        `INSERT INTO user_preferences (user_id) VALUES ($1)`, [user.id]
+      );
+      await client.query(
+        `INSERT INTO onboarding_state (user_id, signed_up_at) VALUES ($1, NOW())
+         ON CONFLICT (user_id) DO NOTHING`,
+        [user.id]
+      );
+
+      // set_password token — 24-hour expiry
+      const token = crypto.randomBytes(48).toString('hex');
+      await client.query(
+        `INSERT INTO auth_tokens (user_id, token, purpose, expires_at)
+         VALUES ($1, $2, 'set_password', NOW() + INTERVAL '24 hours')`,
+        [user.id, token]
+      );
+
+      await client.query('COMMIT');
+
+      // Use the request's own host so the link works on Railway AND production
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const setPasswordUrl = `${baseUrl}/set-password?token=${token}`;
+
+      logger.info(`[auth] Bootstrap: admin account created for ${normalizedEmail}`);
+
+      return res.status(201).json({
+        message    : 'Admin account created. Open set_password_url in your browser to set your password.',
+        set_password_url: setPasswordUrl,
+      });
+
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ─────────────────────────────────────────────────────────────

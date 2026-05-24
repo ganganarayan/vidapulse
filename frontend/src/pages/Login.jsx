@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import api from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 
 // ── OAuth error messages ──────────────────────────────────────
 const OAUTH_ERRORS = {
@@ -15,6 +16,7 @@ const OAUTH_ERRORS = {
 export default function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { refetch } = useAuth();
 
   const [email,     setEmail]     = useState('');
   const [password,  setPassword]  = useState('');
@@ -41,6 +43,10 @@ export default function Login() {
     setLoading(true);
     try {
       await api.post('/auth/login', { email, password });
+      // Refetch user BEFORE navigating — the cookie is now set and
+      // AuthContext needs to load the user so ProtectedRoute lets us through.
+      // Without this, ProtectedRoute sees user=null and redirects back to /login.
+      await refetch();
       navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || 'Something went wrong. Please try again.');

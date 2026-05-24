@@ -86,9 +86,9 @@ export default function VideoDetail() {
       .then(res => {
         const v = res.data.video;
         setVideo(v);
-        // If already completed on first load, skip animation and reveal
+        // If already completed on first load, skip straight to dashboard
         if (v.processing_status === 'completed') {
-          setViewState('processing'); // still show animation for delight
+          setViewState('ready'); // return visit — no animation needed
         } else if (v.processing_status === 'failed') {
           setFetchError('Video processing failed. Please try again.');
           setViewState('error');
