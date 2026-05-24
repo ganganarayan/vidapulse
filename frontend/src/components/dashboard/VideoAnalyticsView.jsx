@@ -46,6 +46,17 @@ const COMPLETE_DELAY = 2700; // fires onAnimationComplete
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────
 
+/** Format seconds as m:ss or h:mm:ss */
+function fmtSeconds(secs) {
+  if (!secs || secs < 0) return '0:00';
+  const s = Math.round(secs);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
 const PLATFORM_LABELS = {
   youtube     : 'YouTube',
   vimeo       : 'Vimeo',
@@ -201,6 +212,14 @@ export default function VideoAnalyticsView({
   const totalWatchSecs = parseInt(video?.total_watch_seconds_sum ?? 0, 10);
   const totalWatchMins = Math.round(totalWatchSecs / 60);
 
+  // Derived / computed metrics
+  const completionRate   = hasPlays ? (completedViews / plays) * 100 : null;
+  const dropoffRate      = completionRate !== null ? (100 - completionRate) : null;
+  const avgWatchSecs     = hasPlays && totalWatchSecs > 0 ? totalWatchSecs / plays : null;
+  const avgWatchPerViewer= viewers > 0 && totalWatchSecs > 0 ? totalWatchSecs / viewers : null;
+  const replayCount      = hasPlays ? Math.max(0, plays - viewers) : null;
+  const replayRate       = hasPlays && plays > 0 ? Math.max(0, (plays - viewers) / plays * 100) : null;
+
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col">
 
@@ -257,15 +276,15 @@ export default function VideoAnalyticsView({
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-50 leading-tight">
             {video?.title ?? 'Untitled Video'}
           </h1>
-          <p className="text-sm text-gray-500 mt-1.5 flex items-center gap-2">
+          <p className="text-sm text-gray-400 mt-1.5 flex items-center gap-2">
             <span>{PLATFORM_LABELS[video?.source_type] ?? 'Video'}</span>
-            <span className="text-gray-700">·</span>
+            <span className="text-gray-600">·</span>
             <span>Added {video?.created_at ? new Date(video.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</span>
           </p>
         </div>
 
-        {/* ── 6 Metric cards (2 rows of 3) ────────────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+        {/* ── 12 Metric cards (4 rows of 3) ───────────────────────── */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-10">
           {/* Row 1 — Primary KPIs */}
           <MetricCard
             label="Total Plays"
@@ -287,8 +306,16 @@ export default function VideoAnalyticsView({
             format={n => `${n.toFixed(0)}%`}
             visible={stage >= 5}
             accent="emerald"
+            className="col-span-2 sm:col-span-1"
           />
-          {/* Row 2 — Engagement depth */}
+          {/* Row 2 — Engagement rates */}
+          <MetricCard
+            label="Completion Rate"
+            value={completionRate}
+            format={n => `${n.toFixed(0)}%`}
+            visible={stage >= 5}
+            accent="teal"
+          />
           <MetricCard
             label="Play Rate"
             value={hasPlays ? playRatePct : null}
@@ -297,18 +324,56 @@ export default function VideoAnalyticsView({
             accent="violet"
           />
           <MetricCard
-            label="Completions"
-            value={hasPlays ? completedViews : null}
-            format={n => n.toLocaleString()}
+            label="Drop-off Rate"
+            value={dropoffRate}
+            format={n => `${n.toFixed(0)}%`}
             visible={stage >= 5}
             accent="rose"
           />
+          {/* Row 3 — Time & depth */}
           <MetricCard
             label="Total Watch Time"
             value={hasPlays ? totalWatchMins : null}
             format={n => n >= 60 ? `${(n / 60).toFixed(1)} hr` : `${n} min`}
             visible={stage >= 5}
             accent="sky"
+          />
+          <MetricCard
+            label="Avg. Duration / View"
+            value={avgWatchSecs}
+            format={n => fmtSeconds(n)}
+            visible={stage >= 5}
+            accent="orange"
+          />
+          <MetricCard
+            label="Avg. Watch / Viewer"
+            value={avgWatchPerViewer}
+            format={n => fmtSeconds(n)}
+            visible={stage >= 5}
+            accent="purple"
+          />
+          {/* Row 4 — Volume & repeats */}
+          <MetricCard
+            label="Completions"
+            value={hasPlays ? completedViews : null}
+            format={n => n.toLocaleString()}
+            visible={stage >= 5}
+            accent="pink"
+          />
+          <MetricCard
+            label="Re-watches"
+            value={replayCount}
+            format={n => n.toLocaleString()}
+            visible={stage >= 5}
+            accent="yellow"
+          />
+          <MetricCard
+            label="Replay Rate"
+            value={replayRate}
+            format={n => `${n.toFixed(0)}%`}
+            visible={stage >= 5}
+            accent="amber"
+            className="col-span-2 sm:col-span-1"
           />
         </div>
 
@@ -322,7 +387,7 @@ export default function VideoAnalyticsView({
           <p className={`text-lg font-semibold mb-1 ${judgment.colorClass}`}>
             {judgment.headline}
           </p>
-          <p className="text-sm text-gray-400 max-w-xl leading-relaxed">
+          <p className="text-sm text-gray-300 max-w-xl leading-relaxed">
             {judgment.detail}
           </p>
         </div>
@@ -354,32 +419,38 @@ export default function VideoAnalyticsView({
 // MetricCard — a single stat card with optional count-up animation
 // ─────────────────────────────────────────────────────────────────────────
 
-function MetricCard({ label, value, format, visible, accent }) {
+function MetricCard({ label, value, format, visible, accent, className = '' }) {
   // Counter starts when the card becomes visible
   const numericValue  = typeof value === 'number' ? value : 0;
   const countedValue  = useCountUp(numericValue, 900, visible && value !== null);
   const isNull        = value === null;
 
   const accentMap = {
-    amber  : 'border-t-amber-500/60',
-    indigo : 'border-t-indigo-500/60',
-    emerald: 'border-t-emerald-500/60',
-    violet : 'border-t-violet-500/60',
-    rose   : 'border-t-rose-500/60',
-    sky    : 'border-t-sky-500/60',
+    amber  : 'border-t-amber-500/70',
+    indigo : 'border-t-indigo-500/70',
+    emerald: 'border-t-emerald-500/70',
+    teal   : 'border-t-teal-500/70',
+    violet : 'border-t-violet-500/70',
+    rose   : 'border-t-rose-500/70',
+    sky    : 'border-t-sky-500/70',
+    orange : 'border-t-orange-500/70',
+    purple : 'border-t-purple-500/70',
+    pink   : 'border-t-pink-500/70',
+    yellow : 'border-t-yellow-500/70',
   };
 
   return (
     <div
-      className={`bg-gray-800 border border-gray-700 border-t-2 ${accentMap[accent] ?? accentMap.amber}
-                  rounded-xl px-5 py-5 transition-all duration-500
-                  ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+      className={`bg-gray-800 border border-gray-700/80 border-t-2 ${accentMap[accent] ?? accentMap.amber}
+                  rounded-xl px-4 py-4 transition-all duration-500
+                  ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+                  ${className}`}
     >
-      <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-2">
+      <p className="text-xs text-gray-400 uppercase tracking-wider font-medium mb-2 leading-tight">
         {label}
       </p>
-      <p className="text-4xl font-bold text-gray-50 tabular-nums">
-        {isNull ? '—' : format(countedValue)}
+      <p className="text-3xl font-bold text-gray-50 tabular-nums">
+        {isNull ? <span className="text-gray-600">—</span> : format(countedValue)}
       </p>
     </div>
   );
@@ -525,7 +596,7 @@ function EmbedModal({ video, copied, onCopy, onClose }) {
         <div className="px-6 py-5 overflow-y-auto flex-1">
 
           {/* Instructions */}
-          <p className="text-sm text-gray-400 mb-5">
+          <p className="text-sm text-gray-300 mb-5">
             Copy the code below and paste it anywhere on your page — on any website, page builder, or canvas.
             Plays, watch time, and heatmap data will appear in this dashboard automatically.
           </p>
@@ -545,7 +616,7 @@ function EmbedModal({ video, copied, onCopy, onClose }) {
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-800 flex items-center
                         justify-between gap-3 flex-shrink-0">
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-gray-500">
             Works on any website or page builder · No scripts or extra setup needed
           </p>
           <div className="flex gap-2 flex-shrink-0">
@@ -662,7 +733,7 @@ function PlayerSettingsSection({ videoId }) {
       <div className="h-px bg-gray-800 mb-8" />
       <button
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-2 text-sm font-semibold text-gray-400 hover:text-gray-200 transition-colors mb-4"
+        className="flex items-center gap-2 text-sm font-semibold text-gray-300 hover:text-gray-100 transition-colors mb-4"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500">
           <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />

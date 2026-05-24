@@ -205,13 +205,13 @@ function VideoCard({ video, onClick, onTitleUpdate }) {
           {/* Title + meta — clicks to navigate */}
           <button onClick={onClick} className="flex-1 min-w-0 text-left">
             <p className="font-semibold text-gray-100 truncate">{video.title}</p>
-            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+            <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
               <span>{sourceLabel}</span>
-              <span className="text-gray-700">·</span>
+              <span className="text-gray-600">·</span>
               <span>{video.total_plays ?? 0} plays</span>
-              <span className="text-gray-700">·</span>
+              <span className="text-gray-600">·</span>
               <span>{video.unique_viewers ?? 0} viewers</span>
-              <span className="text-gray-700">·</span>
+              <span className="text-gray-600">·</span>
               <span>{avgWatch} avg</span>
             </p>
           </button>
@@ -219,11 +219,11 @@ function VideoCard({ video, onClick, onTitleUpdate }) {
           {/* Metric columns */}
           <div className="hidden lg:flex items-center gap-6 flex-shrink-0">
             <div className="text-center">
-              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Play Rate</p>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Play Rate</p>
               <p className="text-sm font-bold text-gray-200 mt-0.5">{playRate}</p>
             </div>
             <div className="text-center">
-              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Engagement</p>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Engagement</p>
               <p className="text-sm font-bold text-gray-200 mt-0.5">{avgWatch}</p>
             </div>
           </div>
@@ -525,7 +525,7 @@ function EmptyState({ user, onVideoAdded }) {
           </div>
         )}
 
-        <p className="text-xs text-gray-600">
+        <p className="text-xs text-gray-500">
           YouTube · Vimeo · Loom · Zoom · Google Drive · Dropbox · Direct MP4 links
         </p>
       </div>
@@ -542,7 +542,7 @@ function LoadingSkeleton() {
     <div className="flex-1 flex items-center justify-center py-24">
       <div className="flex flex-col items-center gap-3">
         <div className="w-7 h-7 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm text-gray-500">Loading your videos…</p>
+        <p className="text-sm text-gray-400">Loading your videos…</p>
       </div>
     </div>
   );

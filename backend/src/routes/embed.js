@@ -20,6 +20,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool }  = require('../config/database');
 const logger    = require('../config/logger');
+const env       = require('../config/env');
 
 // ── Allow this route to be framed by any domain ───────────────────────────
 router.use((req, res, next) => {
@@ -56,7 +57,9 @@ router.get('/:videoId', async (req, res) => {
       return res.status(200).type('html').send(loadingPage(video.title));
     }
 
-    const apiBase  = `${req.protocol}://${req.get('host')}`;
+    // Use APP_URL from env — never reconstruct from req.protocol which can be
+    // 'http' behind Railway's reverse proxy, causing Mixed Content blocking.
+    const apiBase  = env.APP_URL;
     const videoUrl = video.playable_url || video.original_url;
 
     // Load player settings (non-fatal — falls back to defaults)

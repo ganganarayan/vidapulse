@@ -78,7 +78,7 @@ function AppSidebar() {
 
         {isAdmin && (
           <>
-            <div className="mt-5 mb-1.5 px-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+            <div className="mt-5 mb-1.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
               Admin
             </div>
             <SidebarItem
@@ -111,7 +111,7 @@ function AppSidebar() {
             <p className="text-xs font-medium text-gray-300 truncate mt-1">
               {isImpersonating ? '(Admin view)' : (user.name || user.email)}
             </p>
-            <p className="text-xs text-gray-600 truncate">{user.email}</p>
+            <p className="text-xs text-gray-500 truncate">{user.email}</p>
             <button
               onClick={handleSignOut}
               disabled={signingOut}
