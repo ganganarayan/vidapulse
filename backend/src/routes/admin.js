@@ -686,6 +686,70 @@ router.get('/impersonation-log', async (req, res, next) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/analytics-diag
+//
+// Raw analytics counts — admin only, used to diagnose pipeline issues.
+// Returns sessions, plays, viewer counts and the last 20 sessions.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/analytics-diag', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    // Global totals across all videos
+    const { rows: [totals] } = await pool.query(`
+      SELECT
+        COUNT(*)                                          AS total_sessions,
+        SUM(play_count)                                   AS total_play_events,
+        COUNT(*) FILTER (WHERE play_count > 0)            AS sessions_with_play,
+        COUNT(DISTINCT viewer_id)                         AS distinct_viewers
+      FROM analytics_sessions
+    `);
+
+    // Per-video summary
+    const { rows: videos } = await pool.query(`
+      SELECT v.id, v.title, v.total_plays, v.unique_viewers, v.avg_watch_pct,
+             COUNT(s.id)                                  AS session_rows,
+             SUM(s.play_count)                            AS session_play_sum,
+             COUNT(s.id) FILTER (WHERE s.play_count > 0)  AS sessions_with_play
+      FROM   videos v
+      LEFT JOIN analytics_sessions s ON s.video_id = v.id
+      WHERE  v.is_active = TRUE
+      GROUP  BY v.id, v.title, v.total_plays, v.unique_viewers, v.avg_watch_pct
+      ORDER  BY v.created_at DESC
+      LIMIT  20
+    `);
+
+    // Most recent 20 sessions (newest first)
+    const { rows: recent } = await pool.query(`
+      SELECT s.id, s.video_id, s.play_count, s.max_watch_pct,
+             s.total_watch_seconds, s.started_at, s.ended_at,
+             s.device_type, s.page_url
+      FROM   analytics_sessions s
+      ORDER  BY s.started_at DESC
+      LIMIT  20
+    `);
+
+    // Viewer table count
+    const { rows: [vcount] } = await pool.query(
+      `SELECT COUNT(*) AS total_viewers FROM viewers`
+    );
+
+    return res.json({
+      totals: {
+        total_sessions   : parseInt(totals.total_sessions,    10),
+        total_play_events: parseInt(totals.total_play_events, 10) || 0,
+        sessions_with_play: parseInt(totals.sessions_with_play, 10),
+        distinct_viewers : parseInt(totals.distinct_viewers,  10),
+        total_viewers_row: parseInt(vcount.total_viewers,     10),
+      },
+      videos,
+      recent_sessions: recent,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Export the action logging helper for use by other route handlers
 // (e.g., video routes can call this when a video is deleted during impersonation)
 module.exports = router;
