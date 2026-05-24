@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import api from '../lib/api';
 import AppLayout from '../components/AppLayout';
 
@@ -14,17 +15,12 @@ import AppLayout from '../components/AppLayout';
  */
 export default function AccountSettings() {
   const { user, updateUser } = useAuth();
+  const { showToast }        = useToast();
   const [upgradeData, setUpgradeData] = useState(null);
-  const [toast,       setToast]       = useState(null); // { message, type }
 
   useEffect(() => {
     api.get('/upgrade').then(res => setUpgradeData(res.data)).catch(() => {});
   }, []);
-
-  function showToast(message, type = 'success') {
-    setToast({ message, type });
-  }
-  function dismissToast() { setToast(null); }
 
   const plan    = user?.plan ?? 'free';
   const isAdmin = user?.role === 'admin' || plan === 'admin_lifetime';
@@ -160,8 +156,6 @@ export default function AccountSettings() {
         </div>
       </main>
 
-      {/* ── Toast ──────────────────────────────────────────────── */}
-      <Toast toast={toast} onDismiss={dismissToast} />
     </AppLayout>
   );
 }
@@ -395,60 +389,6 @@ function PasswordStrength({ password }) {
         ))}
       </div>
       <span className={`text-xs font-medium flex-shrink-0 ${textColors[score]}`}>{labels[score]}</span>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Toast — amber chip, slides in from bottom-right, auto-dismisses in 5s
-// ─────────────────────────────────────────────────────────────────────────
-
-function Toast({ toast, onDismiss }) {
-  const timerRef = useRef(null);
-
-  useEffect(() => {
-    if (!toast) return;
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(onDismiss, 5000);
-    return () => clearTimeout(timerRef.current);
-  }, [toast, onDismiss]);
-
-  if (!toast) return null;
-
-  const isError   = toast.type === 'error';
-  const colorClass = isError
-    ? 'bg-red-500 text-white border-red-400/50'
-    : 'bg-amber-500 text-gray-900 border-amber-400/50';
-
-  return (
-    <div
-      className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5
-                  px-4 py-3 rounded-xl border shadow-2xl
-                  text-sm font-semibold
-                  animate-slide-up
-                  ${colorClass}`}
-      style={{ animation: 'slideUp 0.25s ease-out' }}
-    >
-      {isError
-        ? <span className="text-base leading-none">✕</span>
-        : <span className="text-base leading-none">✓</span>
-      }
-      {toast.message}
-      <button
-        onClick={onDismiss}
-        className="ml-1 opacity-70 hover:opacity-100 transition-opacity leading-none text-base"
-        aria-label="Dismiss"
-      >
-        ×
-      </button>
-
-      {/* Inject keyframe once */}
-      <style>{`
-        @keyframes slideUp {
-          from { opacity: 0; transform: translateY(16px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
     </div>
   );
 }

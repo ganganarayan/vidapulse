@@ -76,9 +76,10 @@ export default function VideoDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [viewState, setViewState] = useState('initialising');
-  const [video,     setVideo]     = useState(null);
-  const [fetchError, setFetchError] = useState('');
+  const [viewState,    setViewState]    = useState('initialising');
+  const [video,        setVideo]        = useState(null);
+  const [fetchError,   setFetchError]   = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // ── Initial fetch ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -111,9 +112,11 @@ export default function VideoDetail() {
   }, []);
 
   const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
     api.get(`/videos/${id}`)
       .then(res => setVideo(res.data.video))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setIsRefreshing(false));
   }, [id]);
 
   // ── Render ─────────────────────────────────────────────────────────────
@@ -154,6 +157,7 @@ export default function VideoDetail() {
       user={user}
       onBack={() => navigate('/dashboard')}
       onRefresh={handleRefresh}
+      isRefreshing={isRefreshing}
     />
   );
 }
@@ -367,7 +371,7 @@ function DashboardReveal({ video, user, onRevealComplete }) {
 // ReadyDashboard — static view for return visits (no entry animation)
 // ─────────────────────────────────────────────────────────────────────────
 
-function ReadyDashboard({ video, user, onBack, onRefresh }) {
+function ReadyDashboard({ video, user, onBack, onRefresh, isRefreshing }) {
   return (
     <VideoAnalyticsView
       video={video}
@@ -375,6 +379,7 @@ function ReadyDashboard({ video, user, onBack, onRefresh }) {
       animateIn={false}
       onBack={onBack}
       onRefresh={onRefresh}
+      isRefreshing={isRefreshing}
     />
   );
 }

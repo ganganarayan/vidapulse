@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api              from '../../lib/api';
+import { useToast }     from '../../contexts/ToastContext';
 import InsightsSection      from './InsightsSection';
 import HeatmapSection       from './HeatmapSection';
 import ViewerStoriesSection from './ViewerStoriesSection';
@@ -172,6 +173,7 @@ export default function VideoAnalyticsView({
   onAnimationComplete = null,
   onBack              = null,
   onRefresh           = null,
+  isRefreshing        = false,
 }) {
   const navigate = useNavigate();
   const handleBack = onBack ?? (() => navigate('/dashboard'));
@@ -247,10 +249,11 @@ export default function VideoAnalyticsView({
           {onRefresh && (
             <button
               onClick={onRefresh}
-              className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
+              disabled={isRefreshing}
+              className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors disabled:cursor-not-allowed"
               title="Refresh analytics"
             >
-              <RefreshIcon />
+              <RefreshIcon spinning={isRefreshing} />
             </button>
           )}
           <Link
@@ -695,6 +698,7 @@ const DEFAULTS = {
 };
 
 function PlayerSettingsSection({ videoId }) {
+  const { showToast } = useToast();
   const [settings, setSettings] = React.useState(null);
   const [saving,   setSaving]   = React.useState(false);
   const [open,     setOpen]     = React.useState(false);
@@ -707,14 +711,20 @@ function PlayerSettingsSection({ videoId }) {
   }, [videoId, open]);
 
   async function toggle(key) {
+    const prev = { ...settings };
     const next = { ...settings, [key]: !settings[key] };
-    setSettings(next);
+    setSettings(next);   // optimistic update
     setSaving(true);
     try {
       const { data } = await api.patch(`/videos/${videoId}/player-settings`, next);
       setSettings(data.settings);
-    } catch (_) {}
-    finally { setSaving(false); }
+      showToast('Player settings saved');
+    } catch (err) {
+      setSettings(prev);  // revert on error
+      showToast(err.response?.data?.message ?? 'Failed to save settings', 'error');
+    } finally {
+      setSaving(false);
+    }
   }
 
   const ROWS = [
@@ -854,14 +864,19 @@ function CloseIcon() {
   );
 }
 
-function RefreshIcon() {
+function RefreshIcon({ spinning = false }) {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+    <svg
+      width="15" height="15" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      style={spinning ? { animation: 'vpSpin 0.8s linear infinite' } : undefined}
     >
       <polyline points="23 4 23 10 17 10" />
       <polyline points="1 20 1 14 7 14" />
       <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+      {spinning && (
+        <style>{`@keyframes vpSpin { from { transform-origin: center; transform: rotate(0deg); } to { transform-origin: center; transform: rotate(360deg); } }`}</style>
+      )}
     </svg>
   );
 }

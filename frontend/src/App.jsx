@@ -2,8 +2,10 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ToastProvider }         from './contexts/ToastContext';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import Login             from './pages/Login';
+import Register          from './pages/Register';
 import SetPassword       from './pages/SetPassword';
 import ForgotPassword    from './pages/ForgotPassword';
 import ResetPassword     from './pages/ResetPassword';
@@ -29,7 +31,7 @@ function ProtectedRoute({ children }) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <span className="text-amber-500 text-3xl">▶</span>
+          <span className="text-amber-500 text-3xl select-none">{'▶︎'}</span>
           <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
@@ -53,7 +55,7 @@ function AdminRoute({ children }) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <span className="text-amber-500 text-3xl">▶</span>
+          <span className="text-amber-500 text-3xl select-none">{'▶︎'}</span>
           <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
@@ -70,6 +72,7 @@ function AdminRoute({ children }) {
 export default function App() {
   return (
     <AuthProvider>
+      <ToastProvider>
       <BrowserRouter>
         {/*
           ImpersonationBanner sits outside <Routes> so it persists across
@@ -81,6 +84,7 @@ export default function App() {
 
           {/* ── Auth pages (public) ─────────────────────────── */}
           <Route path="/login"           element={<Login />} />
+          <Route path="/register"        element={<Register />} />
           <Route path="/set-password"    element={<SetPassword />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password"  element={<ResetPassword />} />
@@ -153,6 +157,7 @@ export default function App() {
 
         </Routes>
       </BrowserRouter>
+      </ToastProvider>
     </AuthProvider>
   );
 }

@@ -327,6 +327,81 @@ router.post('/logout', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// POST /api/auth/register
+//
+// Self-signup: creates a free subscriber account and logs in.
+// Body: { email, name, password }
+// ─────────────────────────────────────────────────────────────
+
+router.post('/register', async (req, res, next) => {
+  try {
+    const { email, name, password } = req.body ?? {};
+
+    if (!email || !name || !password) {
+      return res.status(400).json({ error: 'Validation Error', message: 'email, name and password are required' });
+    }
+    const normalizedEmail = String(email).toLowerCase().trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return res.status(400).json({ error: 'Validation Error', message: 'Enter a valid email address' });
+    }
+    if (String(password).length < 8) {
+      return res.status(400).json({ error: 'Validation Error', message: 'Password must be at least 8 characters' });
+    }
+
+    // Check duplicate
+    const { rows: existing } = await pool.query(
+      `SELECT id FROM users WHERE email = $1`, [normalizedEmail]
+    );
+    if (existing.length > 0) {
+      return res.status(409).json({ error: 'Conflict', message: 'An account with that email already exists' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: plans } = await client.query(
+        `SELECT id FROM plans WHERE name = 'free' AND is_active = TRUE LIMIT 1`
+      );
+      if (!plans.length) throw new Error('Free plan not found');
+
+      const hash = await require('bcrypt').hash(password, 12);
+
+      const { rows: [user] } = await client.query(
+        `INSERT INTO users (email, name, plan_id, role, password_hash, password_set, created_via)
+         VALUES ($1, $2, $3, 'subscriber', $4, TRUE, 'self_signup')
+         RETURNING id`,
+        [normalizedEmail, String(name).trim(), plans[0].id, hash]
+      );
+
+      await client.query(
+        `INSERT INTO user_preferences (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [user.id]
+      );
+      await client.query(
+        `INSERT INTO onboarding_state (user_id, signed_up_at) VALUES ($1, NOW()) ON CONFLICT DO NOTHING`,
+        [user.id]
+      );
+
+      await client.query('COMMIT');
+
+      const token = await authService.buildJwt(user.id);
+      authService.setJwtCookie(res, token);
+
+      logger.info(`[auth/register] New subscriber: ${normalizedEmail}`);
+      return res.status(201).json({ ok: true });
+
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
 // PATCH /api/auth/me  (requires auth)
 //
 // Updates the authenticated user's name and/or password.

@@ -266,6 +266,8 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
     var VID=${JSON.stringify(id)};
     var RESUME=${JSON.stringify(resumePlay)};
 
+    console.log('[VidaPulse] tracker loaded — API:', API, '| video:', VID);
+
     /* Persistent viewer cookie */
     var k='_vp_'+VID.slice(0,8),ck=localStorage.getItem(k);
     if(!ck){
@@ -276,11 +278,13 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
       }catch(e){ck=Math.random().toString(36).slice(2)+Date.now().toString(36);}
       localStorage.setItem(k,ck);
     }
+    console.log('[VidaPulse] viewer cookie:', ck);
 
     var sid=null,on=false,t0=0,maxP=0,secs=0,ivs=[];
     var dv=window.innerWidth<768?'mobile':window.innerWidth<1024?'tablet':'desktop';
 
     function sess(){
+      console.log('[VidaPulse] creating session...');
       fetch(API+'/analytics/session',{method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({video_id:VID,viewer_cookie:ck,
@@ -288,11 +292,20 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
           referrer:document.referrer,device_type:dv,
           screen_width:screen.width,screen_height:screen.height,
           user_agent:navigator.userAgent})
-      }).then(function(r){return r.json();}).then(function(d){sid=d.session_id;});
+      }).then(function(r){
+        console.log('[VidaPulse] session HTTP status:', r.status);
+        return r.json();
+      }).then(function(d){
+        sid=d.session_id;
+        console.log('[VidaPulse] session created:', sid);
+      }).catch(function(e){
+        console.error('[VidaPulse] session error:', e);
+      });
     }
 
     function ping(ev){
-      if(!sid)return;
+      if(!sid){console.warn('[VidaPulse] ping skipped — no session yet, event:', ev);return;}
+      console.log('[VidaPulse] ping event:', ev, '| maxPct:', maxP.toFixed(1), '| watchSecs:', secs.toFixed(1));
       var body=JSON.stringify({session_id:sid,video_id:VID,event:ev,
         max_pct:maxP,watch_seconds:secs,intervals:ivs});
       /* sendBeacon must use a Blob with explicit JSON type —
