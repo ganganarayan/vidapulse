@@ -35,9 +35,10 @@ const createUserSchema = z.object({
 
   // Only these three plan names are accepted from the webhook.
   // admin_lifetime is internal only and cannot be assigned via webhook.
+  // Defaults to 'free' when not provided.
   plan : z.enum(['free', 'starter', 'pro'], {
     errorMap: () => ({ message: 'plan must be one of: free, starter, pro' }),
-  }),
+  }).optional().default('free'),
 
   // Optional classification fields — drive divineleads email branching
   use_case: z.enum([
@@ -121,16 +122,15 @@ router.post('/create-user', webhookAuth, async (req, res) => {
       // Idempotent response: account already exists, nothing was changed
       logger.info(`[webhook/create-user] Existing user returned for: ${parseResult.data.email}`);
       return res.status(200).json({
-        status  : 'exists',
-        message : 'Account already exists for this email — no changes made',
+        success : true,
+        existing: true,
         user_id : user.id,
       });
     }
 
     logger.info(`[webhook/create-user] ✓ Created account for: ${parseResult.data.email}`);
-    return res.status(201).json({
-      status  : 'created',
-      message : 'Account created. Set-password link delivered via behavioral webhook to divineleads.',
+    return res.status(200).json({
+      success : true,
       user_id : user.id,
     });
 

@@ -43,6 +43,19 @@ export default function Dashboard() {
   const [videos,        setVideos]        = useState(null);
   const [videosLoading, setVideosLoading] = useState(true);
 
+  // After OAuth login the backend redirects to /dashboard?token=JWT.
+  // Strip the token from the URL immediately so it never sits in browser history.
+  // The httpOnly cookie is already set — the token param is only for non-cookie clients.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('token')) {
+      params.delete('token');
+      const newSearch = params.toString();
+      const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '');
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     api.get('/videos')

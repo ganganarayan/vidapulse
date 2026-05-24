@@ -85,34 +85,51 @@ async function loginWithPassword(email, password) {
   );
   const user = result.rows[0];
 
-  // Use a single generic message for missing/inactive accounts to prevent
-  // email enumeration (don't reveal whether the address is registered).
+  // Unknown or inactive account — constant-time compare prevents email enumeration.
+  // This is a valid bcrypt hash (cost 12) that will never match any real password
+  // but forces the full work factor so timing is identical to a found account.
   if (!user || !user.is_active) {
-    // Run a dummy bcrypt compare so timing stays constant regardless of whether
-    // the user exists — prevents timing-based email enumeration.
-    // This is a syntactically valid bcrypt hash (cost 12); it will never match
-    // any real password but forces the full bcrypt work factor to run.
     await bcrypt.compare(password, '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW');
     throw Object.assign(
-      new Error('Incorrect email or password.'),
+      new Error('Invalid email or password'),
       { code: 'INVALID_CREDENTIALS' }
     );
   }
 
+  // ── First login: password_set = FALSE ──────────────────────────────────
+  // Account created by webhook — subscriber hasn't set a password yet.
+  // Their first login attempt IS their password-set step: validate, hash,
+  // persist. From this point on they are a returning user.
   if (!user.password_set || !user.password_hash) {
-    // Email exists but uses OAuth / hasn't set a password yet.
-    // This message is intentionally specific — it guides the user without
-    // revealing more than necessary (the account IS known to the user at this point).
-    throw Object.assign(
-      new Error('Password not set — sign in with Google or Microsoft, or use Forgot Password.'),
-      { code: 'PASSWORD_NOT_SET' }
+    if (password.length < 8) {
+      throw Object.assign(
+        new Error('Password must be at least 8 characters'),
+        { code: 'VALIDATION_ERROR' }
+      );
+    }
+    if (!/\d/.test(password)) {
+      throw Object.assign(
+        new Error('Password must contain at least one number'),
+        { code: 'VALIDATION_ERROR' }
+      );
+    }
+    const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    await pool.query(
+      `UPDATE users
+       SET password_hash = $1, password_set = TRUE,
+           last_login_at = NOW(), updated_at  = NOW()
+       WHERE id = $2`,
+      [hash, user.id]
     );
+    logger.info(`[authService] First login — password set for: ${normalizedEmail}`);
+    return { ...user, first_login: true };
   }
 
+  // ── Returning user: verify password ───────────────────────────────────
   const match = await bcrypt.compare(password, user.password_hash);
   if (!match) {
     throw Object.assign(
-      new Error('Incorrect email or password.'),
+      new Error('Invalid email or password'),
       { code: 'INVALID_CREDENTIALS' }
     );
   }
@@ -123,7 +140,7 @@ async function loginWithPassword(email, password) {
   );
 
   logger.info(`[authService] Password login: ${normalizedEmail}`);
-  return user;
+  return { ...user, first_login: false };
 }
 
 // ─────────────────────────────────────────────────────────────

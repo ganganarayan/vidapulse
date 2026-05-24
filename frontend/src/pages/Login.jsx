@@ -43,13 +43,14 @@ export default function Login() {
     setLoading(true);
     try {
       await api.post('/auth/login', { email, password });
-      // Refetch user BEFORE navigating — the cookie is now set and
+      // Refetch user BEFORE navigating — the httpOnly cookie is now set and
       // AuthContext needs to load the user so ProtectedRoute lets us through.
-      // Without this, ProtectedRoute sees user=null and redirects back to /login.
       await refetch();
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      setError(err.response?.data?.message || 'Something went wrong. Please try again.');
+      // Server returns { error: '...' } for both 401 and first-login 400
+      const msg = err.response?.data?.error || err.response?.data?.message || 'Something went wrong. Please try again.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -80,7 +81,7 @@ export default function Login() {
 
       {/* Card */}
       <div className="w-full max-w-md bg-gray-800 border border-gray-700 rounded-2xl p-8 shadow-xl">
-        <h1 className="text-xl font-bold text-gray-50 mb-6">Welcome back</h1>
+        <h1 className="text-xl font-bold text-gray-50 mb-6">Welcome to VidaPulse</h1>
 
         {/* Error banner */}
         {error && (
@@ -177,7 +178,7 @@ export default function Login() {
                        text-gray-900 font-semibold text-sm rounded-lg py-2.5
                        transition-colors disabled:cursor-not-allowed mt-1"
           >
-            {loading ? 'Signing in…' : 'Sign in'}
+            {loading ? 'Signing in…' : 'Continue'}
           </button>
         </form>
 

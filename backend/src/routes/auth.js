@@ -221,17 +221,24 @@ router.post('/login', async (req, res, next) => {
 
     const user  = await authService.loginWithPassword(parsed.data.email, parsed.data.password);
     const token = await authService.buildJwt(user.id);
+
+    // Set httpOnly cookie for browser-based auth (used by the frontend SPA).
+    // Also return token in the body so native/mobile clients can use it directly.
     authService.setJwtCookie(res, token);
 
-    // Do NOT return the token in the body — it is set as an httpOnly cookie.
-    // Returning it in the body would let JS read it and defeat the httpOnly protection.
-    return res.json({ ok: true });
+    return res.json({
+      success    : true,
+      token,
+      first_login: !!user.first_login,
+      redirect   : '/dashboard',
+    });
   } catch (err) {
     if (err.code === 'INVALID_CREDENTIALS') {
-      return res.status(401).json({ error: 'Unauthorized', message: err.message });
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
-    if (err.code === 'PASSWORD_NOT_SET') {
-      return res.status(401).json({ error: 'Unauthorized', message: err.message });
+    if (err.code === 'VALIDATION_ERROR') {
+      // First-login password validation failure (too short, no number)
+      return res.status(400).json({ error: err.message });
     }
     next(err);
   }
@@ -569,7 +576,9 @@ router.get('/oauth/google/callback', async (req, res) => {
     authService.setJwtCookie(res, jwt);
 
     logger.info(`[auth] Google OAuth success: ${profile.email}`);
-    return res.redirect(`${frontendUrl}/dashboard`);
+    // Token in URL lets the frontend store it in localStorage for non-cookie clients.
+    // The httpOnly cookie is also set so the browser SPA works without any extra JS.
+    return res.redirect(`${frontendUrl}/dashboard?token=${jwt}`);
 
   } catch (err) {
     logger.error(`[auth] Google OAuth callback error: ${err.message}`);
@@ -621,7 +630,7 @@ router.get('/oauth/microsoft/callback', async (req, res) => {
     authService.setJwtCookie(res, jwt);
 
     logger.info(`[auth] Microsoft OAuth success: ${profile.email}`);
-    return res.redirect(`${frontendUrl}/dashboard`);
+    return res.redirect(`${frontendUrl}/dashboard?token=${jwt}`);
 
   } catch (err) {
     logger.error(`[auth] Microsoft OAuth callback error: ${err.message}`);
