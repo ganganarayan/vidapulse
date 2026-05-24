@@ -603,6 +603,10 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         console.log('[VidaPulse] session HTTP status:', r.status);
         return r.json();
       }).then(function(d){
+        if(!d||!d.session_id){
+          console.error('[VidaPulse] session bad response — no session_id:', JSON.stringify(d));
+          return;
+        }
         sid=d.session_id;
         console.log('[VidaPulse] session created:', sid);
         /* Flush any pings that fired before the session was ready.
@@ -619,19 +623,25 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
     }
 
     function ping(ev){
-      if(!sid){pq.push(ev);console.log('[VidaPulse] ping queued (session pending), event:',ev);return;}
-      console.log('[VidaPulse] ping event:', ev, '| maxPct:', maxP.toFixed(1), '| watchSecs:', secs.toFixed(1));
+      if(!sid){pq.push(ev);console.log('[VidaPulse] queued (no session yet):',ev);return;}
       var body=JSON.stringify({session_id:sid,video_id:VID,event:ev,
         max_pct:maxP,watch_seconds:secs,intervals:ivs});
-      /* sendBeacon must use a Blob with explicit JSON type —
-         passing a plain string sends as text/plain which Express
-         cannot parse, silently dropping every analytics event. */
-      if(navigator.sendBeacon){
-        try{navigator.sendBeacon(API+'/analytics/ping',new Blob([body],{type:'application/json'}));}
-        catch(e){fetch(API+'/analytics/ping',{method:'POST',keepalive:true,
-          headers:{'Content-Type':'application/json'},body:body});}
-      }else{fetch(API+'/analytics/ping',{method:'POST',keepalive:true,
-        headers:{'Content-Type':'application/json'},body:body});}
+      console.log('[VidaPulse] ping →',ev,'| sid:',sid.slice(0,8),'| maxPct:',maxP.toFixed(1),'| secs:',secs.toFixed(1));
+      /* Use fetch+keepalive — works mid-session AND on page unload.
+         sendBeacon is NOT used: it returns false silently on failure
+         (no exception), so the catch block never runs and pings vanish. */
+      fetch(API+'/analytics/ping',{
+        method:'POST',keepalive:true,
+        headers:{'Content-Type':'application/json'},body:body
+      }).then(function(r){
+        console.log('[VidaPulse] ping ✓',ev,'→ HTTP',r.status);
+      }).catch(function(e){
+        console.warn('[VidaPulse] ping ✗',ev,'→',e.message);
+        /* last-ditch fallback for unload scenario */
+        try{navigator.sendBeacon&&navigator.sendBeacon(
+          API+'/analytics/ping',new Blob([body],{type:'application/json'}));}
+        catch(_){}
+      });
     }
 
     /* Resume playback helper */
