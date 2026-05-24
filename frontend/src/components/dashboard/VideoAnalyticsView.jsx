@@ -692,7 +692,7 @@ function AnalyticsSections({ video, user }) {
 // ─────────────────────────────────────────────────────────────────────────
 
 const DEFAULTS = {
-  autoplay: false, autoplay_muted: true, show_controls: true,
+  autoplay: false, autoplay_muted: true,
   show_seek_bar: true, show_play_pause_btn: true, show_playback_speed: true,
   show_fullscreen_btn: true, resume_playback: false, loop: false,
 };
@@ -729,9 +729,8 @@ function PlayerSettingsSection({ videoId }) {
 
   const ROWS = [
     { key: 'autoplay',            label: 'Autoplay',            desc: 'Start playing when the page loads' },
-    { key: 'show_controls',       label: 'Show Controls',       desc: 'Play / pause and volume controls' },
+    { key: 'show_play_pause_btn', label: 'Play / Pause Button', desc: 'Show the play and pause button in the control bar' },
     { key: 'show_seek_bar',       label: 'Seek Bar',            desc: 'Allow viewers to scrub through the video' },
-    { key: 'show_play_pause_btn', label: 'Play / Pause Button', desc: 'Show the play and pause button' },
     { key: 'show_playback_speed', label: 'Playback Speed',      desc: 'Let viewers choose 0.5×, 1×, 1.25×, 1.5×, 2×' },
     { key: 'show_fullscreen_btn', label: 'Fullscreen Button',   desc: 'Show the fullscreen toggle' },
     { key: 'resume_playback',     label: 'Resume Playback',     desc: 'Remember where viewers left off last time' },

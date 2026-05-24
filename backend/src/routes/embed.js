@@ -94,16 +94,22 @@ router.get('/:videoId', async (req, res) => {
 
 function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
   const { id, title, source_type } = video;
-  // Player settings with safe defaults
-  const autoplay     = ps.autoplay     ?? false;
-  const showControls = ps.show_controls ?? true;
-  const showSeekBar  = ps.show_seek_bar ?? true;
-  const showSpeed    = ps.show_playback_speed ?? true;
-  const resumePlay   = ps.resume_playback ?? false;
-  const loopVideo    = ps.loop ?? false;
+
+  // Individual player settings (show_controls removed — every control has its own toggle)
+  const autoplay       = ps.autoplay           ?? false;
+  const showPlayPause  = ps.show_play_pause_btn ?? true;
+  const showSeekBar    = ps.show_seek_bar       ?? true;
+  const showSpeed      = ps.show_playback_speed ?? true;
+  const showFullscreen = ps.show_fullscreen_btn ?? true;
+  const resumePlay     = ps.resume_playback     ?? false;
+  const loopVideo      = ps.loop               ?? false;
+
+  // Show the control bar only if at least one individual control is enabled
+  const anyControls = showPlayPause || showSeekBar || showSpeed || showFullscreen;
 
   let playerHtml  = '';
   let extraScript = '';
+  let extraStyles = '';
 
   // ── YouTube ─────────────────────────────────────────────────────────
   if (source_type === 'youtube') {
@@ -121,7 +127,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         player=new YT.Player('yt-player',{
           videoId:${JSON.stringify(ytId)},
           width:'100%',height:'100%',
-          playerVars:{rel:0,modestbranding:1},
+          playerVars:{rel:0,modestbranding:1,controls:${anyControls ? 1 : 0}},
           events:{
             onReady:function(){
               sess();
@@ -159,7 +165,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
   else if (source_type === 'vimeo') {
     const vmId = extractVimeoId(videoUrl);
     playerHtml = `<iframe id="vm-player"
-      src="https://player.vimeo.com/video/${esc(vmId)}?api=1"
+      src="https://player.vimeo.com/video/${esc(vmId)}?api=1&controls=${anyControls ? 1 : 0}"
       style="width:100%;height:100%;border:none"
       allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
     extraScript = `
@@ -190,21 +196,70 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
   }
 
   // ── HLS / MP4 / S3 / Azure (direct video) ───────────────────────────
+  // Custom control bar: each button only rendered when its toggle is ON.
+  // Turning off all 4 individual toggles hides the bar entirely.
   else if (['hls_stream','mp4_direct','amazon_s3','azure_blob'].includes(source_type)) {
     const isHls = source_type === 'hls_stream';
+
+    // Build only the control elements that are enabled
+    const ppBtn = showPlayPause
+      ? `<button class="vp-btn" id="vp-pp" title="Play/Pause">
+           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+         </button>` : '';
+    const skBar = showSeekBar
+      ? `<input type="range" id="vp-seek" min="0" max="1000" value="0">` : '';
+    const tmDisp = (showSeekBar || showPlayPause)
+      ? `<span id="vp-time">0:00</span>` : '';
+    const spSel = showSpeed
+      ? `<select id="vp-speed">
+           <option value="0.5">0.5×</option>
+           <option value="1" selected>1×</option>
+           <option value="1.25">1.25×</option>
+           <option value="1.5">1.5×</option>
+           <option value="2">2×</option>
+         </select>` : '';
+    const fsBtn = showFullscreen
+      ? `<button class="vp-btn" id="vp-fs" title="Fullscreen">
+           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+         </button>` : '';
+
     playerHtml = `<video id="vp-vid" preload="metadata"
-      ${showControls ? 'controls' : ''}
-      ${autoplay ? 'autoplay muted' : ''}
+      ${autoplay ? 'autoplay muted playsinline' : 'playsinline'}
       ${loopVideo ? 'loop' : ''}
-      style="width:100%;height:100%;background:#000">
+      style="width:100%;height:100%;display:block;background:#000">
       ${isHls ? '' : `<source src="${esc(videoUrl)}" />`}
-      Your browser does not support video playback.
-    </video>`;
+    </video>
+    ${anyControls ? `<div id="vp-bar">${ppBtn}${skBar}${tmDisp}${spSel}${fsBtn}</div>` : ''}`;
+
+    extraStyles = `
+      #vp-bar{position:absolute;bottom:0;left:0;right:0;
+        padding:8px 10px 10px;
+        background:linear-gradient(transparent,rgba(0,0,0,.8));
+        display:flex;align-items:center;gap:8px;
+        opacity:0;transition:opacity .25s;pointer-events:none;}
+      #player-wrap:hover #vp-bar,#player-wrap.show-bar #vp-bar{opacity:1;pointer-events:auto;}
+      .vp-btn{background:none;border:none;color:#fff;cursor:pointer;
+        padding:3px 4px;display:flex;align-items:center;flex-shrink:0;line-height:1;}
+      .vp-btn:hover{color:#f59e0b;}
+      #vp-seek{flex:1;-webkit-appearance:none;appearance:none;
+        height:3px;border-radius:2px;
+        background:linear-gradient(to right,#f59e0b var(--pct,0%),rgba(255,255,255,.25) var(--pct,0%));
+        cursor:pointer;outline:none;min-width:30px;}
+      #vp-seek::-webkit-slider-thumb{-webkit-appearance:none;
+        width:11px;height:11px;border-radius:50%;background:#f59e0b;cursor:pointer;margin-top:-4px;}
+      #vp-seek::-moz-range-thumb{width:11px;height:11px;border-radius:50%;
+        background:#f59e0b;cursor:pointer;border:none;}
+      #vp-time{color:rgba(255,255,255,.75);font-size:11px;white-space:nowrap;
+        flex-shrink:0;font-family:sans-serif;}
+      #vp-speed{background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.2);
+        color:#fff;font-size:11px;padding:2px 4px;border-radius:3px;
+        cursor:pointer;flex-shrink:0;}
+    `;
+
     extraScript = `
       var v=document.getElementById('vp-vid');
 
       ${isHls ? `
-      /* Load HLS.js from CDN for HLS streams */
       var s=document.createElement('script');
       s.src='https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js';
       s.onload=function(){
@@ -224,11 +279,88 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
       sess();
       `}
 
-      function attachVideoEvents(v){
-        /* Resume playback — seek to stored position on first load */
-        var resumePos=loadPos();
-        if(resumePos>0){v.currentTime=resumePos;}
+      /* Format seconds → m:ss */
+      function fmt(s){s=Math.floor(s||0);var m=Math.floor(s/60);return m+':'+('0'+(s%60)).slice(-2);}
 
+      function attachVideoEvents(v){
+        var pp=document.getElementById('vp-pp');
+        var sk=document.getElementById('vp-seek');
+        var tm=document.getElementById('vp-time');
+        var sp=document.getElementById('vp-speed');
+        var fs=document.getElementById('vp-fs');
+        var pw=document.getElementById('player-wrap');
+
+        /* Auto-show bar briefly on tap (mobile) */
+        if(pw){
+          pw.addEventListener('click',function(){
+            pw.classList.add('show-bar');
+            clearTimeout(pw._bt);
+            pw._bt=setTimeout(function(){pw.classList.remove('show-bar');},3000);
+          });
+        }
+
+        /* Resume playback */
+        var resumePos=loadPos();
+        if(resumePos>5){v.currentTime=resumePos;}
+
+        /* Play/Pause button */
+        var PLAY_ICON='<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+        var PAUSE_ICON='<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+        if(pp){
+          pp.onclick=function(e){e.stopPropagation();v.paused?v.play():v.pause();};
+          v.addEventListener('play',function(){if(pp)pp.innerHTML=PAUSE_ICON;});
+          v.addEventListener('pause',function(){if(pp)pp.innerHTML=PLAY_ICON;});
+          v.addEventListener('ended',function(){if(pp)pp.innerHTML=PLAY_ICON;});
+        }
+
+        /* Seek bar */
+        if(sk){
+          var dragging=false;
+          function updateBar(){
+            if(v.duration){
+              var p=(v.currentTime/v.duration)*100;
+              sk.style.setProperty('--pct',p+'%');
+              sk.value=(v.currentTime/v.duration)*1000;
+            }
+            if(tm)tm.textContent=fmt(v.currentTime);
+          }
+          v.addEventListener('timeupdate',function(){if(!dragging)updateBar();});
+          v.addEventListener('loadedmetadata',updateBar);
+          sk.addEventListener('mousedown',function(){dragging=true;});
+          sk.addEventListener('touchstart',function(){dragging=true;},{passive:true});
+          sk.addEventListener('input',function(){
+            var pct=(sk.value/1000)*100;
+            sk.style.setProperty('--pct',pct+'%');
+            if(tm&&v.duration)tm.textContent=fmt((sk.value/1000)*v.duration);
+          });
+          sk.addEventListener('change',function(){
+            dragging=false;
+            if(v.duration)v.currentTime=(sk.value/1000)*v.duration;
+          });
+          sk.addEventListener('mouseup',function(){
+            dragging=false;
+            if(v.duration)v.currentTime=(sk.value/1000)*v.duration;
+          });
+        }
+
+        /* Playback speed */
+        if(sp){sp.onchange=function(){v.playbackRate=parseFloat(sp.value);};}
+
+        /* Fullscreen */
+        var FS_ENTER='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+        var FS_EXIT='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>';
+        if(fs){
+          fs.onclick=function(e){
+            e.stopPropagation();
+            if(document.fullscreenElement){document.exitFullscreen();}
+            else{(pw||v).requestFullscreen().catch(function(){});}
+          };
+          document.addEventListener('fullscreenchange',function(){
+            if(fs)fs.innerHTML=document.fullscreenElement?FS_EXIT:FS_ENTER;
+          });
+        }
+
+        /* Analytics events */
         v.addEventListener('play',function(){
           if(!on){on=true;t0=v.currentTime;ping('play');}
         });
@@ -245,6 +377,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         });
         setInterval(function(){
           if(on&&v.duration>0){maxP=Math.max(maxP,v.currentTime/v.duration*100);}
+          if(RESUME&&on){savePos(v.currentTime);}
         },10000);
       }
     `;
@@ -345,9 +478,11 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     html,body{width:100%;height:100%;overflow:hidden;background:#000}
-    #player-wrap{position:absolute;inset:0;display:flex;align-items:stretch}
-    #player-wrap>*{flex:1}
+    #player-wrap{position:absolute;inset:0;overflow:hidden}
+    #player-wrap>iframe,#player-wrap>video{width:100%;height:100%;display:block}
+    #yt-wrap,#yt-wrap>div{position:absolute;inset:0}
     #yt-player{position:absolute;inset:0}
+    ${extraStyles}
   </style>
 </head>
 <body>
