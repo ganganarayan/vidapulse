@@ -587,7 +587,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
     }
     console.log('[VidaPulse] viewer cookie:', ck);
 
-    var sid=null,on=false,t0=0,maxP=0,secs=0,ivs=[];
+    var sid=null, pq=[], on=false,t0=0,maxP=0,secs=0,ivs=[];
     var dv=window.innerWidth<768?'mobile':window.innerWidth<1024?'tablet':'desktop';
 
     function sess(){
@@ -605,13 +605,21 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
       }).then(function(d){
         sid=d.session_id;
         console.log('[VidaPulse] session created:', sid);
+        /* Flush any pings that fired before the session was ready.
+           This is the normal case — play events almost always arrive
+           before the async session fetch returns (~200-500 ms on Railway). */
+        if(pq.length){
+          console.log('[VidaPulse] flushing',pq.length,'queued ping(s):', pq.join(','));
+          var q=pq.splice(0);
+          q.forEach(function(ev){ping(ev);});
+        }
       }).catch(function(e){
         console.error('[VidaPulse] session error:', e);
       });
     }
 
     function ping(ev){
-      if(!sid){console.warn('[VidaPulse] ping skipped — no session yet, event:', ev);return;}
+      if(!sid){pq.push(ev);console.log('[VidaPulse] ping queued (session pending), event:',ev);return;}
       console.log('[VidaPulse] ping event:', ev, '| maxPct:', maxP.toFixed(1), '| watchSecs:', secs.toFixed(1));
       var body=JSON.stringify({session_id:sid,video_id:VID,event:ev,
         max_pct:maxP,watch_seconds:secs,intervals:ivs});
