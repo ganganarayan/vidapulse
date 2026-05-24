@@ -372,70 +372,20 @@ function MetricCard({ label, value, format, visible, accent }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// generateEmbedSnippet — builds the self-contained tracker script string.
-// Called once per modal open so the apiBase is always current.
+// generateEmbedSnippet — returns a self-contained <iframe> tag.
+// The iframe loads /embed/:videoId which handles the player + all tracking
+// automatically — no extra steps, no scripts on the embedding page.
 // ─────────────────────────────────────────────────────────────────────────
 
-function generateEmbedSnippet(videoId, apiBase) {
-  return `<!-- VidaPulse tracker — paste before </body> on every page that shows this video -->
-<script>
-(function(vid,api){
-  /* 1. Persistent viewer cookie */
-  var k='_vp_'+vid.slice(0,8),ck=localStorage.getItem(k);
-  if(!ck){
-    ck=([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,function(c){
-      return(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16);
-    });
-    localStorage.setItem(k,ck);
-  }
-
-  /* 2. Create analytics session */
-  var sid=null;
-  var dv=window.innerWidth<768?'mobile':window.innerWidth<1024?'tablet':'desktop';
-  fetch(api+'/analytics/session',{method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({video_id:vid,viewer_cookie:ck,
-      page_url:location.href,referrer:document.referrer,device_type:dv,
-      screen_width:screen.width,screen_height:screen.height,
-      user_agent:navigator.userAgent})
-  }).then(function(r){return r.json();}).then(function(d){sid=d.session_id;});
-
-  /* 3. Send ping helper */
-  function ping(ev,max,secs,ivs){
-    if(!sid)return;
-    var body=JSON.stringify({session_id:sid,video_id:vid,event:ev,
-      max_pct:max,watch_seconds:secs,intervals:ivs});
-    if(navigator.sendBeacon){navigator.sendBeacon(api+'/analytics/ping',body);}
-    else{fetch(api+'/analytics/ping',{method:'POST',keepalive:true,
-      headers:{'Content-Type':'application/json'},body:body});}
-  }
-
-  /* 4. Hook into <video data-vp="VIDEO_ID"> or first <video> on the page */
-  document.addEventListener('DOMContentLoaded',function(){
-    var el=document.querySelector('[data-vp="'+vid+'"]')||document.querySelector('video');
-    if(!el)return;
-    var on=false,t0=0,maxP=0,secs=0,ivs=[];
-    el.addEventListener('play',function(){
-      if(!on){on=true;t0=el.currentTime;ping('play',maxP,secs,ivs);}
-    });
-    el.addEventListener('pause',function(){
-      if(on){on=false;var e=el.currentTime;ivs.push([t0,e]);secs+=e-t0;
-        maxP=Math.max(maxP,el.duration?e/el.duration*100:0);ping('pause',maxP,secs,ivs);}
-    });
-    el.addEventListener('ended',function(){
-      if(on){on=false;var e=el.currentTime;ivs.push([t0,e]);secs+=e-t0;}
-      maxP=100;ping('end',100,secs,ivs);
-    });
-    setInterval(function(){
-      if(on&&el.duration){maxP=Math.max(maxP,el.currentTime/el.duration*100);}
-    },10000);
-    window.addEventListener('beforeunload',function(){
-      if(on){var e=el.currentTime;ivs.push([t0,e]);secs+=e-t0;}
-      ping('end',maxP,secs,ivs);
-    });
-  });
-})('${videoId}','${apiBase}/api');
-</script>`;
+function generateEmbedSnippet(videoId, origin) {
+  return `<iframe
+  src="${origin}/embed/${videoId}"
+  width="560"
+  height="315"
+  frameborder="0"
+  allow="autoplay; fullscreen; picture-in-picture"
+  allowfullscreen>
+</iframe>`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -542,7 +492,7 @@ function EmbedModal({ video, copied, onCopy, onClose }) {
         <div className="flex items-center justify-between px-6 py-4
                         border-b border-gray-800 flex-shrink-0">
           <div>
-            <h2 className="text-base font-bold text-gray-50">Embed tracking code</h2>
+            <h2 className="text-base font-bold text-gray-50">Embed video</h2>
             <p className="text-xs text-gray-500 mt-0.5 truncate max-w-sm">
               {video?.title ?? 'Your video'}
             </p>
@@ -561,25 +511,10 @@ function EmbedModal({ video, copied, onCopy, onClose }) {
         <div className="px-6 py-5 overflow-y-auto flex-1">
 
           {/* Instructions */}
-          <ol className="text-sm text-gray-400 mb-5 flex flex-col gap-2 list-decimal list-inside">
-            <li>
-              Paste the snippet below just before the{' '}
-              <code className="text-amber-400 bg-gray-800 px-1 py-0.5 rounded text-xs">&lt;/body&gt;</code>{' '}
-              tag on any page where this video appears.
-            </li>
-            <li>
-              Add{' '}
-              <code className="text-amber-400 bg-gray-800 px-1 py-0.5 rounded text-xs">
-                data-vp=&quot;{video?.id ?? 'VIDEO_ID'}&quot;
-              </code>{' '}
-              to your{' '}
-              <code className="text-amber-400 bg-gray-800 px-1 py-0.5 rounded text-xs">&lt;video&gt;</code>{' '}
-              element so the tracker can find it. If you have only one video on the page, this step is optional.
-            </li>
-            <li>
-              That&apos;s it — plays, watch time, and heatmap data will appear in this dashboard automatically.
-            </li>
-          </ol>
+          <p className="text-sm text-gray-400 mb-5">
+            Copy the code below and paste it anywhere on your page — on any website, page builder, or canvas.
+            Plays, watch time, and heatmap data will appear in this dashboard automatically.
+          </p>
 
           {/* Code block */}
           <div className="relative">
@@ -597,9 +532,7 @@ function EmbedModal({ video, copied, onCopy, onClose }) {
         <div className="px-6 py-4 border-t border-gray-800 flex items-center
                         justify-between gap-3 flex-shrink-0">
           <p className="text-xs text-gray-600">
-            Works with any{' '}
-            <code className="text-gray-500">&lt;video&gt;</code>{' '}
-            element · No page-reload needed
+            Works on any website or page builder · No scripts or extra setup needed
           </p>
           <div className="flex gap-2 flex-shrink-0">
             <button
@@ -618,7 +551,7 @@ function EmbedModal({ video, copied, onCopy, onClose }) {
             >
               {copied
                 ? <><CheckSmallIcon className="text-gray-900" /> Copied!</>
-                : <><CopyIcon /> Copy snippet</>
+                : <><CopyIcon /> Copy embed code</>
               }
             </button>
           </div>

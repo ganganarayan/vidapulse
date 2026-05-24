@@ -469,7 +469,7 @@ router.get('/users', async (req, res, next) => {
        LEFT JOIN (
          SELECT user_id, COUNT(*)::int AS video_count
          FROM   videos
-         WHERE  is_deleted = FALSE
+         WHERE  is_active = TRUE
          GROUP  BY user_id
        ) vc ON vc.user_id = u.id
        ${whereClause}

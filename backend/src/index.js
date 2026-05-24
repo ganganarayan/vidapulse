@@ -32,6 +32,7 @@ const path         = require('path');
 const { testConnection } = require('./config/database');
 const { runMigrations  } = require('./db/migrate');
 const routes             = require('./routes');
+const embedRoutes        = require('./routes/embed');
 const { errorHandler   } = require('./middleware/errorHandler');
 const webhookSender      = require('./services/webhookSender');
 const scheduledJobs      = require('./services/scheduledJobs');
@@ -78,6 +79,13 @@ app.use(cookieParser());
 // ── Body parsing ──────────────────────────────────────────────
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// ─────────────────────────────────────────────────────────────
+// Embed route — public, no auth, must come before API + static
+// GET /embed/:videoId → self-contained HTML player + tracking
+// ─────────────────────────────────────────────────────────────
+
+app.use('/embed', embedRoutes);
 
 // ─────────────────────────────────────────────────────────────
 // API routes (always mounted, on all domains)

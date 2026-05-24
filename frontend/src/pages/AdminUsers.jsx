@@ -274,7 +274,7 @@ export default function AdminUsers() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
             </button>
-            <span className="text-amber-500 text-xl font-bold">▶</span>
+            <span className="text-amber-500 text-xl font-bold select-none">{'▶︎'}</span>
             <span className="text-white font-semibold">VidaPulse</span>
             <span className="text-gray-600 mx-1">/</span>
             <span className="text-gray-300">User Accounts</span>
