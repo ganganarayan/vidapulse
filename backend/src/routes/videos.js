@@ -742,12 +742,15 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
     const existing = await fetchPlayerSettings(req.params.id);
     const merged   = { ...existing, ...parseResult.data };
 
+    // Note: we do NOT include user_id in the INSERT — the table has a CHECK
+    // constraint that forbids video_id and user_id both being non-null.
+    // Per-video settings are keyed by video_id only.
     await pool.query(
       `INSERT INTO video_player_settings
-         (video_id, user_id, autoplay, autoplay_muted, show_controls, show_seek_bar,
+         (video_id, autoplay, autoplay_muted, show_controls, show_seek_bar,
           show_play_pause_btn, show_playback_speed, show_fullscreen_btn,
           resume_playback, loop, accent_color)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT (video_id) DO UPDATE SET
          autoplay            = EXCLUDED.autoplay,
          autoplay_muted      = EXCLUDED.autoplay_muted,
@@ -761,7 +764,7 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
          accent_color        = EXCLUDED.accent_color,
          updated_at          = NOW()`,
       [
-        req.params.id, req.user.id,
+        req.params.id,
         merged.autoplay, merged.autoplay_muted, merged.show_controls,
         merged.show_seek_bar, merged.show_play_pause_btn, merged.show_playback_speed,
         merged.show_fullscreen_btn, merged.resume_playback, merged.loop, merged.accent_color,
