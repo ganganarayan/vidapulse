@@ -327,6 +327,78 @@ router.post('/logout', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// PATCH /api/auth/me  (requires auth)
+//
+// Updates the authenticated user's name and/or password.
+// Body fields (all optional, at least one required):
+//   name            — display name (1-200 chars)
+//   new_password    — new password (min 8 chars)
+//   confirm_password — must equal new_password
+// ─────────────────────────────────────────────────────────────
+
+router.patch('/me', requireAuth, async (req, res, next) => {
+  try {
+    const { name, new_password, confirm_password } = req.body ?? {};
+    const setClauses = [];
+    const params     = [];
+
+    if (name !== undefined) {
+      const trimmed = String(name).trim();
+      if (!trimmed || trimmed.length > 200) {
+        return res.status(400).json({
+          error  : 'Validation Error',
+          message: 'Name must be between 1 and 200 characters',
+        });
+      }
+      params.push(trimmed);
+      setClauses.push(`name = $${params.length}`);
+    }
+
+    if (new_password !== undefined) {
+      if (!new_password || new_password.length < 8) {
+        return res.status(400).json({
+          error  : 'Validation Error',
+          message: 'Password must be at least 8 characters',
+        });
+      }
+      if (new_password !== confirm_password) {
+        return res.status(400).json({
+          error  : 'Validation Error',
+          message: 'Passwords do not match',
+        });
+      }
+      const hash = await require('bcrypt').hash(new_password, 12);
+      params.push(hash);
+      setClauses.push(`password_hash = $${params.length}`);
+      setClauses.push(`password_set = TRUE`);
+    }
+
+    if (!setClauses.length) {
+      return res.status(400).json({
+        error  : 'Validation Error',
+        message: 'Nothing to update — provide name or new_password',
+      });
+    }
+
+    setClauses.push('updated_at = NOW()');
+    params.push(req.user.id);
+
+    const { rows: [updated] } = await pool.query(
+      `UPDATE users SET ${setClauses.join(', ')}
+       WHERE id = $${params.length}
+       RETURNING id, name, email`,
+      params
+    );
+
+    logger.info(`[auth/me] User ${req.user.id} updated profile`);
+    return res.json({ ok: true, user: updated });
+
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
 // GET /api/auth/me  (requires auth)
 // ─────────────────────────────────────────────────────────────
 

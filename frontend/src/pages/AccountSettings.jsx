@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
 import AppLayout from '../components/AppLayout';
@@ -6,18 +6,27 @@ import AppLayout from '../components/AppLayout';
 /**
  * AccountSettings
  *
- * Profile, plan info, and security log for the authenticated user.
+ * Profile (with inline name editing), plan/billing, security, and
+ * inline password-change form.
+ *
+ * Toast system: amber chip that slides in from bottom-right and
+ * auto-dismisses after 5 seconds.
  */
 export default function AccountSettings() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [upgradeData, setUpgradeData] = useState(null);
+  const [toast,       setToast]       = useState(null); // { message, type }
 
-  // Fetch upgrade/plan data to get current video count + pricing links
   useEffect(() => {
     api.get('/upgrade').then(res => setUpgradeData(res.data)).catch(() => {});
   }, []);
 
-  const plan = user?.plan ?? 'free';
+  function showToast(message, type = 'success') {
+    setToast({ message, type });
+  }
+  function dismissToast() { setToast(null); }
+
+  const plan    = user?.plan ?? 'free';
   const isAdmin = user?.role === 'admin' || plan === 'admin_lifetime';
 
   return (
@@ -27,16 +36,19 @@ export default function AccountSettings() {
 
           <h1 className="text-xl font-bold text-gray-50 mb-8">Account Settings</h1>
 
-          {/* ── Profile ─────────────────────────────────────────── */}
+          {/* ── Profile ───────────────────────────────────────── */}
           <Section title="Profile">
-            <Row label="Name"  value={user?.name  ?? '—'} />
+            <EditableNameRow
+              user={user}
+              updateUser={updateUser}
+              onToast={showToast}
+            />
             <Row label="Email" value={user?.email ?? '—'} />
             <Row label="Role"  value={isAdmin ? 'Admin' : 'Subscriber'} />
           </Section>
 
           {/* ── Plan & Billing ─────────────────────────────────── */}
           <Section title="Plan & Billing">
-            {/* Current plan highlight */}
             <div className="px-4 py-4">
               <div className="flex items-center justify-between mb-3">
                 <div>
@@ -86,7 +98,6 @@ export default function AccountSettings() {
               </div>
             </div>
 
-            {/* Upgrade CTAs */}
             {(plan === 'free' || plan === 'starter') && (
               <div className="px-4 pb-4 border-t border-gray-700/50">
                 <p className="text-xs text-gray-400 font-medium mt-4 mb-3 uppercase tracking-wider">
@@ -116,15 +127,22 @@ export default function AccountSettings() {
               <div className="px-4 py-3 border-t border-gray-700/50 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
                 <p className="text-sm text-gray-300">
-                  {plan === 'admin_lifetime' ? 'Lifetime admin access — all features unlocked.' : 'Pro plan active — all features unlocked.'}
+                  {plan === 'admin_lifetime'
+                    ? 'Lifetime admin access — all features unlocked.'
+                    : 'Pro plan active — all features unlocked.'}
                 </p>
               </div>
             )}
           </Section>
 
+          {/* ── Change Password ────────────────────────────────── */}
+          <Section title="Password">
+            <ChangePasswordForm onToast={showToast} />
+          </Section>
+
           {/* ── Security ───────────────────────────────────────── */}
           <Section title="Security">
-            <div className="flex items-start gap-3 py-2">
+            <div className="flex items-start gap-3 px-4 py-4">
               <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mt-0.5">
                 <LockIcon />
               </div>
@@ -139,26 +157,299 @@ export default function AccountSettings() {
             </div>
           </Section>
 
-          {/* ── Password ───────────────────────────────────────── */}
-          <Section title="Password">
-            <div className="py-2 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-400">
-                  To change your password, use the forgot-password flow from the login page.
-                </p>
-              </div>
-              <a
-                href="/forgot-password"
-                className="flex-shrink-0 ml-4 text-sm text-amber-400 hover:text-amber-300 transition-colors"
-              >
-                Reset password →
-              </a>
-            </div>
-          </Section>
-
         </div>
       </main>
+
+      {/* ── Toast ──────────────────────────────────────────────── */}
+      <Toast toast={toast} onDismiss={dismissToast} />
     </AppLayout>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// EditableNameRow — name field with pencil → inline edit → save
+// ─────────────────────────────────────────────────────────────────────────
+
+function EditableNameRow({ user, updateUser, onToast }) {
+  const [editing, setEditing] = useState(false);
+  const [name,    setName]    = useState(user?.name ?? '');
+  const [saving,  setSaving]  = useState(false);
+  const [error,   setError]   = useState('');
+  const inputRef = useRef(null);
+
+  // Sync if user object changes externally
+  useEffect(() => {
+    if (!editing) setName(user?.name ?? '');
+  }, [user?.name, editing]);
+
+  useEffect(() => {
+    if (editing) setTimeout(() => inputRef.current?.focus(), 30);
+  }, [editing]);
+
+  async function handleSave() {
+    const trimmed = name.trim();
+    if (!trimmed) { setError('Name cannot be empty'); return; }
+    if (trimmed === user?.name) { setEditing(false); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const { data } = await api.patch('/auth/me', { name: trimmed });
+      updateUser({ name: data.user.name });
+      setEditing(false);
+      onToast('Name updated successfully');
+    } catch (err) {
+      setError(err.response?.data?.message ?? 'Could not save. Try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter')  handleSave();
+    if (e.key === 'Escape') { setEditing(false); setName(user?.name ?? ''); setError(''); }
+  }
+
+  return (
+    <div className="flex items-center justify-between px-4 py-3 gap-3">
+      <span className="text-sm text-gray-400 flex-shrink-0">Name</span>
+
+      {editing ? (
+        <div className="flex items-center gap-2 flex-1 justify-end">
+          <div className="flex flex-col items-end gap-1">
+            <input
+              ref={inputRef}
+              value={name}
+              onChange={e => { setName(e.target.value); setError(''); }}
+              onKeyDown={handleKeyDown}
+              maxLength={200}
+              disabled={saving}
+              className="bg-gray-700 border border-gray-600 focus:border-amber-500 text-gray-100
+                         text-sm rounded-lg px-3 py-1.5 focus:outline-none w-52 text-right"
+            />
+            {error && <p className="text-xs text-red-400">{error}</p>}
+          </div>
+          <button
+            onClick={handleSave}
+            disabled={saving || !name.trim()}
+            className="px-3 py-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400
+                       text-gray-900 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
+          >
+            {saving ? '…' : 'Save'}
+          </button>
+          <button
+            onClick={() => { setEditing(false); setName(user?.name ?? ''); setError(''); }}
+            className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-200 font-medium">{user?.name ?? '—'}</span>
+          <button
+            onClick={() => setEditing(true)}
+            className="p-1 rounded text-gray-600 hover:text-gray-300 transition-colors"
+            title="Edit name"
+          >
+            <PencilIcon />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ChangePasswordForm — new password + confirm, no current password required
+// ─────────────────────────────────────────────────────────────────────────
+
+function ChangePasswordForm({ onToast }) {
+  const [newPw,     setNewPw]     = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [saving,    setSaving]    = useState(false);
+  const [error,     setError]     = useState('');
+  const [showNew,   setShowNew]   = useState(false);
+  const [showConf,  setShowConf]  = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    if (newPw.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+    if (newPw !== confirmPw) {
+      setError('Passwords do not match');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.patch('/auth/me', {
+        new_password    : newPw,
+        confirm_password: confirmPw,
+      });
+      setNewPw('');
+      setConfirmPw('');
+      onToast('Password changed successfully');
+    } catch (err) {
+      setError(err.response?.data?.message ?? 'Could not update password.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="px-4 py-4">
+      <p className="text-xs text-gray-400 mb-4">
+        Set a new password for your account. You'll remain logged in after changing it.
+      </p>
+
+      <div className="flex flex-col gap-3 mb-4">
+        {/* New password */}
+        <div>
+          <label className="block text-xs text-gray-400 mb-1.5">New password</label>
+          <div className="relative">
+            <input
+              type={showNew ? 'text' : 'password'}
+              value={newPw}
+              onChange={e => { setNewPw(e.target.value); setError(''); }}
+              placeholder="Min. 8 characters"
+              autoComplete="new-password"
+              disabled={saving}
+              className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
+                         text-gray-100 placeholder-gray-500 text-sm rounded-lg px-3 py-2.5
+                         pr-10 focus:outline-none transition-colors"
+            />
+            <button type="button" onClick={() => setShowNew(v => !v)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
+              {showNew ? <EyeOffIcon /> : <EyeIcon />}
+            </button>
+          </div>
+        </div>
+
+        {/* Confirm password */}
+        <div>
+          <label className="block text-xs text-gray-400 mb-1.5">Confirm new password</label>
+          <div className="relative">
+            <input
+              type={showConf ? 'text' : 'password'}
+              value={confirmPw}
+              onChange={e => { setConfirmPw(e.target.value); setError(''); }}
+              placeholder="Repeat new password"
+              autoComplete="new-password"
+              disabled={saving}
+              className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
+                         text-gray-100 placeholder-gray-500 text-sm rounded-lg px-3 py-2.5
+                         pr-10 focus:outline-none transition-colors"
+            />
+            <button type="button" onClick={() => setShowConf(v => !v)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
+              {showConf ? <EyeOffIcon /> : <EyeIcon />}
+            </button>
+          </div>
+        </div>
+
+        {/* Strength hint */}
+        {newPw.length > 0 && (
+          <PasswordStrength password={newPw} />
+        )}
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-400 mb-3">{error}</p>
+      )}
+
+      <button
+        type="submit"
+        disabled={saving || !newPw || !confirmPw}
+        className="px-4 py-2 text-sm font-semibold bg-amber-500 hover:bg-amber-400
+                   text-gray-900 rounded-lg transition-colors disabled:opacity-40
+                   disabled:cursor-not-allowed"
+      >
+        {saving ? 'Saving…' : 'Change password'}
+      </button>
+    </form>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PasswordStrength — simple visual indicator
+// ─────────────────────────────────────────────────────────────────────────
+
+function PasswordStrength({ password }) {
+  const len    = password.length;
+  const hasUpper = /[A-Z]/.test(password);
+  const hasNum   = /[0-9]/.test(password);
+  const hasSpec  = /[^A-Za-z0-9]/.test(password);
+  const score    = [len >= 8, len >= 12, hasUpper, hasNum, hasSpec].filter(Boolean).length;
+
+  const labels = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Very strong'];
+  const colors = ['', 'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-emerald-500', 'bg-emerald-400'];
+  const textColors = ['', 'text-red-400', 'text-orange-400', 'text-amber-400', 'text-emerald-400', 'text-emerald-300'];
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex gap-1 flex-1">
+        {[1,2,3,4,5].map(i => (
+          <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= score ? colors[score] : 'bg-gray-700'}`} />
+        ))}
+      </div>
+      <span className={`text-xs font-medium flex-shrink-0 ${textColors[score]}`}>{labels[score]}</span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Toast — amber chip, slides in from bottom-right, auto-dismisses in 5s
+// ─────────────────────────────────────────────────────────────────────────
+
+function Toast({ toast, onDismiss }) {
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(onDismiss, 5000);
+    return () => clearTimeout(timerRef.current);
+  }, [toast, onDismiss]);
+
+  if (!toast) return null;
+
+  const isError   = toast.type === 'error';
+  const colorClass = isError
+    ? 'bg-red-500 text-white border-red-400/50'
+    : 'bg-amber-500 text-gray-900 border-amber-400/50';
+
+  return (
+    <div
+      className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5
+                  px-4 py-3 rounded-xl border shadow-2xl
+                  text-sm font-semibold
+                  animate-slide-up
+                  ${colorClass}`}
+      style={{ animation: 'slideUp 0.25s ease-out' }}
+    >
+      {isError
+        ? <span className="text-base leading-none">✕</span>
+        : <span className="text-base leading-none">✓</span>
+      }
+      {toast.message}
+      <button
+        onClick={onDismiss}
+        className="ml-1 opacity-70 hover:opacity-100 transition-opacity leading-none text-base"
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+
+      {/* Inject keyframe once */}
+      <style>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(16px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
   );
 }
 
@@ -194,9 +485,7 @@ function Row({ label, value }) {
 
 function UpgradeCard({ name, price, features = [], href, highlight = false }) {
   const Tag   = href ? 'a' : 'div';
-  const props = href
-    ? { href, target: '_blank', rel: 'noopener noreferrer' }
-    : {};
+  const props = href ? { href, target: '_blank', rel: 'noopener noreferrer' } : {};
 
   return (
     <Tag
@@ -222,13 +511,10 @@ function UpgradeCard({ name, price, features = [], href, highlight = false }) {
           </li>
         ))}
       </ul>
-      {href ? (
-        <p className={`text-xs font-semibold ${highlight ? 'text-amber-400' : 'text-gray-300'}`}>
-          Upgrade to {name} →
-        </p>
-      ) : (
-        <p className="text-xs text-gray-500 italic">Payment link coming soon</p>
-      )}
+      {href
+        ? <p className={`text-xs font-semibold ${highlight ? 'text-amber-400' : 'text-gray-300'}`}>Upgrade to {name} →</p>
+        : <p className="text-xs text-gray-500 italic">Payment link coming soon</p>
+      }
     </Tag>
   );
 }
@@ -263,6 +549,40 @@ function LockIcon() {
     >
       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    >
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    >
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    >
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+      <line x1="1" y1="1" x2="23" y2="23" />
     </svg>
   );
 }

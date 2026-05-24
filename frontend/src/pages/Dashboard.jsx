@@ -208,24 +208,22 @@ function VideoCard({ video, onClick, onTitleUpdate }) {
             <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
               <span>{sourceLabel}</span>
               <span className="text-gray-600">·</span>
-              <span>{video.total_plays ?? 0} plays</span>
-              <span className="text-gray-600">·</span>
-              <span>{video.unique_viewers ?? 0} viewers</span>
-              <span className="text-gray-600">·</span>
-              <span>{avgWatch} avg</span>
+              <span>{avgWatch} avg watch</span>
+              {/* Views & Viewers shown as stat columns on sm+; show inline on xs only */}
+              <span className="sm:hidden text-gray-600">·</span>
+              <span className="sm:hidden">{video.total_plays ?? 0} plays</span>
+              <span className="sm:hidden text-gray-600">·</span>
+              <span className="sm:hidden">{video.unique_viewers ?? 0} viewers</span>
             </p>
           </button>
 
           {/* Metric columns */}
-          <div className="hidden lg:flex items-center gap-6 flex-shrink-0">
-            <div className="text-center">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Play Rate</p>
-              <p className="text-sm font-bold text-gray-200 mt-0.5">{playRate}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Engagement</p>
-              <p className="text-sm font-bold text-gray-200 mt-0.5">{avgWatch}</p>
-            </div>
+          <div className="hidden sm:flex items-center gap-5 flex-shrink-0">
+            <StatCol label="Views"   value={(video.total_plays   ?? 0).toLocaleString()} />
+            <StatCol label="Viewers" value={(video.unique_viewers ?? 0).toLocaleString()} />
+            <div className="hidden lg:block w-px h-8 bg-gray-700" />
+            <StatCol label="Play Rate"  value={playRate}  className="hidden lg:block" />
+            <StatCol label="Engagement" value={avgWatch}  className="hidden lg:block" />
           </div>
 
           {/* Action icons */}
@@ -263,6 +261,19 @@ function VideoCard({ video, onClick, onTitleUpdate }) {
         />
       )}
     </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// StatCol — compact stat column used inside VideoCard
+// ─────────────────────────────────────────────────────────────────────────
+
+function StatCol({ label, value, className = '' }) {
+  return (
+    <div className={`text-center ${className}`}>
+      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
+      <p className="text-sm font-bold text-gray-200 mt-0.5">{value}</p>
+    </div>
   );
 }
 
