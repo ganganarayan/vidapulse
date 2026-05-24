@@ -1,0 +1,9 @@
+{
+  "name": "vidapulse",
+  "version": "1.0.0",
+  "description": "VidaPulse monorepo root — tells Nixpacks to provision Node.js for the build",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
