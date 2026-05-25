@@ -278,7 +278,14 @@ router.post('/session', async (req, res) => {
       ]
     );
 
-    return res.json({ session_id: session.id });
+    res.json({ session_id: session.id });
+
+    // Fire-and-forget: record player_load event in analytics_events
+    pool.query(
+      `INSERT INTO analytics_events (session_id, video_id, event_type, occurred_at)
+       VALUES ($1, $2, 'player_load', NOW())`,
+      [session.id, video_id]
+    ).catch(err => logger.warn(`[analytics/session] player_load insert failed: ${err.message}`));
 
   } catch (err) {
     logger.error(`[analytics/session] ${err.message}`, { video_id });
@@ -316,6 +323,7 @@ router.post('/ping', async (req, res) => {
     watch_seconds    = 0,
     intervals        = [],
     duration_seconds,
+    position,        // optional: current playback position in seconds
   } = req.body ?? {};
 
   // Always respond 200 so sendBeacon doesn't log errors in the browser
@@ -401,6 +409,28 @@ router.post('/ping', async (req, res) => {
       [safeMax, safeWatched, safeAvgPct, isPlay ? 1 : 0, isEnd, session_id]
     );
     if (!updated) return; // session row vanished between queries — drop
+
+    // ── 1b. Record individual event in analytics_events (fire-and-forget) ──
+    // Maps ping event names to analytics_event_type ENUM values.
+    // 'end' from the embed script maps to 'ended' in the DB.
+    const PING_EVENT_MAP = {
+      play    : 'play',
+      pause   : 'pause',
+      seek    : 'seek',
+      end     : 'ended',
+      ended   : 'ended',
+    };
+    const dbEventType = PING_EVENT_MAP[event];
+    if (dbEventType) {
+      const safePosition = position !== null && position !== undefined
+        ? (parseFloat(position) || null) : null;
+      pool.query(
+        `INSERT INTO analytics_events
+           (session_id, video_id, event_type, video_position, occurred_at)
+         VALUES ($1, $2, $3::analytics_event_type, $4, NOW())`,
+        [session_id, video_id, dbEventType, safePosition]
+      ).catch(err => logger.warn(`[analytics/ping] event insert failed: ${err.message}`));
+    }
 
     // True only when this specific UPDATE moved play_count from 0 to 1
     const isFirstPlay = isPlay && updated.play_count === 1;
@@ -536,6 +566,56 @@ router.post('/ping', async (req, res) => {
   } catch (err) {
     logger.error(`[analytics/ping] ${err.message}`, { session_id, video_id });
     // Response already sent — nothing to do
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// POST /api/analytics/event
+//
+// Accepts discrete events from embed pages that fall outside the normal
+// heartbeat flow — currently: cta_click.
+//
+// This endpoint is called by the subscriber's landing page JS:
+//   window.VidaPulse.trackCTA(sessionId, videoId, position?)
+//
+// Body:
+//   session_id  UUID   — from the session started by the embed player
+//   video_id    UUID
+//   event_type  string — currently only 'cta_click'
+//   position    number — optional playback position in seconds
+//
+// Response: { ok: true }  (always — same as /ping)
+// ─────────────────────────────────────────────────────────────────────────
+
+router.post('/event', async (req, res) => {
+  const { session_id, video_id, event_type, position } = req.body ?? {};
+  res.json({ ok: true }); // always respond 200 quickly
+
+  // Only accept cta_click for now
+  if (!session_id || !video_id || event_type !== 'cta_click') {
+    if (event_type && event_type !== 'cta_click') {
+      logger.warn(`[analytics/event] unsupported event_type: ${event_type}`);
+    }
+    return;
+  }
+
+  try {
+    const safePosition = position !== null && position !== undefined
+      ? (parseFloat(position) || null) : null;
+
+    // Only insert if the session actually belongs to this video
+    await pool.query(
+      `INSERT INTO analytics_events
+         (session_id, video_id, event_type, video_position, occurred_at)
+       SELECT $1, $2, 'cta_click', $3, NOW()
+       WHERE EXISTS (
+         SELECT 1 FROM analytics_sessions
+         WHERE id = $1 AND video_id = $2
+       )`,
+      [session_id, video_id, safePosition]
+    );
+  } catch (err) {
+    logger.warn(`[analytics/event] cta_click insert failed: ${err.message}`);
   }
 });
 

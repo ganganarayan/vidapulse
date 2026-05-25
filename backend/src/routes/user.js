@@ -482,6 +482,10 @@ const ALERT_DEFAULTS = {
   viral_moment    : false,
   new_domain_embed: false,
   weekly_digest   : false,
+  begins_to_watch : false,
+  completes_video : false,
+  watches_90_pct  : false,
+  cta_click       : false,
 };
 
 router.get('/alert-prefs', requireAuth, async (req, res, next) => {

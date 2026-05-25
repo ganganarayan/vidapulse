@@ -26,10 +26,12 @@ const EVENT_STYLES = {
   player_error    : 'bg-red-500/15 text-red-300 border border-red-500/25',
   player_load     : 'bg-gray-600/40 text-gray-400 border border-gray-600/40',
   player_unload   : 'bg-gray-600/40 text-gray-400 border border-gray-600/40',
+  video_loaded    : 'bg-gray-600/40 text-gray-400 border border-gray-600/40',
   session_heartbeat: 'bg-gray-700/40 text-gray-500 border border-gray-700/40',
   quality_change  : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/25',
   pip_enter       : 'bg-violet-500/15 text-violet-300 border border-violet-500/25',
   pip_exit        : 'bg-violet-500/15 text-violet-300 border border-violet-500/25',
+  cta_click       : 'bg-pink-500/15 text-pink-300 border border-pink-500/25',
 };
 
 function EventBadge({ type }) {
@@ -67,6 +69,29 @@ function fmtAbsTime(iso) {
 function shortSession(uuid) {
   if (!uuid) return '—';
   return '#' + uuid.replace(/-/g, '').slice(0, 8).toUpperCase();
+}
+
+function downloadEventsCSV(events) {
+  const HEADERS = ['occurred_at','event_type','video_title','session_id','video_position'];
+  const esc = v => {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    return (s.includes(',') || s.includes('"') || s.includes('\n'))
+      ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [
+    HEADERS.join(','),
+    ...events.map(e => HEADERS.map(h => esc(e[h])).join(',')),
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `events-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 export default function EventsPage() {
@@ -118,6 +143,16 @@ export default function EventsPage() {
                          rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2
                          focus:ring-amber-500/50 w-48"
             />
+            {filtered.length > 0 && (
+              <button
+                onClick={() => downloadEventsCSV(filtered)}
+                className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400
+                           hover:text-gray-200 hover:border-gray-600 transition-colors"
+                title="Download CSV"
+              >
+                <DownloadIcon />
+              </button>
+            )}
             <button
               onClick={load}
               className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400
@@ -197,6 +232,17 @@ export default function EventsPage() {
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────
+
+function DownloadIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+  );
+}
 
 function CalendarIcon() {
   return (

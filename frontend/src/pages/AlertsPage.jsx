@@ -37,11 +37,38 @@ const ALERT_RULES = [
     title: 'Weekly Digest',
     desc:  "Send me a Monday-morning recap of last week's top performers.",
   },
+  {
+    key:   'begins_to_watch',
+    title: 'Begins to Watch',
+    desc:  'Notify me whenever a viewer presses play on any of my videos.',
+  },
+  {
+    key:   'completes_video',
+    title: 'Completes Video',
+    desc:  'Alert me when a viewer watches all the way to the end of a video.',
+  },
+  {
+    key:   'watches_90_pct',
+    title: 'Watches 90%+',
+    desc:  'Notify me when a viewer watches more than 90% of a video — a strong intent signal.',
+  },
+  {
+    key:   'cta_click',
+    title: 'CTA Click',
+    desc:  'Alert me when a viewer clicks the call-to-action button placed on a video page.',
+  },
 ];
 
 const DEFAULTS = {
-  traffic_spike: false, sudden_dropoff: false, viral_moment: false,
-  new_domain_embed: false, weekly_digest: false,
+  traffic_spike   : false,
+  sudden_dropoff  : false,
+  viral_moment    : false,
+  new_domain_embed: false,
+  weekly_digest   : false,
+  begins_to_watch : false,
+  completes_video : false,
+  watches_90_pct  : false,
+  cta_click       : false,
 };
 
 export default function AlertsPage() {

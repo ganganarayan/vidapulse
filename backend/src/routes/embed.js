@@ -547,16 +547,17 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
 
         /* ── Analytics ──────────────────────────────── */
         v.addEventListener('loadedmetadata',function(){if(v.duration>0)dur=v.duration;});
-        v.addEventListener('play',function(){if(!on){on=true;t0=v.currentTime;ping('play');}});
+        v.addEventListener('play',function(){if(!on){on=true;t0=v.currentTime;curPos=v.currentTime;ping('play');}});
         v.addEventListener('pause',function(){
-          if(on){on=false;var e=v.currentTime;secs+=e-t0;ivs.push([t0,e]);
+          if(on){on=false;var e=v.currentTime;curPos=e;secs+=e-t0;ivs.push([t0,e]);
             maxP=v.duration>0?Math.max(maxP,e/v.duration*100):maxP;ping('pause');}
         });
         v.addEventListener('ended',function(){
-          if(on){on=false;var e=v.currentTime;secs+=e-t0;ivs.push([t0,e]);}
-          maxP=100;ping('end');
+          if(on){on=false;var e=v.currentTime;curPos=e;secs+=e-t0;ivs.push([t0,e]);}
+          maxP=100;curPos=v.duration||curPos;ping('end');
         });
         v.addEventListener('seeked',function(){
+          curPos=v.currentTime;
           if(on){var e=v.currentTime;secs+=e-t0;ivs.push([t0,e]);t0=e;}
         });
         /* Heartbeat every 15 s: flush the current in-progress interval so the
@@ -566,6 +567,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         setInterval(function(){
           if(on&&v.duration>0){
             var now=v.currentTime;
+            curPos=now;
             maxP=Math.max(maxP,now/v.duration*100);
             dur=v.duration;
             secs+=now-t0;
@@ -609,7 +611,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
     }
     console.log('[VidaPulse] viewer cookie:', ck);
 
-    var sid=null, pq=[], on=false,t0=0,maxP=0,secs=0,ivs=[],dur=0;
+    var sid=null, pq=[], on=false,t0=0,maxP=0,secs=0,ivs=[],dur=0,curPos=0;
     var dv=window.innerWidth<768?'mobile':window.innerWidth<1024?'tablet':'desktop';
 
     function sess(){
@@ -631,6 +633,10 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         }
         sid=d.session_id;
         console.log('[VidaPulse] session created:', sid);
+        /* Notify parent window so CTA-click tracking works on the embedding page */
+        try{if(window.parent!==window)window.parent.postMessage(
+          {type:'vidapulse_session',session_id:sid,video_id:VID},'*');}
+        catch(_){}
         /* Flush any pings that fired before the session was ready.
            This is the normal case — play events almost always arrive
            before the async session fetch returns (~200-500 ms on Railway). */
@@ -652,7 +658,8 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
       var toSend=ivs.splice(0);
       var body=JSON.stringify({session_id:sid,video_id:VID,event:ev,
         max_pct:maxP,watch_seconds:secs,intervals:toSend,
-        duration_seconds:dur>0?dur:undefined});
+        duration_seconds:dur>0?dur:undefined,
+        position:curPos>0?curPos:undefined});
       console.log('[VidaPulse] ping →',ev,'| sid:',sid.slice(0,8),'| maxPct:',maxP.toFixed(1),'| secs:',secs.toFixed(1),'| ivs:',toSend.length);
       /* Use fetch+keepalive — works mid-session AND on page unload.
          sendBeacon is NOT used: it returns false silently on failure

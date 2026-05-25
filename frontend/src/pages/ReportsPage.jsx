@@ -1,5 +1,5 @@
 'use strict';
-import React, { useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import AppLayout from '../components/AppLayout';
 import { useToast } from '../contexts/ToastContext';
 import api from '../lib/api';
@@ -7,197 +7,457 @@ import api from '../lib/api';
 /**
  * ReportsPage — /reports
  *
- * Report templates. The Viewer Journey Export downloads a real CSV.
- * Scheduled report configuration is saved for when the scheduler is built.
+ * Fully customisable analytics reports:
+ *  - Select metrics via checkboxes
+ *  - Choose date range
+ *  - Generate in background (status polling)
+ *  - Download CSV when ready
+ *
+ * Plus the always-available instant downloads:
+ *  - Viewer Journey Export (all sessions CSV)
+ *  - Events Export (all analytics_events CSV)
  */
 
-const TEMPLATES = [
-  {
-    key:      'weekly_summary',
-    title:    'Weekly Performance Summary',
-    desc:     'Plays, viewers, watch time, and top videos for the past 7 days.',
-    schedule: 'Every Monday 9AM',
-    type:     'scheduled',
-  },
-  {
-    key:      'monthly_engagement',
-    title:    'Monthly Engagement Report',
-    desc:     'Heatmaps, retention curves, and audience breakdown for the past 30 days.',
-    schedule: '1st of each month',
-    type:     'scheduled',
-  },
-  {
-    key:      'top_domains',
-    title:    'Top Domains Quarterly',
-    desc:     'Where your videos are being embedded and how each domain performs.',
-    schedule: 'Quarterly',
-    type:     'scheduled',
-  },
-  {
-    key:      'viewer_journey',
-    title:    'Viewer Journey Export',
-    desc:     'CSV export of every viewer session — country, device, watch time, video.',
-    schedule: 'On demand',
-    type:     'download',
-  },
+// ── Available metrics ────────────────────────────────────────────────────
+
+const ALL_METRICS = [
+  { key: 'total_views',        label: 'Total Views',        desc: 'Every page load where the embed appeared' },
+  { key: 'unique_views',       label: 'Unique Views',       desc: 'Distinct visitors (by cookie) per video' },
+  { key: 'total_viewers',      label: 'Total Viewers',      desc: 'Sessions where play was pressed' },
+  { key: 'unique_viewers',     label: 'Unique Viewers',     desc: 'Distinct people who pressed play' },
+  { key: 'avg_watch_pct',      label: 'Avg Watch %',        desc: 'Average percentage watched per playing session' },
+  { key: 'play_rate',          label: 'Play Rate %',        desc: 'Share of page loads that resulted in a play' },
+  { key: 'completion_rate',    label: 'Completion Rate %',  desc: 'Share of plays that reached the end' },
+  { key: 'total_watch_seconds',label: 'Total Watch Time',   desc: 'Cumulative seconds watched across all sessions' },
 ];
+
+const DATE_RANGES = [
+  { key: '7_days',  label: 'Last 7 days' },
+  { key: '30_days', label: 'Last 30 days' },
+  { key: '90_days', label: 'Last 90 days' },
+  { key: 'all_time',label: 'All time' },
+];
+
+const DEFAULT_METRICS  = ['total_views', 'unique_viewers', 'avg_watch_pct', 'play_rate'];
+const POLL_INTERVAL_MS = 3000;
+
+// ── Status helpers ───────────────────────────────────────────────────────
+
+const STATUS_META = {
+  pending    : { label: 'Queued',      color: 'text-yellow-400',  bg: 'bg-yellow-500/10 border-yellow-500/20', spin: true  },
+  processing : { label: 'Generating…', color: 'text-blue-400',    bg: 'bg-blue-500/10 border-blue-500/20',     spin: true  },
+  completed  : { label: 'Ready',       color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20', spin: false },
+  failed     : { label: 'Failed',      color: 'text-red-400',     bg: 'bg-red-500/10 border-red-500/20',       spin: false },
+};
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
   const { showToast } = useToast();
-  const [downloading, setDownloading] = useState(false);
-  const [setupModal,  setSetupModal]  = useState(null); // key of template being set up
 
-  async function downloadViewerJourney() {
-    setDownloading(true);
+  // ── Builder state ────────────────────────────────────────────────────
+  const [selectedMetrics, setSelectedMetrics] = useState(new Set(DEFAULT_METRICS));
+  const [dateRange,       setDateRange]       = useState('30_days');
+  const [reportTitle,     setReportTitle]     = useState('');
+  const [generating,      setGenerating]      = useState(false);
+
+  // ── Report list ───────────────────────────────────────────────────────
+  const [reports,         setReports]         = useState([]);
+  const [listLoading,     setListLoading]     = useState(true);
+
+  // ── Instant downloads ─────────────────────────────────────────────────
+  const [downloadingVJ,   setDownloadingVJ]   = useState(false);
+  const [downloadingEv,   setDownloadingEv]   = useState(false);
+
+  // ── Load report list ─────────────────────────────────────────────────
+
+  const loadList = useCallback(() => {
+    api.get('/reports/list')
+      .then(r => setReports(r.data.reports ?? []))
+      .catch(() => {})
+      .finally(() => setListLoading(false));
+  }, []);
+
+  useEffect(() => { loadList(); }, [loadList]);
+
+  // ── Auto-poll while any report is pending/processing ──────────────────
+
+  useEffect(() => {
+    const hasActive = reports.some(r => r.status === 'pending' || r.status === 'processing');
+    if (!hasActive) return;
+    const id = setInterval(() => {
+      api.get('/reports/list')
+        .then(r => setReports(r.data.reports ?? []))
+        .catch(() => {});
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [reports]);
+
+  // ── Toggle metric checkbox ─────────────────────────────────────────────
+
+  function toggleMetric(key) {
+    setSelectedMetrics(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
+  // ── Generate report ───────────────────────────────────────────────────
+
+  async function generate() {
+    if (selectedMetrics.size === 0) {
+      showToast('Select at least one metric', 'error');
+      return;
+    }
+    const title = reportTitle.trim() ||
+      `${DATE_RANGES.find(d => d.key === dateRange)?.label} Report`;
+    setGenerating(true);
     try {
-      const response = await fetch('/api/reports/viewer-journey', {
-        credentials: 'include',
+      await api.post('/reports/generate', {
+        title,
+        metrics   : [...selectedMetrics],
+        date_range: dateRange,
       });
+      showToast('Report queued — generating in the background');
+      setReportTitle('');
+      loadList();
+    } catch (err) {
+      showToast(err.response?.data?.error ?? 'Could not queue report', 'error');
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  // ── Download a completed report ───────────────────────────────────────
+
+  async function downloadReport(id) {
+    try {
+      const response = await fetch(`/api/reports/download/${id}`, { credentials: 'include' });
       if (!response.ok) throw new Error('Download failed');
-      const blob     = await response.blob();
-      const url      = window.URL.createObjectURL(blob);
-      const a        = document.createElement('a');
-      a.href         = url;
-      a.download     = `viewer-journey-${new Date().toISOString().slice(0, 10)}.csv`;
+      const blob = await response.blob();
+      const url  = window.URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      const cd   = response.headers.get('Content-Disposition') ?? '';
+      const fn   = cd.match(/filename="?([^"]+)"?/)?.[1] ?? `report-${id.slice(0, 8)}.csv`;
+      a.download = fn;
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      showToast('Download started');
     } catch {
-      showToast('Download failed — try again', 'error');
-    } finally {
-      setDownloading(false);
+      showToast('Download failed', 'error');
     }
   }
 
-  function handleSetup(template) {
-    if (template.type === 'download') {
-      downloadViewerJourney();
-    } else {
-      setSetupModal(template);
-    }
+  // ── Instant viewer-journey download ───────────────────────────────────
+
+  async function downloadViewerJourney() {
+    setDownloadingVJ(true);
+    try {
+      const r    = await fetch('/api/reports/viewer-journey', { credentials: 'include' });
+      if (!r.ok) throw new Error();
+      const blob = await r.blob();
+      const url  = window.URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `viewer-journey-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+      showToast('Download started');
+    } catch { showToast('Download failed', 'error'); }
+    finally  { setDownloadingVJ(false); }
+  }
+
+  // ── Instant events download ────────────────────────────────────────────
+
+  async function downloadEvents() {
+    setDownloadingEv(true);
+    try {
+      const r    = await fetch('/api/reports/events', { credentials: 'include' });
+      if (!r.ok) throw new Error();
+      const blob = await r.blob();
+      const url  = window.URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `events-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+      showToast('Download started');
+    } catch { showToast('Download failed', 'error'); }
+    finally  { setDownloadingEv(false); }
   }
 
   return (
     <AppLayout>
-      <div className="max-w-2xl mx-auto px-6 py-8">
+      <div className="max-w-2xl mx-auto px-6 py-8 space-y-8">
 
-        {/* Header */}
-        <div className="mb-8 flex items-center gap-4">
+        {/* ── Page header ─────────────────────────────────────────────── */}
+        <div className="flex items-center gap-4">
           <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
             <ReportIcon />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-50">Reports</h1>
             <p className="text-sm text-gray-400 mt-0.5">
-              Schedule automated reports or download raw data on demand.
+              Build a custom analytics report or export raw data on demand.
             </p>
           </div>
         </div>
 
-        {/* Templates */}
+        {/* ── Report builder ──────────────────────────────────────────── */}
+        <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl overflow-hidden">
+
+          <div className="px-5 py-3.5 border-b border-gray-700/40">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Build a Report</p>
+          </div>
+
+          <div className="px-5 py-5 space-y-5">
+
+            {/* Report title (optional) */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 mb-1.5">
+                Report name <span className="text-gray-500 font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={reportTitle}
+                onChange={e => setReportTitle(e.target.value)}
+                placeholder="e.g. April video performance"
+                className="w-full bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2
+                           text-sm text-gray-200 placeholder-gray-600
+                           focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+              />
+            </div>
+
+            {/* Date range */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 mb-2">
+                Date range
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {DATE_RANGES.map(dr => (
+                  <button
+                    key={dr.key}
+                    onClick={() => setDateRange(dr.key)}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                      dateRange === dr.key
+                        ? 'bg-amber-500 text-gray-900'
+                        : 'bg-gray-700/60 text-gray-400 hover:text-gray-200 hover:bg-gray-700 border border-gray-600'
+                    }`}
+                  >
+                    {dr.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Metric checkboxes */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 mb-2">
+                Metrics to include
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {ALL_METRICS.map(m => {
+                  const checked = selectedMetrics.has(m.key);
+                  return (
+                    <button
+                      key={m.key}
+                      onClick={() => toggleMetric(m.key)}
+                      className={`flex items-start gap-3 px-3.5 py-3 rounded-xl text-left transition-colors border ${
+                        checked
+                          ? 'bg-amber-500/10 border-amber-500/30'
+                          : 'bg-gray-900/40 border-gray-700/50 hover:border-gray-600'
+                      }`}
+                    >
+                      <span className={`mt-0.5 w-4 h-4 flex-shrink-0 rounded flex items-center justify-center border ${
+                        checked
+                          ? 'bg-amber-500 border-amber-500'
+                          : 'bg-transparent border-gray-600'
+                      }`}>
+                        {checked && (
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                            <path d="M2 5l2.5 2.5L8 3" stroke="#1a1a1a" strokeWidth="1.6"
+                              strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </span>
+                      <span>
+                        <span className={`block text-xs font-semibold ${checked ? 'text-amber-300' : 'text-gray-300'}`}>
+                          {m.label}
+                        </span>
+                        <span className="block text-[11px] text-gray-500 mt-0.5 leading-snug">{m.desc}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Generate button */}
+            <div className="flex items-center justify-between pt-1">
+              <p className="text-xs text-gray-500">
+                {selectedMetrics.size} metric{selectedMetrics.size !== 1 ? 's' : ''} selected
+              </p>
+              <button
+                onClick={generate}
+                disabled={generating || selectedMetrics.size === 0}
+                className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400
+                           disabled:opacity-60 text-gray-900 text-sm font-semibold
+                           rounded-lg transition-colors"
+              >
+                {generating ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+                    Queuing…
+                  </>
+                ) : (
+                  <>
+                    <GenerateIcon />
+                    Generate Report
+                  </>
+                )}
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        {/* ── Generated reports list ───────────────────────────────────── */}
+        {(listLoading || reports.length > 0) && (
+          <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-gray-700/40 flex items-center justify-between">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Your Reports</p>
+              {reports.some(r => r.status === 'pending' || r.status === 'processing') && (
+                <span className="flex items-center gap-1.5 text-[11px] text-blue-400">
+                  <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  Generating…
+                </span>
+              )}
+            </div>
+
+            {listLoading ? (
+              <div className="px-5 py-6 flex items-center gap-2 text-gray-500 text-sm">
+                <span className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                Loading reports…
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-700/40">
+                {reports.map(report => {
+                  const meta = STATUS_META[report.status] ?? STATUS_META.failed;
+                  const rangeLabel = DATE_RANGES.find(d => d.key === report.date_range)?.label ?? report.date_range;
+                  return (
+                    <div key={report.id} className="flex items-center justify-between px-5 py-4 gap-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-200 truncate">{report.title}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {rangeLabel}
+                          {report.row_count != null && ` · ${report.row_count} video${report.row_count !== 1 ? 's' : ''}`}
+                          {' · '}{fmtDate(report.created_at)}
+                        </p>
+                        {report.status === 'failed' && report.error_message && (
+                          <p className="text-xs text-red-400 mt-0.5 font-mono">{report.error_message}</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border ${meta.bg} ${meta.color}`}>
+                          {meta.spin && (
+                            <span className={`w-2.5 h-2.5 border-2 border-t-transparent rounded-full animate-spin ${meta.color.replace('text-', 'border-')}`} />
+                          )}
+                          {meta.label}
+                        </span>
+
+                        {report.status === 'completed' && (
+                          <button
+                            onClick={() => downloadReport(report.id)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600
+                                       border border-gray-600 text-gray-200 text-xs font-medium
+                                       rounded-lg transition-colors"
+                          >
+                            <DownloadIcon />
+                            Download
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Instant raw data exports ─────────────────────────────────── */}
         <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl overflow-hidden">
           <div className="px-5 py-3.5 border-b border-gray-700/40">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Report templates</p>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Raw Data Exports</p>
           </div>
 
           <div className="divide-y divide-gray-700/40">
-            {TEMPLATES.map(tmpl => (
-              <div key={tmpl.key} className="flex items-center justify-between px-5 py-4 gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-200">{tmpl.title}</p>
-                  <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{tmpl.desc}</p>
-                  <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mt-1.5">
-                    {tmpl.schedule}
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleSetup(tmpl)}
-                  disabled={downloading && tmpl.type === 'download'}
-                  className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5
-                             bg-gray-700 hover:bg-gray-600 border border-gray-600
-                             text-gray-200 text-xs font-medium rounded-lg transition-colors
-                             disabled:opacity-60"
-                >
-                  {tmpl.type === 'download' ? (
-                    <>
-                      <DownloadIcon />
-                      {downloading ? 'Preparing…' : 'Download'}
-                    </>
-                  ) : (
-                    <>
-                      <SetupIcon />
-                      Setup
-                    </>
-                  )}
-                </button>
+
+            {/* Viewer Journey */}
+            <div className="flex items-center justify-between px-5 py-4 gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-200">Viewer Journey</p>
+                <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
+                  CSV of every viewer session — watch time, device, country, completion, UTMs.
+                </p>
+                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mt-1.5">
+                  On demand · up to 10,000 rows
+                </p>
               </div>
-            ))}
+              <button
+                onClick={downloadViewerJourney}
+                disabled={downloadingVJ}
+                className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5
+                           bg-gray-700 hover:bg-gray-600 border border-gray-600
+                           text-gray-200 text-xs font-medium rounded-lg transition-colors
+                           disabled:opacity-60"
+              >
+                <DownloadIcon />
+                {downloadingVJ ? 'Preparing…' : 'Download'}
+              </button>
+            </div>
+
+            {/* Events CSV */}
+            <div className="flex items-center justify-between px-5 py-4 gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-200">Events Log</p>
+                <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
+                  CSV of every play, pause, seek, CTA click, and completion event — timestamped to the second.
+                </p>
+                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mt-1.5">
+                  On demand · up to 50,000 rows
+                </p>
+              </div>
+              <button
+                onClick={downloadEvents}
+                disabled={downloadingEv}
+                className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5
+                           bg-gray-700 hover:bg-gray-600 border border-gray-600
+                           text-gray-200 text-xs font-medium rounded-lg transition-colors
+                           disabled:opacity-60"
+              >
+                <DownloadIcon />
+                {downloadingEv ? 'Preparing…' : 'Download'}
+              </button>
+            </div>
+
           </div>
         </div>
 
-        <p className="text-xs text-gray-500 mt-4 text-center">
-          Scheduled reports will be delivered via your configured webhook endpoint.
-        </p>
       </div>
-
-      {/* Setup modal */}
-      {setupModal && (
-        <SetupModal template={setupModal} onClose={() => setSetupModal(null)} />
-      )}
     </AppLayout>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// SetupModal — configure a scheduled report
-// ─────────────────────────────────────────────────────────────────────────
-
-function SetupModal({ template, onClose }) {
-  const { showToast } = useToast();
-
-  function handleSave() {
-    showToast(`${template.title} configured`);
-    onClose();
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6">
-        <h2 className="text-base font-bold text-gray-50 mb-1">{template.title}</h2>
-        <p className="text-xs text-gray-400 mb-5">{template.desc}</p>
-
-        <div className="bg-gray-800/60 border border-gray-700/50 rounded-lg px-4 py-3 mb-5">
-          <p className="text-xs text-gray-500 mb-0.5">Schedule</p>
-          <p className="text-sm font-semibold text-amber-400">{template.schedule}</p>
-        </div>
-
-        <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg px-4 py-3 mb-5">
-          <p className="text-xs text-gray-300 leading-relaxed">
-            Reports will be sent to your configured <strong className="text-amber-400">webhook endpoint</strong>.
-            Make sure your endpoint is set up in{' '}
-            <a href="/integrations" className="text-amber-400 hover:underline" onClick={onClose}>
-              Integrations
-            </a>.
-          </p>
-        </div>
-
-        <div className="flex gap-2 justify-end">
-          <button onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors">
-            Cancel
-          </button>
-          <button onClick={handleSave}
-            className="px-4 py-2 text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-gray-900 rounded-lg transition-colors">
-            Save schedule
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -227,12 +487,13 @@ function DownloadIcon() {
   );
 }
 
-function SetupIcon() {
+function GenerateIcon() {
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3"/>
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      <polyline points="23 4 23 10 17 10"/>
+      <polyline points="1 20 1 14 7 14"/>
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
     </svg>
   );
 }
