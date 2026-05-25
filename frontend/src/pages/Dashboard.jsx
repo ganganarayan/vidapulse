@@ -68,7 +68,7 @@ export default function Dashboard() {
     <AppLayout>
       {/* Content header */}
       <div className="border-b border-gray-800 px-6 py-3.5 flex items-center justify-between flex-shrink-0">
-        <h1 className="text-sm font-semibold text-gray-200">Your Videos</h1>
+        <h1 className="text-sm font-semibold text-gray-200">Videos</h1>
         <div className="flex items-center gap-3">
           <NotificationBell />
           {videos?.length > 0 && (

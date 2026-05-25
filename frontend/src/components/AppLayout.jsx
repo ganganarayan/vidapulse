@@ -57,9 +57,8 @@ function AppSidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
-        <SidebarItem to="/dashboard" icon={<GridIcon />}    label="Overview"    active={active('/dashboard', true)} />
-        <SidebarItem to="/dashboard" icon={<VideoIcon />}   label="Videos"      active={false} />
-        <SidebarItem to="#"          icon={<ListIcon />}    label="Playlists"   active={false} coming />
+        <SidebarItem to="/dashboard" icon={<GridIcon />}   label="Overview" active={active('/dashboard', true)} />
+        <SidebarItem to="/videos"    icon={<VideoIcon />}  label="Videos"   active={active('/videos')} />
 
         <SidebarDivider label="Analytics" />
         <SidebarItem to="/events"  icon={<EventsIcon />}  label="Events"   active={active('/events')} />

@@ -309,6 +309,56 @@ router.put('/preferences', requireAuth, async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
+// GET /api/user/overview
+//
+// Aggregate stats across all of the authenticated user's active videos.
+// Used by the Overview dashboard page.
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get('/overview', requireAuth, async (req, res, next) => {
+  try {
+    // Aggregate totals
+    const { rows: [agg] } = await pool.query(
+      `SELECT
+         COUNT(*)                                                          AS total_videos,
+         COALESCE(SUM(total_plays), 0)                                    AS total_plays,
+         COALESCE(SUM(unique_viewers), 0)                                 AS total_viewers,
+         COALESCE(
+           SUM(avg_watch_pct * total_plays) / NULLIF(SUM(total_plays), 0),
+           0
+         )                                                                AS avg_watch_pct,
+         COALESCE(SUM(total_watch_time_seconds), 0)                       AS total_watch_seconds
+       FROM videos
+       WHERE user_id = $1 AND is_active = TRUE`,
+      [req.user.id]
+    );
+
+    // Top 5 videos by plays
+    const { rows: topVideos } = await pool.query(
+      `SELECT id, title, total_plays, unique_viewers,
+              ROUND(avg_watch_pct::numeric, 1) AS avg_watch_pct,
+              thumbnail_url, source_type
+       FROM   videos
+       WHERE  user_id = $1 AND is_active = TRUE
+       ORDER  BY total_plays DESC
+       LIMIT  5`,
+      [req.user.id]
+    );
+
+    return res.json({
+      total_videos       : parseInt(agg.total_videos, 10),
+      total_plays        : parseInt(agg.total_plays, 10),
+      total_viewers      : parseInt(agg.total_viewers, 10),
+      avg_watch_pct      : parseFloat(parseFloat(agg.avg_watch_pct).toFixed(1)),
+      total_watch_seconds: parseInt(agg.total_watch_seconds, 10),
+      top_videos         : topVideos,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
 // GET /api/user/events
 //
 // Returns the 200 most-recent analytics events across all of the

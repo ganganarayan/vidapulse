@@ -17,6 +17,7 @@ import OnboardingHealth  from './pages/OnboardingHealth';
 import AdminUsers        from './pages/AdminUsers';
 import AccountSettings   from './pages/AccountSettings';
 import ScriptGenerator   from './pages/ScriptGenerator';
+import OverviewPage      from './pages/OverviewPage';
 import IntegrationsPage  from './pages/IntegrationsPage';
 import HelpPage          from './pages/HelpPage';
 import AdminHelpPage     from './pages/AdminHelpPage';
@@ -98,20 +99,27 @@ export default function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password"  element={<ResetPassword />} />
 
-          {/* ── Dashboard (protected) ──────────────────────── */}
-          {/*
-            /dashboard           → video list or empty state
-            /dashboard/videos/:id → individual video analytics
-            (video detail page built in Steps 11–14)
-          */}
+          {/* ── Overview (protected) — aggregate stats home ─── */}
           <Route
             path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <OverviewPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ── Videos list (protected) ────────────────────── */}
+          <Route
+            path="/videos"
             element={
               <ProtectedRoute>
                 <Dashboard />
               </ProtectedRoute>
             }
           />
+
+          {/* ── Video detail (protected) ───────────────────── */}
           <Route
             path="/dashboard/videos/:id"
             element={
