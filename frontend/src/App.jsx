@@ -17,6 +17,9 @@ import OnboardingHealth  from './pages/OnboardingHealth';
 import AdminUsers        from './pages/AdminUsers';
 import AccountSettings   from './pages/AccountSettings';
 import ScriptGenerator   from './pages/ScriptGenerator';
+import IntegrationsPage  from './pages/IntegrationsPage';
+import HelpPage          from './pages/HelpPage';
+import AdminHelpPage     from './pages/AdminHelpPage';
 
 /**
  * ProtectedRoute
@@ -124,6 +127,26 @@ export default function App() {
             }
           />
 
+          {/* ── Integrations (all authenticated users) ───────────── */}
+          <Route
+            path="/integrations"
+            element={
+              <ProtectedRoute>
+                <IntegrationsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ── Help & Support (all authenticated users) ─────────── */}
+          <Route
+            path="/help"
+            element={
+              <ProtectedRoute>
+                <HelpPage />
+              </ProtectedRoute>
+            }
+          />
+
           {/* ── Admin pages (admin role or admin_lifetime plan) ──── */}
           <Route
             path="/admin/users"
@@ -138,6 +161,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <WebhookSettings />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/help"
+            element={
+              <AdminRoute>
+                <AdminHelpPage />
               </AdminRoute>
             }
           />

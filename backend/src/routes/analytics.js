@@ -1,5 +1,62 @@
 'use strict';
 
+const geoip = require('geoip-lite');
+
+// ── Country ISO-2 → display name (top 60 codes) ──────────────────────────
+const ISO_NAMES = {
+  AF:'Afghanistan',AL:'Albania',DZ:'Algeria',AR:'Argentina',AU:'Australia',
+  AT:'Austria',BD:'Bangladesh',BE:'Belgium',BR:'Brazil',CA:'Canada',
+  CL:'Chile',CN:'China',CO:'Colombia',HR:'Croatia',CZ:'Czechia',
+  DK:'Denmark',EG:'Egypt',FI:'Finland',FR:'France',DE:'Germany',
+  GH:'Ghana',GR:'Greece',HK:'Hong Kong',HU:'Hungary',IN:'India',
+  ID:'Indonesia',IQ:'Iraq',IE:'Ireland',IL:'Israel',IT:'Italy',
+  JP:'Japan',JO:'Jordan',KE:'Kenya',KR:'South Korea',KW:'Kuwait',
+  MY:'Malaysia',MX:'Mexico',MA:'Morocco',NL:'Netherlands',NZ:'New Zealand',
+  NG:'Nigeria',NO:'Norway',PK:'Pakistan',PE:'Peru',PH:'Philippines',
+  PL:'Poland',PT:'Portugal',QA:'Qatar',RO:'Romania',RU:'Russia',
+  SA:'Saudi Arabia',SG:'Singapore',ZA:'South Africa',ES:'Spain',
+  SE:'Sweden',CH:'Switzerland',TW:'Taiwan',TH:'Thailand',TR:'Turkey',
+  UA:'Ukraine',AE:'UAE',GB:'United Kingdom',US:'United States',VN:'Vietnam',
+};
+
+/** Extract real client IP, handling Cloudflare and reverse proxies */
+function getClientIp(req) {
+  const cf = req.headers['cf-connecting-ip'];
+  if (cf) return cf.trim();
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) return xff.split(',')[0].trim();
+  return req.ip || null;
+}
+
+/** Parse browser name from a User-Agent string */
+function parseBrowser(ua) {
+  if (!ua) return null;
+  if (/Edg\//.test(ua))                            return 'Edge';
+  if (/OPR\/|OPR\s|Opera/.test(ua))                return 'Opera';
+  if (/SamsungBrowser/.test(ua))                   return 'Samsung';
+  if (/YaBrowser/.test(ua))                        return 'Yandex';
+  if (/UCBrowser/.test(ua))                        return 'UC Browser';
+  if (/CriOS/.test(ua))                            return 'Chrome';  // Chrome iOS
+  if (/FxiOS/.test(ua))                            return 'Firefox'; // Firefox iOS
+  if (/Chrome\//.test(ua))                         return 'Chrome';
+  if (/Firefox\//.test(ua))                        return 'Firefox';
+  if (/Safari\//.test(ua) && /Version\//.test(ua)) return 'Safari';
+  return 'Other';
+}
+
+/** Look up country from an IP address (handles IPv4-mapped IPv6) */
+function lookupCountry(ip) {
+  if (!ip) return { code: null, name: null };
+  const ipv4 = ip.replace(/^::ffff:/i, '');
+  try {
+    const geo = geoip.lookup(ipv4);
+    if (!geo?.country) return { code: null, name: null };
+    return { code: geo.country, name: ISO_NAMES[geo.country] || geo.country };
+  } catch {
+    return { code: null, name: null };
+  }
+}
+
 /**
  * Analytics Ingestion API — public, no authentication
  *
@@ -177,6 +234,13 @@ router.post('/session', async (req, res) => {
     const VALID_DEVICE = new Set(['desktop', 'tablet', 'mobile', 'tv', 'unknown']);
     const safeDevice   = VALID_DEVICE.has(device_type) ? device_type : 'unknown';
 
+    // Auto-detect browser from User-Agent if not provided by the client
+    const detectedBrowser = (browser && browser.trim()) || parseBrowser(user_agent);
+
+    // Geo-IP lookup from the real client IP (handles Cloudflare proxying)
+    const realIp = getClientIp(req);
+    const geo    = lookupCountry(realIp);
+
     // Create a fresh analytics session
     const { rows: [session] } = await pool.query(
       `INSERT INTO analytics_sessions
@@ -186,9 +250,10 @@ router.post('/session', async (req, res) => {
           device_type, browser, os,
           screen_width, screen_height,
           user_agent, ip_address,
+          country_code, country_name,
           started_at)
        VALUES
-         ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::inet,NOW())
+         ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::inet,$18,$19,NOW())
        RETURNING id`,
       [
         video_id,
@@ -202,12 +267,14 @@ router.post('/session', async (req, res) => {
         utm_term     ? utm_term.slice(0, 255)     : null,
         utm_content  ? utm_content.slice(0, 255)  : null,
         safeDevice,
-        browser      ? browser.slice(0, 100)  : null,
+        detectedBrowser ? detectedBrowser.slice(0, 100) : null,
         os           ? os.slice(0, 100)        : null,
         screen_width  !== null ? (parseInt(screen_width,  10) || null) : null,
         screen_height !== null ? (parseInt(screen_height, 10) || null) : null,
         user_agent   ? user_agent.slice(0, 500)   : null,
-        req.ip       || null,
+        realIp       || null,
+        geo.code     || null,
+        geo.name     || null,
       ]
     );
 

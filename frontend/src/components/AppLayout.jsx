@@ -61,26 +61,17 @@ function AppSidebar() {
         <SidebarItem to="/dashboard" icon={<VideoIcon />}   label="Videos"      active={false} />
         <SidebarItem to="#"          icon={<ListIcon />}    label="Playlists"   active={false} coming />
 
-        <SidebarDivider label="Analytics" />
-        <SidebarItem to="#" icon={<ChartBarIcon />}   label="Analytics"   active={false} coming />
-        <SidebarItem to="#" icon={<UsersIcon />}      label="Audience"    active={false} coming />
-        <SidebarItem to="#" icon={<ActivityIcon />}   label="Engagement"  active={false} coming />
-        <SidebarItem to="#" icon={<HeatmapIcon />}    label="Heatmaps"    active={false} coming />
-        <SidebarItem to="#" icon={<FunnelIcon />}     label="Funnels"     active={false} coming />
-        <SidebarItem to="#" icon={<EventsIcon />}     label="Events"      active={false} coming />
-        <SidebarItem to="#" icon={<ReportsIcon />}    label="Reports"     active={false} coming />
-        <SidebarItem to="#" icon={<BellIcon />}       label="Alerts"      active={false} coming />
-
         <SidebarDivider label="Account" />
-        <SidebarItem to="/account"   icon={<SettingsIcon />}   label="Settings"      active={active('/account')} />
-        <SidebarItem to="#"          icon={<IntegrationsIcon />} label="Integrations" active={false} coming />
-        <SidebarItem to="#"          icon={<HelpIcon />}       label="Help & Support" active={false} />
+        <SidebarItem to="/account"       icon={<SettingsIcon />}    label="Settings"       active={active('/account')} />
+        <SidebarItem to="/integrations"  icon={<IntegrationsIcon />} label="Integrations"  active={active('/integrations')} />
+        <SidebarItem to="/help"          icon={<HelpIcon />}        label="Help & Support" active={active('/help')} />
 
         {isAdmin && (
           <>
             <SidebarDivider label="Admin" />
             <SidebarItem to="/admin/users"      icon={<UsersIcon />}   label="Users"      active={active('/admin/users')} />
             <SidebarItem to="/admin/webhook"    icon={<WebhookIcon />} label="Webhook"    active={active('/admin/webhook')} />
+            <SidebarItem to="/admin/help"       icon={<HelpIcon />}    label="Help Editor" active={active('/admin/help')} />
             <SidebarItem to="/admin/onboarding" icon={<HeartIcon />}   label="Onboarding" active={active('/admin/onboarding')} />
           </>
         )}
