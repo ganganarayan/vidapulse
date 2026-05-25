@@ -61,6 +61,12 @@ function AppSidebar() {
         <SidebarItem to="/dashboard" icon={<VideoIcon />}   label="Videos"      active={false} />
         <SidebarItem to="#"          icon={<ListIcon />}    label="Playlists"   active={false} coming />
 
+        <SidebarDivider label="Analytics" />
+        <SidebarItem to="/events"  icon={<EventsIcon />}  label="Events"   active={active('/events')} />
+        <SidebarItem to="/funnels" icon={<FunnelIcon />}  label="Funnels"  active={active('/funnels')} />
+        <SidebarItem to="/reports" icon={<ReportsIcon />} label="Reports"  active={active('/reports')} />
+        <SidebarItem to="/alerts"  icon={<BellIcon />}    label="Alerts"   active={active('/alerts')} />
+
         <SidebarDivider label="Account" />
         <SidebarItem to="/account"       icon={<SettingsIcon />}    label="Settings"       active={active('/account')} />
         <SidebarItem to="/integrations"  icon={<IntegrationsIcon />} label="Integrations"  active={active('/integrations')} />

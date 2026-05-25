@@ -308,4 +308,141 @@ router.put('/preferences', requireAuth, async (req, res, next) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────
+// GET /api/user/events
+//
+// Returns the 200 most-recent analytics events across all of the
+// authenticated user's videos.
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get('/events', requireAuth, async (req, res, next) => {
+  const limit  = Math.min(parseInt(req.query.limit  || '200', 10), 500);
+  const offset = parseInt(req.query.offset || '0', 10);
+  try {
+    const { rows } = await pool.query(
+      `SELECT ae.id,
+              ae.event_type,
+              ae.occurred_at,
+              ae.session_id,
+              ae.video_position,
+              v.title AS video_title,
+              v.id    AS video_id
+       FROM   analytics_events ae
+       JOIN   analytics_sessions s ON ae.session_id = s.id
+       JOIN   videos v             ON ae.video_id   = v.id
+       WHERE  v.user_id  = $1
+       ORDER  BY ae.occurred_at DESC
+       LIMIT  $2 OFFSET $3`,
+      [req.user.id, limit, offset]
+    );
+    return res.json({ events: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// GET /api/user/funnel?video_id=<uuid>
+//
+// Returns 4-step funnel counts derived from analytics_sessions.
+// If video_id is supplied only that video's sessions are counted.
+// Also returns the user's video list for the selector dropdown.
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get('/funnel', requireAuth, async (req, res, next) => {
+  const { video_id } = req.query;
+  try {
+    const params      = [req.user.id];
+    const videoClause = video_id ? 'AND s.video_id = $2' : '';
+    if (video_id) params.push(video_id);
+
+    const { rows: [s] } = await pool.query(
+      `SELECT
+         COUNT(*)                                       AS page_loads,
+         COUNT(*) FILTER (WHERE s.play_count > 0)      AS started,
+         COUNT(*) FILTER (WHERE s.max_watch_pct >= 50) AS reached_50,
+         COUNT(*) FILTER (WHERE s.reached_end = TRUE)  AS completed
+       FROM   analytics_sessions s
+       JOIN   videos v ON s.video_id = v.id
+       WHERE  v.user_id = $1 ${videoClause}`,
+      params
+    );
+
+    const { rows: videos } = await pool.query(
+      `SELECT id, title
+       FROM   videos
+       WHERE  user_id = $1 AND is_active = TRUE
+       ORDER  BY created_at DESC`,
+      [req.user.id]
+    );
+
+    const pl = parseInt(s.page_loads, 10);
+    const pct = (n) => (pl ? Math.round(parseInt(n, 10) / pl * 100) : 0);
+
+    return res.json({
+      steps: [
+        { label: 'Landed on Page',  count: pl,                       pct: 100 },
+        { label: 'Started Video',   count: parseInt(s.started,   10), pct: pct(s.started)   },
+        { label: 'Reached 50%',     count: parseInt(s.reached_50, 10), pct: pct(s.reached_50) },
+        { label: 'Completed Video', count: parseInt(s.completed, 10), pct: pct(s.completed) },
+      ],
+      videos,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// GET /api/user/alert-prefs
+// PUT /api/user/alert-prefs
+//
+// Stores and retrieves the user's alert notification toggle preferences.
+// ─────────────────────────────────────────────────────────────────────────
+
+const ALERT_DEFAULTS = {
+  traffic_spike   : false,
+  sudden_dropoff  : false,
+  viral_moment    : false,
+  new_domain_embed: false,
+  weekly_digest   : false,
+};
+
+router.get('/alert-prefs', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT COALESCE(alert_prefs, '{}') AS alert_prefs
+       FROM   user_preferences
+       WHERE  user_id = $1`,
+      [req.user.id]
+    );
+    const prefs = { ...ALERT_DEFAULTS, ...(rows[0]?.alert_prefs ?? {}) };
+    return res.json({ prefs });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/alert-prefs', requireAuth, async (req, res, next) => {
+  try {
+    const { prefs } = req.body ?? {};
+    if (!prefs || typeof prefs !== 'object' || Array.isArray(prefs)) {
+      return res.status(400).json({ error: 'prefs object required' });
+    }
+    const safe = Object.fromEntries(
+      Object.entries(prefs).filter(([k]) => Object.hasOwn(ALERT_DEFAULTS, k))
+    );
+    await pool.query(
+      `UPDATE user_preferences
+       SET    alert_prefs = COALESCE(alert_prefs, '{}') || $1::jsonb
+       WHERE  user_id = $2`,
+      [JSON.stringify(safe), req.user.id]
+    );
+    const merged = { ...ALERT_DEFAULTS, ...safe };
+    return res.json({ ok: true, prefs: merged });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

@@ -33,6 +33,7 @@ const videoRoutes     = require('./videos');
 const analyticsRoutes = require('./analytics');
 const adminRoutes     = require('./admin');
 const helpRoutes      = require('./help');
+const reportsRoutes   = require('./reports');
 
 router.use('/health',    healthRoutes);
 router.use('/webhook',   webhookRoutes);
@@ -42,6 +43,7 @@ router.use('/videos',    videoRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/admin',     adminRoutes);
 router.use('/help',      helpRoutes);
+router.use('/reports',   reportsRoutes);
 
 // ── GET /api/upgrade ──────────────────────────────────────
 // Called when the user visits the upgrade modal.

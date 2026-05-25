@@ -20,6 +20,10 @@ import ScriptGenerator   from './pages/ScriptGenerator';
 import IntegrationsPage  from './pages/IntegrationsPage';
 import HelpPage          from './pages/HelpPage';
 import AdminHelpPage     from './pages/AdminHelpPage';
+import EventsPage        from './pages/EventsPage';
+import FunnelsPage       from './pages/FunnelsPage';
+import AlertsPage        from './pages/AlertsPage';
+import ReportsPage       from './pages/ReportsPage';
 
 /**
  * ProtectedRoute
@@ -126,6 +130,12 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* ── Analytics pages (all authenticated users) ───────── */}
+          <Route path="/events"  element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
+          <Route path="/funnels" element={<ProtectedRoute><FunnelsPage /></ProtectedRoute>} />
+          <Route path="/alerts"  element={<ProtectedRoute><AlertsPage /></ProtectedRoute>} />
+          <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
 
           {/* ── Integrations (all authenticated users) ───────────── */}
           <Route
