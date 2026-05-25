@@ -487,20 +487,34 @@ function generateEmbedSnippet(videoId, origin) {
 }
 
 function EmbedView({ video, user }) {
-  const [linkCopied,  setLinkCopied]  = useState(false);
-  const [embedCopied, setEmbedCopied] = useState(false);
-  const [ctaCopied,   setCtaCopied]   = useState(false);
-  const [ctaDest,     setCtaDest]     = useState('');
+  const { showToast } = useToast();
+
+  const [linkCopied,    setLinkCopied]    = useState(false);
+  const [embedCopied,   setEmbedCopied]   = useState(false);
+
+  // CTA link management
+  const [ctaLinks,      setCtaLinks]      = useState([]);
+  const [ctaLoading,    setCtaLoading]    = useState(false);
+  const [ctaFormOpen,   setCtaFormOpen]   = useState(false);
+  const [ctaForm,       setCtaForm]       = useState({ cta_name: '', page_name: '', destination_url: '' });
+  const [ctaFormSaving, setCtaFormSaving] = useState(false);
+  const [ctaFormError,  setCtaFormError]  = useState('');
+  const [ctaCopiedId,   setCtaCopiedId]   = useState(null);
+  const [ctaDeletingId, setCtaDeletingId] = useState(null);
 
   const origin  = typeof window !== 'undefined' ? window.location.origin : '';
   const snippet = generateEmbedSnippet(video?.id ?? '', origin);
+  const isPro   = user?.plan === 'pro' || user?.plan === 'admin_lifetime';
 
-  const isPro = user?.plan === 'pro' || user?.plan === 'admin_lifetime';
-
-  // Build the CTA tracking URL live as the user types
-  const ctaTrackingUrl = (video?.id && ctaDest.match(/^https?:\/\/.+/))
-    ? `${origin}/api/analytics/cta/${video.id}?to=${encodeURIComponent(ctaDest)}`
-    : '';
+  // Load CTA links when the video changes (Pro only)
+  useEffect(() => {
+    if (!video?.id || !isPro) { setCtaLinks([]); return; }
+    setCtaLoading(true);
+    api.get(`/cta-links/video/${video.id}`)
+      .then(r => setCtaLinks(r.data.cta_links ?? []))
+      .catch(() => {})
+      .finally(() => setCtaLoading(false));
+  }, [video?.id, isPro]);
 
   function copyLink() {
     navigator.clipboard.writeText(video?.original_url ?? '')
@@ -512,11 +526,44 @@ function EmbedView({ video, user }) {
       .then(() => { setEmbedCopied(true); setTimeout(() => setEmbedCopied(false), 3000); })
       .catch(() => {});
   }
-  function copyCta() {
-    if (!ctaTrackingUrl) return;
-    navigator.clipboard.writeText(ctaTrackingUrl)
-      .then(() => { setCtaCopied(true); setTimeout(() => setCtaCopied(false), 2500); })
+  function copyCtaLink(id) {
+    navigator.clipboard.writeText(`${origin}/api/analytics/cta/link/${id}`)
+      .then(() => { setCtaCopiedId(id); setTimeout(() => setCtaCopiedId(null), 2500); })
       .catch(() => {});
+  }
+  async function addCtaLink(e) {
+    e.preventDefault();
+    setCtaFormError('');
+    if (!ctaForm.cta_name.trim())        { setCtaFormError('Button name is required'); return; }
+    if (!ctaForm.destination_url.trim()) { setCtaFormError('Destination URL is required'); return; }
+    if (!ctaForm.destination_url.match(/^https?:\/\/.+/)) { setCtaFormError('Destination must start with https://'); return; }
+    setCtaFormSaving(true);
+    try {
+      const r = await api.post('/cta-links', {
+        video_id        : video.id,
+        cta_name        : ctaForm.cta_name.trim(),
+        page_name       : ctaForm.page_name.trim() || null,
+        destination_url : ctaForm.destination_url.trim(),
+      });
+      setCtaLinks(prev => [...prev, r.data.cta_link]);
+      setCtaForm({ cta_name: '', page_name: '', destination_url: '' });
+      setCtaFormOpen(false);
+    } catch (err) {
+      setCtaFormError(err.response?.data?.message ?? 'Failed to create tracking link');
+    } finally {
+      setCtaFormSaving(false);
+    }
+  }
+  async function deleteCtaLink(id) {
+    setCtaDeletingId(id);
+    try {
+      await api.delete(`/cta-links/${id}`);
+      setCtaLinks(prev => prev.filter(l => l.id !== id));
+    } catch {
+      showToast('Could not delete link', 'error');
+    } finally {
+      setCtaDeletingId(null);
+    }
   }
 
   return (
@@ -574,101 +621,206 @@ function EmbedView({ video, user }) {
           </button>
         </div>
 
-        {/* CTA Tracking Link — Pro plan only */}
-        <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-1">
-            <p className="text-sm font-semibold text-gray-200">CTA Tracking Link</p>
-            {!isPro && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold
-                               bg-amber-500/15 text-amber-400 border border-amber-500/25
-                               rounded-full uppercase tracking-wide">
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
-                Pro
-              </span>
+        {/* CTA Tracking Links — Pro plan only */}
+        <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl overflow-hidden">
+
+          {/* Card header */}
+          <div className="px-5 pt-4 pb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-gray-200">CTA Tracking Links</p>
+              {!isPro && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold
+                                 bg-amber-500/15 text-amber-400 border border-amber-500/25
+                                 rounded-full uppercase tracking-wide">
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                  Pro
+                </span>
+              )}
+            </div>
+            {isPro && (
+              <button
+                onClick={() => { setCtaFormOpen(o => !o); setCtaFormError(''); }}
+                className="flex items-center gap-1 px-3 py-1 text-xs font-semibold
+                           bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20
+                           text-amber-400 rounded-lg transition-colors"
+              >
+                {ctaFormOpen ? '✕ Cancel' : '+ Add link'}
+              </button>
             )}
           </div>
-          <p className="text-xs text-gray-400 mt-0.5 mb-4">
-            Track clicks on your call-to-action button — no code required.
-            Works in all page builders, email tools, and plain HTML.
+
+          <p className="px-5 pb-4 text-xs text-gray-400 leading-relaxed border-b border-gray-700/40">
+            Track clicks on any CTA button without touching code.
+            Each link redirects instantly and logs the click — with button name and page name — in your Events Log.
           </p>
 
           {isPro ? (
-            /* ── Pro: full CTA generator ── */
             <>
-              <div className="bg-amber-500/5 border border-amber-500/15 rounded-lg px-4 py-3 mb-4 flex items-start gap-2">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
-                  className="text-amber-400/70 mt-0.5 flex-shrink-0">
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="12" y1="16" x2="12" y2="12"/>
-                  <line x1="12" y1="8" x2="12.01" y2="8"/>
-                </svg>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Instead of linking your CTA button directly to your destination page, use the tracking link below.
-                  VidaPulse records the click and instantly redirects your visitor — they won't notice any difference.
-                </p>
-              </div>
-
-              <label className="block text-xs font-semibold text-gray-300 mb-1.5">
-                Where should visitors go after clicking?
-              </label>
-              <input
-                type="url"
-                value={ctaDest}
-                onChange={e => { setCtaDest(e.target.value); setCtaCopied(false); }}
-                placeholder="https://your-checkout-page.com"
-                className="w-full bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2
-                           text-sm text-gray-200 placeholder-gray-600
-                           focus:outline-none focus:ring-2 focus:ring-amber-500/40 mb-3"
-              />
-
-              {ctaTrackingUrl ? (
-                <div>
-                  <label className="block text-xs font-semibold text-gray-300 mb-1.5">
-                    Your CTA tracking link — set this as your button's URL
-                  </label>
-                  <div className="flex items-start gap-2">
-                    <code className="flex-1 bg-gray-950 border border-gray-700 rounded-lg px-3 py-2
-                                     text-[11px] text-amber-300 font-mono break-all leading-relaxed">
-                      {ctaTrackingUrl}
-                    </code>
+              {/* ── Add CTA link form ── */}
+              {ctaFormOpen && (
+                <form onSubmit={addCtaLink} className="px-5 py-4 bg-gray-900/30 border-b border-gray-700/40 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-400 mb-1">
+                        Button name <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={ctaForm.cta_name}
+                        onChange={e => setCtaForm(p => ({ ...p, cta_name: e.target.value }))}
+                        placeholder='e.g. "Buy Now"'
+                        className="w-full bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2
+                                   text-xs text-gray-200 placeholder-gray-600
+                                   focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-400 mb-1">
+                        Page name <span className="text-gray-600">(optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={ctaForm.page_name}
+                        onChange={e => setCtaForm(p => ({ ...p, page_name: e.target.value }))}
+                        placeholder='e.g. "Sales Page"'
+                        className="w-full bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2
+                                   text-xs text-gray-200 placeholder-gray-600
+                                   focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-400 mb-1">
+                      Destination URL <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="url"
+                      value={ctaForm.destination_url}
+                      onChange={e => setCtaForm(p => ({ ...p, destination_url: e.target.value }))}
+                      placeholder="https://your-checkout-page.com"
+                      className="w-full bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2
+                                 text-xs text-gray-200 placeholder-gray-600
+                                 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                    />
+                  </div>
+                  {ctaFormError && (
+                    <p className="text-xs text-red-400">{ctaFormError}</p>
+                  )}
+                  <div className="flex justify-end">
                     <button
-                      onClick={copyCta}
-                      className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-400
-                                 text-gray-900 text-xs font-semibold rounded-lg transition-colors mt-0"
+                      type="submit"
+                      disabled={ctaFormSaving}
+                      className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400
+                                 disabled:opacity-60 text-gray-900 text-xs font-semibold
+                                 rounded-lg transition-colors"
                     >
-                      {ctaCopied ? <CheckSmallIcon className="text-gray-900" /> : <CopyIcon />}
-                      {ctaCopied ? 'Copied!' : 'Copy'}
+                      {ctaFormSaving ? (
+                        <>
+                          <span className="w-3 h-3 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+                          Saving…
+                        </>
+                      ) : 'Create tracking link'}
                     </button>
                   </div>
-                  <p className="text-[11px] text-gray-500 mt-2">
-                    Paste this URL as the href/link on your CTA button. Enable the{' '}
-                    <strong className="text-gray-400">CTA Click</strong> alert in Alerts to be notified when it's clicked.
+                </form>
+              )}
+
+              {/* ── CTA links list ── */}
+              {ctaLoading ? (
+                <div className="px-5 py-5 flex items-center gap-2 text-gray-500 text-sm">
+                  <span className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                  Loading…
+                </div>
+              ) : ctaLinks.length === 0 && !ctaFormOpen ? (
+                <div className="px-5 py-6 text-center">
+                  <p className="text-sm text-gray-500">No CTA tracking links yet.</p>
+                  <button
+                    onClick={() => setCtaFormOpen(true)}
+                    className="mt-1.5 text-xs text-amber-400 hover:text-amber-300 transition-colors"
+                  >
+                    + Create your first link
+                  </button>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-700/40">
+                  {ctaLinks.map(link => {
+                    const trackingUrl = `${origin}/api/analytics/cta/link/${link.id}`;
+                    const isCopied    = ctaCopiedId === link.id;
+                    const isDeleting  = ctaDeletingId === link.id;
+                    return (
+                      <div key={link.id} className="px-5 py-3.5 flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <p className="text-xs font-semibold text-gray-200">{link.cta_name}</p>
+                            {link.page_name && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-gray-700/60 text-gray-400 rounded-md border border-gray-600/50">
+                                {link.page_name}
+                              </span>
+                            )}
+                          </div>
+                          <code className="text-[10px] text-amber-300/60 font-mono block truncate">
+                            {trackingUrl}
+                          </code>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            onClick={() => copyCtaLink(link.id)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-700 hover:bg-gray-600
+                                       border border-gray-600 text-xs text-gray-200 rounded-lg transition-colors"
+                          >
+                            {isCopied ? <CheckSmallIcon className="text-emerald-400" /> : <CopyIcon />}
+                            {isCopied ? 'Copied' : 'Copy'}
+                          </button>
+                          <button
+                            onClick={() => deleteCtaLink(link.id)}
+                            disabled={isDeleting}
+                            className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10
+                                       rounded-lg transition-colors disabled:opacity-40"
+                            title="Delete link"
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Footer note */}
+              {(ctaLinks.length > 0 || ctaFormOpen) && (
+                <div className="px-5 py-3 bg-gray-900/20 border-t border-gray-700/40">
+                  <p className="text-[11px] text-gray-500 leading-relaxed">
+                    Set each link as the <strong className="text-gray-400">href/URL</strong> of your button.
+                    Clicks appear in your Events Log as{' '}
+                    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-mono bg-pink-500/15 text-pink-300 border border-pink-500/25">cta click</span>{' '}
+                    events with button name, page name, and destination — exportable as CSV.
+                    Enable the <strong className="text-gray-400">CTA Click</strong> alert for real-time notifications.
                   </p>
                 </div>
-              ) : ctaDest ? (
-                <p className="text-xs text-red-400">Destination must be a valid URL starting with https://</p>
-              ) : null}
+              )}
             </>
           ) : (
             /* ── Non-Pro: upgrade prompt ── */
-            <div className="bg-gray-900/50 border border-gray-700/60 rounded-lg px-4 py-4">
-              <p className="text-xs font-semibold text-gray-300 mb-1">Upgrade to Pro to unlock CTA tracking</p>
-              <p className="text-xs text-gray-500 leading-relaxed mb-3">
-                Generate a tracking link that records every CTA click and instantly redirects
-                your visitor — no JavaScript required. Works anywhere you can paste a URL.
-              </p>
-              <a
-                href="/upgrade"
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-amber-500 hover:bg-amber-400
-                           text-gray-900 text-xs font-semibold rounded-lg transition-colors"
-              >
-                View Pro plan →
-              </a>
+            <div className="px-5 py-4">
+              <div className="bg-gray-900/50 border border-gray-700/60 rounded-lg px-4 py-4">
+                <p className="text-xs font-semibold text-gray-300 mb-1">Upgrade to Pro to unlock CTA tracking</p>
+                <p className="text-xs text-gray-500 leading-relaxed mb-3">
+                  Create a named tracking link for each CTA button across different pages.
+                  Every click is logged with button name, page name, and destination — downloadable as CSV from Reports.
+                </p>
+                <a
+                  href="/upgrade"
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-amber-500 hover:bg-amber-400
+                             text-gray-900 text-xs font-semibold rounded-lg transition-colors"
+                >
+                  View Pro plan →
+                </a>
+              </div>
             </div>
           )}
         </div>
@@ -839,6 +991,19 @@ function SettingsNavIcon() {
       stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+      <path d="M10 11v6"/>
+      <path d="M14 11v6"/>
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
     </svg>
   );
 }

@@ -279,9 +279,12 @@ async function _generateEventsLog(userId) {
     `SELECT
        ae.occurred_at,
        ae.event_type,
-       v.title          AS video,
+       v.title                           AS video,
        ae.video_position,
-       ae.session_id
+       ae.session_id,
+       ae.metadata->>'cta_name'          AS cta_name,
+       ae.metadata->>'page_name'         AS page_name,
+       ae.metadata->>'destination_url'   AS destination_url
      FROM   analytics_events ae
      LEFT   JOIN analytics_sessions s ON ae.session_id = s.id
      JOIN   videos v                  ON ae.video_id   = v.id
@@ -291,7 +294,10 @@ async function _generateEventsLog(userId) {
     [userId]
   );
 
-  const HEADERS = ['occurred_at','event_type','video','video_position','session_id'];
+  const HEADERS = [
+    'occurred_at','event_type','video','video_position','session_id',
+    'cta_name','page_name','destination_url',
+  ];
   const csv = buildCsv(HEADERS, rows);
   return { csv, rowCount: rows.length };
 }

@@ -34,6 +34,7 @@ const analyticsRoutes = require('./analytics');
 const adminRoutes     = require('./admin');
 const helpRoutes      = require('./help');
 const reportsRoutes   = require('./reports');
+const ctaLinksRoutes  = require('./ctaLinks');
 
 router.use('/health',    healthRoutes);
 router.use('/webhook',   webhookRoutes);
@@ -44,6 +45,7 @@ router.use('/analytics', analyticsRoutes);
 router.use('/admin',     adminRoutes);
 router.use('/help',      helpRoutes);
 router.use('/reports',   reportsRoutes);
+router.use('/cta-links', ctaLinksRoutes);
 
 // ── GET /api/upgrade ──────────────────────────────────────
 // Called when the user visits the upgrade modal.

@@ -570,6 +570,69 @@ router.post('/ping', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
+// GET /api/analytics/cta/link/:ctaId
+//
+// Named CTA tracking link — looks up a video_cta_links row, records the
+// click with full metadata (cta_name, page_name, destination_url), then
+// 302-redirects. Only records if the video owner is on Pro/admin_lifetime.
+//
+// NOTE: this route MUST be registered before /cta/:videoId to prevent
+// Express matching "link" as a videoId parameter.
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get('/cta/link/:ctaId', async (req, res) => {
+  const { ctaId } = req.params;
+
+  // Validate UUID format
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(ctaId)) {
+    return res.status(400).send('Invalid CTA link ID.');
+  }
+
+  let ctaLink;
+  try {
+    const { rows: [row] } = await pool.query(
+      `SELECT c.id, c.cta_name, c.page_name, c.destination_url, c.video_id,
+              p.name AS plan_name
+       FROM   video_cta_links c
+       JOIN   videos v ON v.id = c.video_id
+       JOIN   users  u ON u.id = v.user_id
+       JOIN   plans  p ON p.id = u.plan_id
+       WHERE  c.id = $1 AND v.is_active = TRUE`,
+      [ctaId]
+    );
+    ctaLink = row;
+  } catch (err) {
+    logger.error(`[analytics/cta/link] lookup failed: ${err.message}`);
+    return res.status(500).send('Internal error.');
+  }
+
+  if (!ctaLink) {
+    return res.status(404).send('CTA link not found or video is inactive.');
+  }
+
+  // Redirect immediately — tracking is fire-and-forget
+  res.redirect(302, ctaLink.destination_url);
+
+  // Record click with full metadata (Pro/admin_lifetime plan only)
+  if (ctaLink.plan_name === 'pro' || ctaLink.plan_name === 'admin_lifetime') {
+    pool.query(
+      `INSERT INTO analytics_events
+         (session_id, video_id, event_type, occurred_at, metadata)
+       VALUES (NULL, $1, 'cta_click', NOW(), $2::jsonb)`,
+      [
+        ctaLink.video_id,
+        JSON.stringify({
+          cta_link_id    : ctaId,
+          cta_name       : ctaLink.cta_name,
+          page_name      : ctaLink.page_name || null,
+          destination_url: ctaLink.destination_url,
+        }),
+      ]
+    ).catch(err => logger.warn(`[analytics/cta/link] insert failed: ${err.message}`));
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
 // GET /api/analytics/cta/:videoId
 //
 // CTA tracking link — no JavaScript required on the subscriber's page.
