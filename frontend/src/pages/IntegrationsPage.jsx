@@ -100,15 +100,15 @@ function WebhookCard({ isAdmin }) {
 
   const load = useCallback(() => {
     if (!isAdmin) { setLoading(false); return; }
-    api.get('/admin/webhook')
+    api.get('/admin/webhook-settings')
       .then(r => {
-        const s = r.data.settings;
+        const s = r.data.settings ?? {};
         setSettings(s);
         // Only populate if stored value is a real URL — ignore stale test data (emails, etc.)
-        const storedUrl = s?.endpoint_url ?? '';
+        const storedUrl = s.webhook_url ?? '';
         setUrl(storedUrl.startsWith('http://') || storedUrl.startsWith('https://') ? storedUrl : '');
-        setSecret(s?.secret_key ?? '');
-        setIsActive(s?.is_active ?? false);
+        setSecret(s.webhook_secret ?? '');
+        setIsActive(s.is_active ?? false);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -117,16 +117,22 @@ function WebhookCard({ isAdmin }) {
   useEffect(() => { load(); }, [load]);
 
   async function save() {
-    // Validate: if a URL is provided it must be a proper https endpoint
     const trimmed = url.trim();
+    // Validate: if a URL is provided it must start with https://
     if (trimmed && !trimmed.startsWith('https://') && !trimmed.startsWith('http://')) {
       showToast('Endpoint URL must start with https://', 'error');
       return;
     }
     setSaving(true);
     try {
-      await api.put('/admin/webhook', { endpoint_url: trimmed, secret_key: secret, is_active: isActive });
-      showToast('Webhook saved');
+      // Send null when empty so the DB value is cleared
+      await api.patch('/admin/webhook-settings', {
+        webhook_url   : trimmed || null,
+        webhook_secret: secret  || null,
+        is_active     : isActive,
+      });
+      setUrl(trimmed);
+      showToast(trimmed ? 'Webhook saved' : 'Webhook URL cleared');
       setTestResult(null);
     } catch (err) {
       showToast(err.response?.data?.message ?? 'Save failed', 'error');
@@ -139,7 +145,7 @@ function WebhookCard({ isAdmin }) {
     setTesting(true);
     setTestResult(null);
     try {
-      const { data } = await api.post('/admin/webhook/test');
+      const { data } = await api.post('/admin/webhook-settings/test');
       setTestResult(data);
     } catch (err) {
       setTestResult({ ok: false, error: err.response?.data?.message ?? 'Error' });
