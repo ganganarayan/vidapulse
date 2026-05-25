@@ -8,7 +8,10 @@ import api from '../lib/api';
  * AlertsPage — /alerts
  *
  * Lets users toggle alert rules. Preferences are stored in user_preferences.alert_prefs
- * and will trigger webhook notifications when the corresponding conditions are met.
+ * and will trigger in-app + browser push notifications when the conditions are met.
+ *
+ * The CTA Click rule has an inline setup guide (collapsed by default) explaining
+ * how to add the companion tracking script to the subscriber's landing page.
  */
 
 const ALERT_RULES = [
@@ -55,7 +58,8 @@ const ALERT_RULES = [
   {
     key:   'cta_click',
     title: 'CTA Click',
-    desc:  'Alert me when a viewer clicks the call-to-action button placed on a video page.',
+    desc:  'Alert me when a viewer clicks the call-to-action button on a video page.',
+    hasSetup: true,
   },
 ];
 
@@ -71,11 +75,53 @@ const DEFAULTS = {
   cta_click       : false,
 };
 
+// ── CTA tracking snippets ──────────────────────────────────────────────────
+
+const CTA_BUTTON_SNIPPET = `<button data-vp-cta>Get Instant Access</button>`;
+
+const CTA_SCRIPT_SNIPPET =
+`<script>
+(function(){
+  var _vps = null;
+  /* Auto-detect API URL from the VidaPulse embed iframe on this page */
+  var _iframe = document.querySelector('iframe[src*="/embed/"]');
+  var _api = _iframe
+    ? _iframe.src.replace(/\\/embed\\/.*/, '/api/analytics/event')
+    : 'https://app.vidapulse.in/api/analytics/event';
+
+  /* Capture session ID posted by the iframe player */
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'vidapulse_session') {
+      _vps = e.data;
+    }
+  });
+
+  /* Fire cta_click whenever any [data-vp-cta] element is clicked */
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-vp-cta]');
+    if (btn && _vps) {
+      fetch(_api, {
+        method : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body   : JSON.stringify({
+          session_id : _vps.session_id,
+          video_id   : _vps.video_id,
+          event_type : 'cta_click'
+        })
+      }).catch(function() {});
+    }
+  });
+})();
+<\/script>`;
+
+// ─────────────────────────────────────────────────────────────────────────
+
 export default function AlertsPage() {
-  const { showToast } = useToast();
+  const { showToast }    = useToast();
   const [prefs,   setPrefs]   = useState(DEFAULTS);
   const [loading, setLoading] = useState(true);
-  const [saving,  setSaving]  = useState(null); // key currently being saved
+  const [saving,  setSaving]  = useState(null);
+  const [ctaOpen, setCtaOpen] = useState(false);
 
   const load = useCallback(() => {
     api.get('/user/alert-prefs')
@@ -94,7 +140,7 @@ export default function AlertsPage() {
       await api.put('/user/alert-prefs', { prefs: { [key]: next } });
       showToast(`${ALERT_RULES.find(r => r.key === key)?.title} ${next ? 'enabled' : 'disabled'}`);
     } catch {
-      setPrefs(p => ({ ...p, [key]: !next })); // revert
+      setPrefs(p => ({ ...p, [key]: !next }));
       showToast('Could not save preference', 'error');
     } finally {
       setSaving(null);
@@ -116,7 +162,7 @@ export default function AlertsPage() {
             <div>
               <h1 className="text-2xl font-bold text-gray-50">Alerts</h1>
               <p className="text-sm text-gray-400 mt-0.5">
-                Get notified when something important happens — a traffic spike, a sudden drop-off, or a new embed.
+                Get notified when something important happens across your videos.
               </p>
             </div>
           </div>
@@ -142,26 +188,50 @@ export default function AlertsPage() {
 
               <div className="divide-y divide-gray-700/40">
                 {ALERT_RULES.map(rule => (
-                  <div key={rule.key} className="flex items-center justify-between px-5 py-4 gap-4">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-200">{rule.title}</p>
-                      <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{rule.desc}</p>
+                  <React.Fragment key={rule.key}>
+
+                    {/* ── Rule row ── */}
+                    <div className="px-5 py-4 gap-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-200">{rule.title}</p>
+                          <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{rule.desc}</p>
+                          {/* Setup guide toggle — only for CTA Click */}
+                          {rule.hasSetup && (
+                            <button
+                              onClick={() => setCtaOpen(o => !o)}
+                              className="mt-2 flex items-center gap-1 text-xs text-amber-400/80 hover:text-amber-300 transition-colors"
+                            >
+                              <CodeIcon />
+                              Setup guide
+                              <ChevronIcon open={ctaOpen} />
+                            </button>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => toggle(rule.key)}
+                          disabled={saving === rule.key}
+                          className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors duration-200
+                            ${prefs[rule.key] ? 'bg-amber-500' : 'bg-gray-600'}
+                            ${saving === rule.key ? 'opacity-60' : ''}`}
+                          role="switch"
+                          aria-checked={prefs[rule.key]}
+                        >
+                          <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 mt-0.5
+                            ${prefs[rule.key] ? 'translate-x-4' : 'translate-x-0.5'}`}
+                          />
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => toggle(rule.key)}
-                      disabled={saving === rule.key}
-                      className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors duration-200
-                        ${prefs[rule.key] ? 'bg-amber-500' : 'bg-gray-600'}
-                        ${saving === rule.key ? 'opacity-60' : ''}`}
-                      role="switch"
-                      aria-checked={prefs[rule.key]}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 mt-0.5
-                          ${prefs[rule.key] ? 'translate-x-4' : 'translate-x-0.5'}`}
-                      />
-                    </button>
-                  </div>
+
+                    {/* ── CTA setup guide (collapsible) ── */}
+                    {rule.hasSetup && ctaOpen && (
+                      <div className="bg-gray-900/50 border-t border-gray-700/40 px-5 py-5">
+                        <CtaSetupGuide />
+                      </div>
+                    )}
+
+                  </React.Fragment>
                 ))}
               </div>
             </div>
@@ -185,7 +255,164 @@ export default function AlertsPage() {
   );
 }
 
-// ─── Icons ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// CtaSetupGuide — step-by-step instructions for wiring CTA click tracking
+// ─────────────────────────────────────────────────────────────────────────
+
+function CtaSetupGuide() {
+  const [copiedBtn,  setCopiedBtn]  = useState(false);
+  const [copiedScript, setCopiedScript] = useState(false);
+
+  function copy(text, setCopied) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  }
+
+  return (
+    <div className="space-y-5">
+
+      {/* Context banner */}
+      <div className="flex items-start gap-3 bg-amber-500/5 border border-amber-500/15 rounded-lg px-4 py-3">
+        <InfoIcon />
+        <div>
+          <p className="text-xs font-semibold text-amber-300 mb-0.5">Two separate pieces of code — same landing page</p>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            Your landing page already has the VidaPulse <strong className="text-gray-300">embed iframe</strong>. CTA tracking
+            needs one additional attribute on your button and a small <strong className="text-gray-300">tracking script</strong> added
+            as a separate <code className="text-amber-400/80 text-[11px]">&lt;script&gt;</code> tag — <em>not</em> inside the iframe code.
+          </p>
+        </div>
+      </div>
+
+      {/* Step 1 */}
+      <div>
+        <p className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-2 flex items-center gap-2">
+          <StepBadge n="1" />
+          Add <code className="font-mono text-amber-400 text-[11px] bg-amber-500/10 px-1.5 py-0.5 rounded">data-vp-cta</code> to your CTA button
+        </p>
+        <p className="text-xs text-gray-400 mb-2 leading-relaxed">
+          Add the <code className="text-amber-400/80 text-[11px]">data-vp-cta</code> attribute to any button or link you want
+          to track. No other changes to your existing button are needed.
+        </p>
+        <CodeBlock code={CTA_BUTTON_SNIPPET} copied={copiedBtn} onCopy={() => copy(CTA_BUTTON_SNIPPET, setCopiedBtn)} />
+      </div>
+
+      {/* Step 2 */}
+      <div>
+        <p className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-2 flex items-center gap-2">
+          <StepBadge n="2" />
+          Add the tracking script to your landing page
+        </p>
+        <p className="text-xs text-gray-400 mb-2 leading-relaxed">
+          Paste this <code className="text-amber-400/80 text-[11px]">&lt;script&gt;</code> block anywhere on the same page
+          as your embed iframe — just before the closing <code className="text-amber-400/80 text-[11px]">&lt;/body&gt;</code> tag is ideal.
+          <strong className="text-gray-300"> Do not paste it inside the iframe embed code.</strong>
+        </p>
+        <CodeBlock code={CTA_SCRIPT_SNIPPET} copied={copiedScript} onCopy={() => copy(CTA_SCRIPT_SNIPPET, setCopiedScript)} tall />
+      </div>
+
+      {/* How it works note */}
+      <div className="text-xs text-gray-500 leading-relaxed border-t border-gray-700/40 pt-4">
+        <strong className="text-gray-400">How it works:</strong> The script listens for a message from the VidaPulse
+        iframe (sent as soon as a viewer session is created). When your <code className="text-amber-400/70 text-[11px]">[data-vp-cta]</code> button
+        is clicked, it sends the click event to VidaPulse, linked to that viewer's session. You'll see it appear
+        in the <strong className="text-gray-400">Events log</strong> as a pink <code className="text-amber-400/70 text-[11px]">cta_click</code> badge.
+      </div>
+
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CodeBlock — syntax-highlighted-ish code display with copy button
+// ─────────────────────────────────────────────────────────────────────────
+
+function CodeBlock({ code, copied, onCopy, tall }) {
+  return (
+    <div className="relative group">
+      <pre className={`bg-gray-950 border border-gray-700/60 rounded-lg px-4 py-3 text-[11px] font-mono
+                       text-gray-300 leading-relaxed whitespace-pre-wrap break-all overflow-x-auto
+                       ${tall ? 'max-h-48 overflow-y-auto' : ''}`}>
+        {code}
+      </pre>
+      <button
+        onClick={onCopy}
+        className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1
+                   bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-[10px]
+                   text-gray-400 hover:text-gray-200 transition-colors opacity-0 group-hover:opacity-100"
+      >
+        {copied ? (
+          <><CheckIcon /> Copied</>
+        ) : (
+          <><CopyIcon /> Copy</>
+        )}
+      </button>
+    </div>
+  );
+}
+
+// ─── Small components ─────────────────────────────────────────────────────
+
+function StepBadge({ n }) {
+  return (
+    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-bold flex-shrink-0">
+      {n}
+    </span>
+  );
+}
+
+function ChevronIcon({ open }) {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+      className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  );
+}
+
+function CodeIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="16 18 22 12 16 6"/>
+      <polyline points="8 6 2 12 8 18"/>
+    </svg>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+      className="text-amber-400/70 mt-0.5 flex-shrink-0">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="12" y1="16" x2="12" y2="12"/>
+      <line x1="12" y1="8" x2="12.01" y2="8"/>
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  );
+}
 
 function BellIcon() {
   return (
