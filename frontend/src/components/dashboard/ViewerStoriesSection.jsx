@@ -164,13 +164,20 @@ function StoriesContent({ status, data, userPlan, isPro, onRetry }) {
   // For Pro stories, locked slots are shown for Starter users
   const lockedProTypes = isPro ? [] : STORY_ORDER.filter(t => STORY_META[t].requiredPlan === 'pro');
 
-  // Generating state
+  // Generating state — use different UI depending on whether engine is actively
+  // running (generating) vs waiting for more data (pending)
   if (story_status === 'pending' || story_status === 'generating') {
+    const isGenerating = story_status === 'generating';
     return (
       <div className="bg-gray-800/30 border border-gray-700/40 border-dashed rounded-xl px-5 py-8 text-center">
-        <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-        <p className="text-sm text-gray-400">Analysing viewer patterns…</p>
-        <p className="text-xs text-gray-600 mt-1">Stories appear once enough sessions are collected.</p>
+        {isGenerating
+          ? <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          : <div className="text-2xl mb-3">◎</div>
+        }
+        <p className="text-sm text-gray-400">
+          {isGenerating ? 'Generating viewer stories…' : 'Waiting for more viewers'}
+        </p>
+        <p className="text-xs text-gray-600 mt-1">Stories appear once 5 or more viewers have watched.</p>
       </div>
     );
   }

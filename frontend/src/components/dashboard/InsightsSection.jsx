@@ -364,7 +364,7 @@ function InsightsPending() {
             Insights are on their way
           </p>
           <p className="text-sm text-gray-500 leading-relaxed">
-            Your first AI-generated insights will appear here automatically once enough
+            Your first AI-generated insights will appear here automatically once 5 or more
             viewers have watched your video. Share it to speed things up.
           </p>
         </div>

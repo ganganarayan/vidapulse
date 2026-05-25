@@ -133,13 +133,21 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
           events:{
             onReady:function(){
               sess();
+              var _d=player.getDuration()||0;if(_d>0)dur=_d;
               setInterval(function(){
                 if(player.getPlayerState&&player.getPlayerState()===YT.PlayerState.PLAYING){
                   var d=player.getDuration()||0;
                   var c=player.getCurrentTime()||0;
-                  maxP=d>0?Math.max(maxP,c/d*100):maxP;
+                  if(d>0&&on){
+                    dur=d;
+                    maxP=Math.max(maxP,c/d*100);
+                    secs+=c-t0;
+                    ivs.push([t0,c]);
+                    t0=c;
+                    ping('heartbeat');
+                  }
                 }
-              },10000);
+              },15000);
             },
             onStateChange:function(e){
               var S=YT.PlayerState;
@@ -176,6 +184,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
       script.onload=function(){
         var p=new Vimeo.Player('vm-player');
         sess();
+        p.getDuration().then(function(d){if(d>0)dur=d;}).catch(function(){});
         p.on('play',function(d){
           if(!on){on=true;t0=d.seconds;ping('play');}
         });
@@ -537,6 +546,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         }
 
         /* ── Analytics ──────────────────────────────── */
+        v.addEventListener('loadedmetadata',function(){if(v.duration>0)dur=v.duration;});
         v.addEventListener('play',function(){if(!on){on=true;t0=v.currentTime;ping('play');}});
         v.addEventListener('pause',function(){
           if(on){on=false;var e=v.currentTime;secs+=e-t0;ivs.push([t0,e]);
@@ -549,10 +559,22 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         v.addEventListener('seeked',function(){
           if(on){var e=v.currentTime;secs+=e-t0;ivs.push([t0,e]);t0=e;}
         });
+        /* Heartbeat every 15 s: flush the current in-progress interval so the
+           server has reliable data even if the user never pauses or ends.
+           We close the interval at `now` and restart from `now`, so that
+           subsequent pause/end pings report only new seconds (no double-count). */
         setInterval(function(){
-          if(on&&v.duration>0){maxP=Math.max(maxP,v.currentTime/v.duration*100);}
+          if(on&&v.duration>0){
+            var now=v.currentTime;
+            maxP=Math.max(maxP,now/v.duration*100);
+            dur=v.duration;
+            secs+=now-t0;
+            ivs.push([t0,now]);
+            t0=now;
+            ping('heartbeat');
+          }
           if(RESUME&&on){savePos(v.currentTime);}
-        },10000);
+        },15000);
       }
     `;
   }
@@ -587,7 +609,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
     }
     console.log('[VidaPulse] viewer cookie:', ck);
 
-    var sid=null, pq=[], on=false,t0=0,maxP=0,secs=0,ivs=[];
+    var sid=null, pq=[], on=false,t0=0,maxP=0,secs=0,ivs=[],dur=0;
     var dv=window.innerWidth<768?'mobile':window.innerWidth<1024?'tablet':'desktop';
 
     function sess(){
@@ -624,9 +646,14 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
 
     function ping(ev){
       if(!sid){pq.push(ev);console.log('[VidaPulse] queued (no session yet):',ev);return;}
+      /* Drain ivs so each ping only reports NEW intervals.
+         On failure they are restored at the front so the next ping retries them.
+         This prevents double-counting when heartbeats overlap with pause/end events. */
+      var toSend=ivs.splice(0);
       var body=JSON.stringify({session_id:sid,video_id:VID,event:ev,
-        max_pct:maxP,watch_seconds:secs,intervals:ivs});
-      console.log('[VidaPulse] ping →',ev,'| sid:',sid.slice(0,8),'| maxPct:',maxP.toFixed(1),'| secs:',secs.toFixed(1));
+        max_pct:maxP,watch_seconds:secs,intervals:toSend,
+        duration_seconds:dur>0?dur:undefined});
+      console.log('[VidaPulse] ping →',ev,'| sid:',sid.slice(0,8),'| maxPct:',maxP.toFixed(1),'| secs:',secs.toFixed(1),'| ivs:',toSend.length);
       /* Use fetch+keepalive — works mid-session AND on page unload.
          sendBeacon is NOT used: it returns false silently on failure
          (no exception), so the catch block never runs and pings vanish. */
@@ -637,6 +664,8 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         console.log('[VidaPulse] ping ✓',ev,'→ HTTP',r.status);
       }).catch(function(e){
         console.warn('[VidaPulse] ping ✗',ev,'→',e.message);
+        /* Restore intervals so next ping can retry */
+        if(toSend.length>0)Array.prototype.unshift.apply(ivs,toSend);
         /* last-ditch fallback for unload scenario */
         try{navigator.sendBeacon&&navigator.sendBeacon(
           API+'/analytics/ping',new Blob([body],{type:'application/json'}));}

@@ -638,11 +638,19 @@ router.get('/:id/heatmap', requireAuth, planGate('heatmap'), async (req, res, ne
       [req.params.id]
     );
 
+    // If duration_seconds isn't stored yet, derive it from the highest observed
+    // second bucket so the heatmap can still render for existing videos.
+    let durationSeconds = video.duration_seconds ? parseFloat(video.duration_seconds) : null;
+    if (!durationSeconds && heatmap.length > 0) {
+      const maxBucket = Math.max(...heatmap.map(r => r.second_bucket));
+      durationSeconds = maxBucket + 10; // 10-second tail buffer
+    }
+
     return res.json({
       heatmap,
       drop_off_second : video.primary_drop_off_second,
       drop_off_pct    : video.primary_drop_off_pct,
-      duration_seconds: video.duration_seconds,
+      duration_seconds: durationSeconds,
       total_viewers   : video.unique_viewers,
     });
   } catch (err) {

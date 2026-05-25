@@ -244,10 +244,11 @@ router.post('/ping', async (req, res) => {
   const {
     session_id,
     video_id,
-    event         = 'heartbeat',
-    max_pct       = 0,
-    watch_seconds = 0,
-    intervals     = [],
+    event            = 'heartbeat',
+    max_pct          = 0,
+    watch_seconds    = 0,
+    intervals        = [],
+    duration_seconds,
   } = req.body ?? {};
 
   // Always respond 200 so sendBeacon doesn't log errors in the browser
@@ -287,6 +288,19 @@ router.post('/ping', async (req, res) => {
     if (!ctx) {
       logger.warn(`[analytics/ping] session not found or video mismatch — sid=${session_id.slice(0,8)} vid=${video_id.slice(0,8)}`);
       return;
+    }
+
+    // ── 0. Save video duration if the player reports it and we don't have it ─
+    // The embed player sends duration_seconds on every ping once loadedmetadata
+    // fires. We only write it once (WHERE duration_seconds IS NULL) so a stale
+    // client value can't overwrite a correct one set later.
+    const safeDuration = duration_seconds ? parseFloat(duration_seconds) : 0;
+    if (safeDuration > 0 && !ctx.duration_seconds) {
+      pool.query(
+        `UPDATE videos SET duration_seconds = $1, updated_at = NOW()
+         WHERE id = $2 AND duration_seconds IS NULL`,
+        [safeDuration, video_id]
+      ).catch(err => logger.warn(`[analytics/ping] failed to save duration_seconds: ${err.message}`));
     }
 
     const isPlay = event === 'play';
