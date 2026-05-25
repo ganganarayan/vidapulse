@@ -561,8 +561,8 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         });
         /* Heartbeat every 15 s: flush the current in-progress interval so the
            server has reliable data even if the user never pauses or ends.
-           We close the interval at `now` and restart from `now`, so that
-           subsequent pause/end pings report only new seconds (no double-count). */
+           Closes the interval at "now" and resets t0, so subsequent
+           pause/end pings only report new seconds (no double-count). */
         setInterval(function(){
           if(on&&v.duration>0){
             var now=v.currentTime;
