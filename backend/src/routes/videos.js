@@ -873,7 +873,21 @@ const DAILY_METRICS = {
 
   viewers: `
     SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
-           COUNT(DISTINCT viewer_cookie) AS value
+           COUNT(DISTINCT viewer_id) AS value
+    FROM   analytics_sessions
+    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
+    GROUP  BY 1 ORDER BY 1`,
+
+  unique_views: `
+    SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
+           COUNT(DISTINCT viewer_id) AS value
+    FROM   analytics_sessions
+    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
+    GROUP  BY 1 ORDER BY 1`,
+
+  total_viewers: `
+    SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
+           COUNT(*) FILTER (WHERE play_count > 0) AS value
     FROM   analytics_sessions
     WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
     GROUP  BY 1 ORDER BY 1`,

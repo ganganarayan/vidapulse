@@ -10,7 +10,7 @@ import api from '../../lib/api';
  *
  * Props:
  *   videoId — string
- *   metric  — one of: plays|viewers|avg_watch|play_rate|completion|dropoff|watch_time|rewatches
+ *   metric  — one of: plays|unique_views|total_viewers|viewers|avg_watch|play_rate|completion|dropoff|watch_time|rewatches
  *   video   — video object (used for created_at default range)
  */
 
@@ -32,6 +32,22 @@ const METRIC_CONFIG = {
     backendKey: 'viewers', accentColor: '#818cf8',
     desc: 'Distinct viewers tracked by browser cookie each day.',
     totalLabel: 'Total Unique',
+    format: n => Math.round(n).toLocaleString(),
+    yTickFormat: n => compactNum(n),
+  },
+  unique_views: {
+    label: 'Unique Views', yLabel: 'Visitors',
+    backendKey: 'unique_views', accentColor: '#a78bfa',
+    desc: 'Distinct visitors who loaded the video page each day.',
+    totalLabel: 'Total Unique',
+    format: n => Math.round(n).toLocaleString(),
+    yTickFormat: n => compactNum(n),
+  },
+  total_viewers: {
+    label: 'Total Viewers', yLabel: 'Viewers',
+    backendKey: 'total_viewers', accentColor: '#fb923c',
+    desc: 'Sessions where the play button was pressed each day.',
+    totalLabel: 'Total Viewers',
     format: n => Math.round(n).toLocaleString(),
     yTickFormat: n => compactNum(n),
   },
