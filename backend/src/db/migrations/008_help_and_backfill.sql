@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS site_help (
   video_url   TEXT,                            -- tutorial video URL (YouTube/Vimeo embed)
   sections    JSONB NOT NULL DEFAULT '[]',     -- [{title, content}]
   updated_at  TIMESTAMPTZ DEFAULT NOW(),
-  updated_by  INT REFERENCES users(id) ON DELETE SET NULL
+  updated_by  UUID REFERENCES users(id) ON DELETE SET NULL
 );
 
 -- Seed with initial documentation
