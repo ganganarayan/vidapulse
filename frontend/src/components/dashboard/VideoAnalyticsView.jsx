@@ -225,7 +225,7 @@ export default function VideoAnalyticsView({
                 Engagement
               </p>
               <h2 className="text-2xl font-bold text-gray-50">Engagement Heatmap</h2>
-              <p className="text-xs text-gray-600 mt-1">
+              <p className="text-xs text-gray-400 mt-1">
                 Per-second viewer retention across the full video timeline.
               </p>
             </div>
@@ -240,7 +240,7 @@ export default function VideoAnalyticsView({
                 Engagement
               </p>
               <h2 className="text-2xl font-bold text-gray-50">Viewer Stories</h2>
-              <p className="text-xs text-gray-600 mt-1">
+              <p className="text-xs text-gray-400 mt-1">
                 AI-generated narratives about how your audience watched this video.
               </p>
             </div>
@@ -255,7 +255,7 @@ export default function VideoAnalyticsView({
                 Engagement
               </p>
               <h2 className="text-2xl font-bold text-gray-50">Insights</h2>
-              <p className="text-xs text-gray-600 mt-1">
+              <p className="text-xs text-gray-400 mt-1">
                 Actionable recommendations generated from your audience data.
               </p>
             </div>
@@ -367,7 +367,7 @@ export default function VideoAnalyticsView({
                     <h2 className="text-base font-semibold text-gray-200 group-hover:text-gray-100 transition-colors">
                       Engagement Heatmap
                     </h2>
-                    <span className="ml-auto text-xs text-gray-600 group-hover:text-gray-400 transition-colors">
+                    <span className="ml-auto text-xs text-gray-500 group-hover:text-gray-300 transition-colors">
                       View full →
                     </span>
                   </button>
@@ -510,7 +510,7 @@ function EmbedView({ video }) {
           Settings
         </p>
         <h2 className="text-2xl font-bold text-gray-50">Share & Embed</h2>
-        <p className="text-xs text-gray-600 mt-1">
+        <p className="text-xs text-gray-400 mt-1">
           Copy the video link or embed the tracked player on any website.
         </p>
       </div>
@@ -519,7 +519,7 @@ function EmbedView({ video }) {
         {/* Copy link */}
         <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-5">
           <p className="text-sm font-semibold text-gray-200 mb-1">Video link</p>
-          <p className="text-xs text-gray-500 mb-3">Share the original video URL directly.</p>
+          <p className="text-xs text-gray-400 mb-3">Share the original video URL directly.</p>
           <div className="flex items-center gap-2">
             <code className="flex-1 bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-300 truncate font-mono">
               {video?.original_url ?? '—'}
@@ -538,7 +538,7 @@ function EmbedView({ video }) {
         {/* Embed code */}
         <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-5">
           <p className="text-sm font-semibold text-gray-200 mb-1">Embed code</p>
-          <p className="text-xs text-gray-500 mb-3">
+          <p className="text-xs text-gray-400 mb-3">
             Paste this on any page. Plays, watch time, and heatmap data appear in this dashboard automatically.
           </p>
           <div className="relative">
@@ -621,7 +621,7 @@ function PlayerSettingsView({ videoId }) {
             Settings
           </p>
           <h2 className="text-2xl font-bold text-gray-50">Player Settings</h2>
-          <p className="text-xs text-gray-600 mt-1">
+          <p className="text-xs text-gray-400 mt-1">
             Control how the embedded player looks and behaves.
           </p>
         </div>

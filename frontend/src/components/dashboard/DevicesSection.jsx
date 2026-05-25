@@ -67,7 +67,7 @@ export default function DevicesSection({ videoId }) {
           Audience
         </p>
         <h2 className="text-2xl font-bold text-gray-50">Devices</h2>
-        <p className="text-xs text-gray-600 mt-1">
+        <p className="text-xs text-gray-400 mt-1">
           How your viewers are watching — desktop, mobile, or tablet.
         </p>
       </div>
@@ -85,8 +85,8 @@ export default function DevicesSection({ videoId }) {
         {status === 'loaded' && (
           data.length === 0 ? (
             <div className="py-14 text-center">
-              <p className="text-sm text-gray-500">No device data yet.</p>
-              <p className="text-xs text-gray-600 mt-1">
+              <p className="text-sm text-gray-400">No device data yet.</p>
+              <p className="text-xs text-gray-400 mt-1">
                 Data appears once viewers start watching.
               </p>
             </div>

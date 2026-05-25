@@ -185,14 +185,14 @@ function PrimaryInsightCard({ insight, userPlan, onDismiss }) {
       <div className="px-5 pt-5 pb-3">
         <div className="flex items-center justify-between gap-4 mb-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 uppercase tracking-wider font-medium">
+            <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">
               Primary Insight
             </span>
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium border rounded-full ${sev.badge}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${sev.dot}`} />
               {sev.label}
             </span>
-            <span className="hidden sm:inline px-2 py-0.5 text-xs text-gray-600 bg-gray-700/50 rounded-full">
+            <span className="hidden sm:inline px-2 py-0.5 text-xs text-gray-400 bg-gray-700/50 rounded-full">
               {typeLabel}
             </span>
           </div>
@@ -304,7 +304,7 @@ function SecondaryInsightRow({ insight, userPlan, onDismiss }) {
             {timeLabel}
           </span>
         )}
-        <span className="text-xs text-gray-600 flex-shrink-0">{typeLabel}</span>
+        <span className="text-xs text-gray-400 flex-shrink-0">{typeLabel}</span>
         <ChevronIcon expanded={expanded} />
       </button>
 
@@ -326,7 +326,7 @@ function SecondaryInsightRow({ insight, userPlan, onDismiss }) {
               <div className="px-5 pb-3 flex justify-end">
                 <button
                   onClick={onDismiss}
-                  className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
+                  className="text-xs text-gray-400 hover:text-gray-200 transition-colors"
                 >
                   Dismiss
                 </button>

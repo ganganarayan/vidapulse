@@ -174,10 +174,10 @@ function StoriesContent({ status, data, userPlan, isPro, onRetry }) {
           ? <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           : <div className="text-2xl mb-3">◎</div>
         }
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-gray-300">
           {isGenerating ? 'Generating viewer stories…' : 'Waiting for more viewers'}
         </p>
-        <p className="text-xs text-gray-600 mt-1">Stories appear once 5 or more viewers have watched.</p>
+        <p className="text-xs text-gray-400 mt-1">Stories appear once 5 or more viewers have watched.</p>
       </div>
     );
   }
@@ -187,8 +187,8 @@ function StoriesContent({ status, data, userPlan, isPro, onRetry }) {
   if (!hasAnyStories && lockedProTypes.length === 0) {
     return (
       <div className="bg-gray-800/30 border border-gray-700/40 border-dashed rounded-xl px-5 py-8 text-center">
-        <p className="text-sm text-gray-500">No viewer stories yet.</p>
-        <p className="text-xs text-gray-600 mt-1">Stories appear once 5 or more viewers have watched.</p>
+        <p className="text-sm text-gray-400">No viewer stories yet.</p>
+        <p className="text-xs text-gray-400 mt-1">Stories appear once 5 or more viewers have watched.</p>
       </div>
     );
   }
@@ -209,7 +209,7 @@ function StoriesContent({ status, data, userPlan, isPro, onRetry }) {
 
       {/* Upgrade nudge for Starter */}
       {!isPro && lockedProTypes.length > 0 && (
-        <p className="text-xs text-gray-600 text-center mt-1">
+        <p className="text-xs text-gray-400 text-center mt-1">
           {lockedProTypes.length} more story type{lockedProTypes.length !== 1 ? 's' : ''} unlock on Pro.
         </p>
       )}
@@ -233,13 +233,13 @@ function StoryCard({ story, meta }) {
       <div className="px-5 pt-4 pb-3">
         <div className="flex items-center justify-between gap-3 mb-2">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500" aria-hidden="true">{meta.icon}</span>
-            <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+            <span className="text-xs text-gray-400" aria-hidden="true">{meta.icon}</span>
+            <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">
               {meta.label}
             </span>
           </div>
           {story.viewer_count > 0 && (
-            <span className="text-xs text-gray-600 flex-shrink-0">
+            <span className="text-xs text-gray-400 flex-shrink-0">
               {story.viewer_count.toLocaleString()} viewer{story.viewer_count !== 1 ? 's' : ''}
             </span>
           )}
@@ -258,7 +258,7 @@ function StoryCard({ story, meta }) {
         <button
           onClick={() => setExpanded(e => !e)}
           className="w-full flex items-center justify-between px-5 py-2.5
-                     text-xs text-gray-500 hover:text-gray-300 transition-colors text-left"
+                     text-xs text-gray-400 hover:text-gray-200 transition-colors text-left"
         >
           <span>What this means for your video</span>
           <ChevronIcon expanded={expanded} />
@@ -266,8 +266,8 @@ function StoryCard({ story, meta }) {
 
         {expanded && (
           <div className="px-5 pb-4">
-            <div className="bg-gray-900/50 border border-gray-700/40 rounded-lg px-4 py-3">
-              <p className="text-xs text-gray-400 leading-relaxed">
+            <div className="bg-gray-800/60 border border-gray-700/40 rounded-lg px-4 py-3">
+              <p className="text-sm text-gray-300 leading-relaxed">
                 {story.interpretation}
               </p>
             </div>

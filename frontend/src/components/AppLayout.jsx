@@ -239,7 +239,6 @@ function SidebarItem({ to, icon, label, active, coming = false }) {
       <button className={cls} disabled={coming} title={coming ? 'Coming soon' : label}>
         <span className="flex-shrink-0 w-4 h-4">{icon}</span>
         <span className="flex-1 truncate">{label}</span>
-        {coming && <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wide flex-shrink-0">soon</span>}
       </button>
     );
   }

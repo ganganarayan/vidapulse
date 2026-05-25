@@ -52,7 +52,7 @@ export default function GeographySection({ videoId }) {
             Audience
           </p>
           <h2 className="text-2xl font-bold text-gray-50">Geography</h2>
-          <p className="text-xs text-gray-600 mt-1">
+          <p className="text-xs text-gray-400 mt-1">
             Where in the world your viewers are watching from.
           </p>
         </div>
@@ -77,8 +77,8 @@ export default function GeographySection({ videoId }) {
         {status === 'loaded' && (
           data.length === 0 ? (
             <div className="py-14 text-center">
-              <p className="text-sm text-gray-500">No location data yet.</p>
-              <p className="text-xs text-gray-600 mt-1">
+              <p className="text-sm text-gray-400">No location data yet.</p>
+              <p className="text-xs text-gray-400 mt-1">
                 Country data appears once viewers start watching.
               </p>
             </div>

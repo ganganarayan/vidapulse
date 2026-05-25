@@ -172,7 +172,7 @@ export default function MetricDetailView({ videoId, metric, video }) {
             Metric Analysis
           </p>
           <h2 className="text-2xl font-bold text-gray-50">{cfg.label}</h2>
-          <p className="text-xs text-gray-600 mt-1 max-w-sm">{cfg.desc}</p>
+          <p className="text-xs text-gray-400 mt-1 max-w-sm">{cfg.desc}</p>
         </div>
 
         {/* ── Date range picker ─────────────────────────────────────── */}
@@ -229,8 +229,8 @@ export default function MetricDetailView({ videoId, metric, video }) {
         {status === 'loaded' && (
           data.length === 0 ? (
             <div className="py-16 text-center">
-              <p className="text-sm text-gray-500">No data in this period.</p>
-              <p className="text-xs text-gray-600 mt-1">Try a wider date range.</p>
+              <p className="text-sm text-gray-400">No data in this period.</p>
+              <p className="text-xs text-gray-400 mt-1">Try a wider date range.</p>
             </div>
           ) : (
             <LineChart data={data} cfg={cfg} metricKey={metric} />

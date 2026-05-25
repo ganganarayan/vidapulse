@@ -84,7 +84,7 @@ export default function BrowsersSection({ videoId }) {
           Audience
         </p>
         <h2 className="text-2xl font-bold text-gray-50">Browsers</h2>
-        <p className="text-xs text-gray-600 mt-1">
+        <p className="text-xs text-gray-400 mt-1">
           Which browsers your viewers use to watch your video.
         </p>
       </div>
