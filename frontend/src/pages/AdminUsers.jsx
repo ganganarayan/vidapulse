@@ -279,20 +279,6 @@ export default function AdminUsers() {
             <span className="text-gray-600 mx-1">/</span>
             <span className="text-gray-300">User Accounts</span>
           </div>
-          <nav className="flex items-center gap-2 text-sm">
-            <button
-              onClick={() => navigate('/admin/onboarding')}
-              className="px-3 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-            >
-              Onboarding
-            </button>
-            <button
-              onClick={() => navigate('/admin/webhook')}
-              className="px-3 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-            >
-              Webhooks
-            </button>
-          </nav>
         </div>
       </header>
 
