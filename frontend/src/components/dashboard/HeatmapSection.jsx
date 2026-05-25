@@ -32,12 +32,13 @@ const FAKE_DURATION_S   = 312;
 // Interpolates through: blue → cyan → green → amber → red
 // ─────────────────────────────────────────────────────────────────────────
 
+// Low engagement → red, high engagement → green
 const COLOR_STOPS = [
-  [0.00, [30,  64, 175]],   // blue-700
-  [0.25, [6,  182, 212]],   // cyan-500
-  [0.50, [16, 185, 129]],   // emerald-500
-  [0.75, [245,158,  11]],   // amber-500
-  [1.00, [239, 68,  68]],   // red-500
+  [0.00, [239,  68,  68]],  // red-500
+  [0.35, [251, 146,  60]],  // orange-400
+  [0.60, [234, 179,   8]],  // yellow-500
+  [0.80, [ 74, 222, 128]],  // green-400
+  [1.00, [ 22, 163,  74]],  // green-600
 ];
 
 function heatColor(t) {
@@ -132,7 +133,7 @@ export default function HeatmapSection({ videoId, video, userPlan }) {
         <span className="text-amber-500 text-sm" aria-hidden="true">〰</span>
         <h2 className="text-base font-semibold text-gray-200">Engagement Heatmap</h2>
         {isPro && status === 'loaded' && heatData?.total_viewers > 0 && (
-          <span className="ml-auto text-xs text-gray-600">
+          <span className="ml-auto text-xs text-gray-400">
             {heatData.total_viewers.toLocaleString()} viewer{heatData.total_viewers !== 1 ? 's' : ''}
           </span>
         )}
@@ -252,21 +253,19 @@ function WistiaHeatmapChart({ buckets, dropOffPct, dropOffSecond, durationSecond
         {/* Hover tooltip line */}
         <div className="h-6 flex items-center mb-1">
           {hoverBucket ? (
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-gray-300">
               {hoverSecond != null && (
-                <span className="text-gray-500 mr-2 font-mono">{formatTime(hoverSecond)}</span>
+                <span className="text-gray-400 mr-2 font-mono">{formatTime(hoverSecond)}</span>
               )}
-              <span className="font-semibold text-gray-200">
-                {Math.round(hoverBucket.first_watches)} viewer{Math.round(hoverBucket.first_watches) !== 1 ? 's' : ''}
+              <span className="font-semibold" style={{ color: heatColor(hoverBucket.total / maxTotal) }}>
+                {Math.round((hoverBucket.total / maxTotal) * 100)}% retention
               </span>
               {hoverBucket.replays > 0.5 && (
-                <span className="text-gray-500 ml-2">
-                  + {Math.round(hoverBucket.replays)} replay{Math.round(hoverBucket.replays) !== 1 ? 's' : ''}
-                </span>
+                <span className="text-gray-500 ml-2">· includes replays</span>
               )}
             </span>
           ) : (
-            <span className="text-xs text-gray-600">Hover to inspect</span>
+            <span className="text-xs text-gray-500">Hover to inspect</span>
           )}
         </div>
 
@@ -329,43 +328,23 @@ function WistiaHeatmapChart({ buckets, dropOffPct, dropOffSecond, durationSecond
             );
           })}
 
-          {/* Drop-off line */}
-          {dropOffPct != null && (
-            <div
-              className="absolute top-0 bottom-0 z-10 pointer-events-none"
-              style={{ left: `${dropOffPct}%` }}
-            >
-              <div
-                className="absolute top-0 bottom-0"
-                style={{ width: '2px', backgroundColor: '#ef4444', opacity: 0.85, left: '-1px' }}
-              />
-              {/* Pulsing dot */}
-              <div className="absolute -top-1" style={{ left: '-6px', width: '13px', height: '13px' }}>
-                <span className="absolute inset-0 rounded-full bg-red-500/30 animate-ping" />
-                <span className="absolute rounded-full bg-red-500" style={{ inset: '3.5px' }} />
-              </div>
-            </div>
-          )}
+          {/* Drop-off marker removed — shown in stats row instead */}
         </div>
 
         {/* Time axis */}
-        <TimeAxis
-          durationSeconds={durationSeconds}
-          dropOffPct={dropOffPct}
-          dropOffSecond={dropOffSecond}
-        />
+        <TimeAxis durationSeconds={durationSeconds} />
       </div>
 
       {/* ── Color legend ───────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-800/50">
-        <span className="text-[10px] text-gray-600 font-medium whitespace-nowrap">Low engagement</span>
+        <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Low</span>
         <div
           className="flex-1 h-2 rounded-full"
           style={{
-            background: 'linear-gradient(to right, rgb(30,64,175), rgb(6,182,212), rgb(16,185,129), rgb(245,158,11), rgb(239,68,68))',
+            background: 'linear-gradient(to right, rgb(239,68,68), rgb(251,146,60), rgb(234,179,8), rgb(74,222,128), rgb(22,163,74))',
           }}
         />
-        <span className="text-[10px] text-gray-600 font-medium whitespace-nowrap">High engagement</span>
+        <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">High</span>
       </div>
     </div>
   );
@@ -378,7 +357,7 @@ function WistiaHeatmapChart({ buckets, dropOffPct, dropOffSecond, durationSecond
 function StatPill({ label, value, color }) {
   return (
     <div>
-      <p className="text-[10px] text-gray-500 uppercase tracking-wider leading-none mb-1">
+      <p className="text-[10px] text-gray-400 uppercase tracking-wider leading-none mb-1">
         {label}
       </p>
       <p className="text-base font-bold" style={{ color }}>
@@ -392,39 +371,28 @@ function StatPill({ label, value, color }) {
 // TimeAxis
 // ─────────────────────────────────────────────────────────────────────────
 
-function TimeAxis({ durationSeconds, dropOffPct, dropOffSecond }) {
+function TimeAxis({ durationSeconds }) {
   const dur = durationSeconds || 0;
-  const dropOffTooCloseToEdge =
-    dropOffPct != null && (dropOffPct < 8 || dropOffPct > 92);
 
   return (
     <div className="relative h-7 mt-1 mb-2 select-none" aria-hidden="true">
-      <span className="absolute bottom-0 left-0 text-[10px] text-gray-600 font-mono">0:00</span>
+      <span className="absolute bottom-0 left-0 text-[10px] text-gray-400 font-mono">0:00</span>
 
       {dur > 0 && (
         <>
           {[0.25, 0.5, 0.75].map(frac => (
             <span
               key={frac}
-              className="absolute bottom-0 text-[10px] text-gray-700 font-mono -translate-x-1/2"
+              className="absolute bottom-0 text-[10px] text-gray-500 font-mono -translate-x-1/2"
               style={{ left: `${frac * 100}%` }}
             >
               {formatTime(dur * frac)}
             </span>
           ))}
-          <span className="absolute bottom-0 right-0 text-[10px] text-gray-600 font-mono">
+          <span className="absolute bottom-0 right-0 text-[10px] text-gray-400 font-mono">
             {formatTime(dur)}
           </span>
         </>
-      )}
-
-      {dropOffPct != null && dropOffSecond != null && !dropOffTooCloseToEdge && (
-        <span
-          className="absolute bottom-0 text-[10px] text-red-400 font-medium font-mono -translate-x-1/2"
-          style={{ left: `${dropOffPct}%` }}
-        >
-          {formatTime(dropOffSecond)}
-        </span>
       )}
     </div>
   );

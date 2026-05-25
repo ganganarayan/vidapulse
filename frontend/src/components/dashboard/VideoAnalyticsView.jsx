@@ -181,9 +181,9 @@ export default function VideoAnalyticsView({
       {/* ── Top bar ──────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 border-b border-gray-800 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-gray-500">{video?.title ? video.title.slice(0, 32) + (video.title.length > 32 ? '…' : '') : 'Video'}</span>
-          <span className="text-gray-700">/</span>
-          <span className="font-medium text-gray-300">{viewLabel}</span>
+          <span className="text-gray-400">{video?.title ? video.title.slice(0, 32) + (video.title.length > 32 ? '…' : '') : 'Video'}</span>
+          <span className="text-gray-600">/</span>
+          <span className="font-semibold text-gray-200">{viewLabel}</span>
         </div>
         <div className="flex items-center gap-2">
           <NotificationBell />
@@ -418,7 +418,7 @@ function MetricCard({ label, value, format, visible, accent, className = '', onC
                   ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
                   ${className}`}
     >
-      <p className="text-xs text-gray-400 uppercase tracking-wider font-medium mb-2 leading-tight">
+      <p className="text-[11px] text-gray-300 uppercase tracking-wider font-semibold mb-2 leading-tight">
         {label}
       </p>
       <p className="text-3xl font-bold text-gray-50 tabular-nums">
@@ -427,7 +427,7 @@ function MetricCard({ label, value, format, visible, accent, className = '', onC
           : format(counted)
         }
       </p>
-      <p className="text-[10px] text-gray-600 mt-1.5 group-hover:text-gray-500 transition-colors">
+      <p className="text-[10px] text-gray-500 mt-1.5 group-hover:text-gray-300 transition-colors">
         View details →
       </p>
     </button>

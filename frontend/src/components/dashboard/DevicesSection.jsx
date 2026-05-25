@@ -144,21 +144,21 @@ export function BreakdownChart({ data, colorMap = {}, iconMap = {} }) {
                 {icon && (
                   <span style={{ color }} className="flex-shrink-0">{icon}</span>
                 )}
-                <span className="text-sm font-medium text-gray-300">{label}</span>
+                <span className="text-sm font-semibold text-gray-200">{label}</span>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-gray-400">
                   {count.toLocaleString()} session{count !== 1 ? 's' : ''}
                 </span>
-                <span className="text-sm font-bold text-gray-200 w-12 text-right">
+                <span className="text-sm font-bold w-14 text-right" style={{ color }}>
                   {Number(pct).toFixed(1)}%
                 </span>
               </div>
             </div>
-            <div className="h-2.5 bg-gray-700/40 rounded-full overflow-hidden">
+            <div className="h-3 bg-gray-700/50 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-700"
-                style={{ width: `${widthPct}%`, backgroundColor: color, opacity: 0.85 }}
+                style={{ width: `${widthPct}%`, backgroundColor: color }}
               />
             </div>
           </div>

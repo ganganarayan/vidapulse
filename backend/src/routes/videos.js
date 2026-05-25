@@ -856,8 +856,13 @@ router.get('/:id/analytics/daily', requireAuth, async (req, res, next) => {
 
     const { rows } = await pool.query(DAILY_METRICS[metric], [req.params.id, from, to]);
 
-    const data  = rows.map(r => ({ date: r.date, value: parseFloat(r.value) || 0 }));
-    const total = data.reduce((s, r) => s + r.value, 0);
+    const data = rows.map(r => ({ date: r.date, value: parseFloat(r.value) || 0 }));
+
+    // avg_watch should report the period average, not the sum across days
+    const isAvgMetric = metric === 'avg_watch';
+    const total = data.length === 0 ? 0 : isAvgMetric
+      ? data.reduce((s, r) => s + r.value, 0) / data.length
+      : data.reduce((s, r) => s + r.value, 0);
 
     return res.json({ data, total: Math.round(total * 10) / 10 });
   } catch (err) {

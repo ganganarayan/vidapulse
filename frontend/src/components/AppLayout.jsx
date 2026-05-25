@@ -89,12 +89,12 @@ function AppSidebar() {
         {user && (
           <div className="flex flex-col gap-1">
             <PlanChip plan={user.plan} displayName={user.plan_display_name} />
-            <p className="text-xs font-medium text-gray-300 truncate mt-1">
+            <p className="text-xs font-medium text-gray-200 truncate mt-1">
               {isImpersonating ? '(Admin view)' : (user.name || user.email)}
             </p>
-            <p className="text-xs text-gray-500 truncate">{user.email}</p>
+            <p className="text-xs text-gray-400 truncate">{user.email}</p>
             <button onClick={handleSignOut} disabled={signingOut}
-              className="mt-2 text-left text-xs text-gray-500 hover:text-red-400 transition-colors">
+              className="mt-2 text-left text-xs text-gray-400 hover:text-red-400 transition-colors">
               {signingOut ? 'Signing out…' : 'Sign out'}
             </button>
           </div>
@@ -133,7 +133,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
           ${isActive
             ? 'bg-amber-500/15 text-amber-400'
             : locked
-              ? 'text-gray-600 cursor-not-allowed'
+              ? 'text-gray-500 cursor-not-allowed'
               : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
           }`}
       >
@@ -205,11 +205,11 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
         {user && (
           <div className="flex flex-col gap-1">
             <PlanChip plan={user.plan} displayName={user.plan_display_name} />
-            <p className="text-xs text-gray-500 truncate mt-1">
+            <p className="text-xs text-gray-400 truncate mt-1">
               {isImpersonating ? '(Admin view)' : (user.name || user.email)}
             </p>
             <button onClick={handleSignOut} disabled={signingOut}
-              className="mt-1 text-left text-xs text-gray-500 hover:text-red-400 transition-colors">
+              className="mt-1 text-left text-xs text-gray-400 hover:text-red-400 transition-colors">
               {signingOut ? 'Signing out…' : 'Sign out'}
             </button>
           </div>
@@ -228,7 +228,7 @@ function SidebarItem({ to, icon, label, active, coming = false }) {
     ${active
       ? 'bg-amber-500/15 text-amber-400'
       : coming
-        ? 'text-gray-600 cursor-default'
+        ? 'text-gray-500 cursor-default'
         : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
     }`;
   if (coming || to === '#') {
@@ -236,7 +236,7 @@ function SidebarItem({ to, icon, label, active, coming = false }) {
       <button className={cls} disabled={coming} title={coming ? 'Coming soon' : label}>
         <span className="flex-shrink-0 w-4 h-4">{icon}</span>
         <span className="flex-1 truncate">{label}</span>
-        {coming && <span className="text-[9px] text-gray-600 font-semibold uppercase tracking-wide flex-shrink-0">soon</span>}
+        {coming && <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wide flex-shrink-0">soon</span>}
       </button>
     );
   }
@@ -250,7 +250,7 @@ function SidebarItem({ to, icon, label, active, coming = false }) {
 
 function SidebarDivider({ label }) {
   return (
-    <div className="mt-4 mb-1.5 px-3 text-[10px] font-semibold text-gray-600 uppercase tracking-wider">
+    <div className="mt-4 mb-1.5 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
       {label}
     </div>
   );

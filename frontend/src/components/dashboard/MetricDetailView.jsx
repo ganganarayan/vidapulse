@@ -109,8 +109,13 @@ function compactNum(n) {
 }
 
 function fmtDate(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  if (!dateStr) return '';
+  // PostgreSQL ::date columns arrive as ISO strings like "2026-05-25T00:00:00.000Z".
+  // Appending 'T00:00:00' would break them, so just parse directly and force UTC
+  // to avoid timezone off-by-one (e.g. May 24 in UTC displayed as May 23 locally).
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr).slice(0, 10);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -338,13 +343,13 @@ function LineChart({ data, cfg, metricKey }) {
           <g key={i}>
             <line
               x1={PAD.l} y1={y} x2={PAD.l + IW} y2={y}
-              stroke="#374151" strokeWidth="0.5"
+              stroke="#4b5563" strokeWidth="0.5"
               strokeDasharray={i === 0 ? undefined : '4 4'}
             />
             <text
               x={PAD.l - 8} y={y}
               textAnchor="end" dominantBaseline="middle"
-              fill="#6b7280" fontSize="11" fontFamily="system-ui,sans-serif"
+              fill="#9ca3af" fontSize="11" fontFamily="system-ui,sans-serif"
             >
               {cfg.yTickFormat(v)}
             </text>
@@ -395,7 +400,7 @@ function LineChart({ data, cfg, metricKey }) {
         <line
           x1={PAD.l} y1={PAD.t + IH}
           x2={PAD.l + IW} y2={PAD.t + IH}
-          stroke="#374151" strokeWidth="1"
+          stroke="#4b5563" strokeWidth="1"
         />
 
         {/* X axis date labels */}
@@ -403,7 +408,7 @@ function LineChart({ data, cfg, metricKey }) {
           <text
             key={i} x={xOf(i)} y={VH - 8}
             textAnchor="middle"
-            fill="#6b7280" fontSize="10" fontFamily="system-ui,sans-serif"
+            fill="#9ca3af" fontSize="10" fontFamily="system-ui,sans-serif"
           >
             {fmtDate(data[i].date)}
           </text>
