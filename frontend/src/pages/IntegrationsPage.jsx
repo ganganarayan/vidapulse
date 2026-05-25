@@ -60,10 +60,26 @@ export default function IntegrationsPage() {
 }
 
 const COMING_SOON = [
-  { icon: '⚡', name: 'Zapier',      desc: 'Trigger Zaps when viewers watch, complete, or drop off your videos.' },
-  { icon: '🔧', name: 'Make (Integromat)', desc: 'Build automation flows with viewer events and analytics data.' },
-  { icon: '🔑', name: 'API Key',     desc: 'Access your analytics data programmatically via the VidaPulse REST API.' },
-  { icon: '🔔', name: 'Slack',       desc: 'Get daily digest and key event alerts sent to your Slack channels.' },
+  {
+    icon: '⚡',
+    name: 'Zapier',
+    desc: 'Trigger Zaps on video milestones — traffic spikes, new domain embeds, drop-off alerts, and weekly digests.',
+  },
+  {
+    icon: '🔧',
+    name: 'Make (Integromat)',
+    desc: 'Build automation flows from your video analytics — log performance data, push reports, update dashboards.',
+  },
+  {
+    icon: '🔑',
+    name: 'API Key',
+    desc: 'Pull your video analytics data programmatically to build custom dashboards, reports, or internal tools.',
+  },
+  {
+    icon: '🔔',
+    name: 'Slack',
+    desc: 'Push real-time video performance alerts and weekly digests directly to your Slack workspace.',
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────
