@@ -321,6 +321,8 @@ router.get('/onboarding-health', async (req, res, next) => {
   try {
     const [funnelRes, timingRes, recentRes, planBreakdownRes] = await Promise.all([
 
+      // Admin-role accounts are excluded from all onboarding metrics so they
+      // don't pollute conversion data with internal test/setup activity.
       pool.query(`
         SELECT
           COUNT(*)::int                                                  AS total_users,
@@ -331,7 +333,9 @@ router.get('/onboarding-health', async (req, res, next) => {
           COUNT(*) FILTER (WHERE converted_to_paid_at IS NOT NULL)::int AS converted,
           ROUND(AVG(limit_hit_count) FILTER (WHERE limit_hit_count > 0), 1)
                                                                         AS avg_limit_hits
-        FROM onboarding_state
+        FROM onboarding_state os
+        JOIN users u ON u.id = os.user_id
+        WHERE u.role != 'admin'
       `),
 
       pool.query(`
@@ -351,7 +355,9 @@ router.get('/onboarding-health', async (req, res, next) => {
           ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (
             ORDER BY hours_limit_hit_to_paid
           )::numeric, 1) AS median_limit_to_paid
-        FROM onboarding_state
+        FROM onboarding_state os
+        JOIN users u ON u.id = os.user_id
+        WHERE u.role != 'admin'
       `),
 
       pool.query(`
@@ -371,6 +377,7 @@ router.get('/onboarding-health', async (req, res, next) => {
         FROM onboarding_state os
         JOIN users u ON u.id       = os.user_id
         JOIN plans p ON p.id       = u.plan_id
+        WHERE  u.role != 'admin'
         ORDER BY os.updated_at DESC
         LIMIT 25
       `),
@@ -380,6 +387,7 @@ router.get('/onboarding-health', async (req, res, next) => {
         FROM   users u
         JOIN   plans p ON p.id = u.plan_id
         WHERE  u.is_active = TRUE
+          AND  u.role != 'admin'
         GROUP  BY p.name
         ORDER  BY user_count DESC
       `),
