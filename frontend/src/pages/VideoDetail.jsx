@@ -1,85 +1,62 @@
+'use strict';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+import { VideoSidebar } from '../components/AppLayout';
 import VideoAnalyticsView from '../components/dashboard/VideoAnalyticsView';
 
 /**
  * VideoDetail
  *
- * The per-video analytics page. Handles four view-states in sequence:
+ * Per-video analytics page. Manages four view-states:
  *
- *   1. initialising  — first render, loading video from API
- *   2. processing    — sequential message animation (Step 10)
- *                      polls /api/videos/:id every 3s for processing_status
- *   3. revealing     — dashboard reveal animation (Step 11 — built next)
- *   4. ready         — full analytics dashboard (Steps 12–14)
- *   5. error         — processing failed or network error
+ *   initialising — first render, loading video from API
+ *   processing   — video is being processed; shows sequential animation + polls
+ *   ready        — full two-panel dashboard (VideoSidebar + VideoAnalyticsView)
+ *   error        — processing failed or network error
  *
- * The animation in state 2 always runs for a minimum of ANIMATION_DURATION_MS
- * even if the backend responds faster, so the user always sees the full reveal.
+ * The `animateIn` flag triggers the staggered reveal animation in
+ * VideoAnalyticsView on the first visit after processing completes.
  */
 
 // ─────────────────────────────────────────────────────────────────────────
-// Sequential loading steps — each has a message shown while active
-// and a "done" message shown after it completes.
+// Processing screen constants
 // ─────────────────────────────────────────────────────────────────────────
 
 const STEPS = [
-  {
-    active: 'Identifying your video platform',
-    done  : null, // replaced dynamically with platform name
-  },
-  {
-    active: 'Fetching video details',
-    done  : 'Video details loaded',
-  },
-  {
-    active: 'Connecting your analytics tracker',
-    done  : 'Analytics tracker ready',
-  },
-  {
-    active: 'Generating your embed code',
-    done  : 'Embed code generated',
-  },
-  {
-    active: 'Finalising your dashboard',
-    done  : 'Dashboard ready',
-  },
+  { active: 'Identifying your video platform', done: null },
+  { active: 'Fetching video details',           done: 'Video details loaded' },
+  { active: 'Connecting your analytics tracker', done: 'Analytics tracker ready' },
+  { active: 'Generating your embed code',        done: 'Embed code generated' },
+  { active: 'Finalising your dashboard',         done: 'Dashboard ready' },
 ];
 
-// Each step is active for STEP_MS ms before advancing.
-// Total minimum animation time = STEPS.length × STEP_MS.
-const STEP_MS              = 1800;
-const ANIMATION_DURATION_MS = STEPS.length * STEP_MS; // 9 000 ms
+const STEP_MS               = 1800;
+const ANIMATION_DURATION_MS = STEPS.length * STEP_MS;
+const POLL_INTERVAL_MS      = 3_000;
 
-// How often to poll the backend for processing_status
-const POLL_INTERVAL_MS = 3_000;
-
-// Platform display names (mirrors backend detectSourceType)
 const PLATFORM_LABELS = {
-  youtube     : 'YouTube',
-  vimeo       : 'Vimeo',
-  loom        : 'Loom',
-  zoom        : 'Zoom',
-  google_drive: 'Google Drive',
-  dropbox     : 'Dropbox',
-  mp4_direct  : 'Direct MP4',
-  hls_stream  : 'HLS Stream',
-  other       : 'Video',
+  youtube: 'YouTube', vimeo: 'Vimeo', loom: 'Loom', zoom: 'Zoom',
+  google_drive: 'Google Drive', dropbox: 'Dropbox',
+  mp4_direct: 'Direct MP4', hls_stream: 'HLS Stream', other: 'Video',
 };
 
 // ─────────────────────────────────────────────────────────────────────────
+// VideoDetail — main export
+// ─────────────────────────────────────────────────────────────────────────
 
 export default function VideoDetail() {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const { user } = useAuth();
+  const { id }       = useParams();
+  const navigate     = useNavigate();
+  const { user }     = useAuth();
 
   const [viewState,    setViewState]    = useState('initialising');
   const [video,        setVideo]        = useState(null);
   const [fetchError,   setFetchError]   = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activeView,   setActiveView]   = useState('overview');
+  const [animateIn,    setAnimateIn]    = useState(false);
 
   // ── Initial fetch ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -87,29 +64,25 @@ export default function VideoDetail() {
       .then(res => {
         const v = res.data.video;
         setVideo(v);
-        // If already completed on first load, skip straight to dashboard
         if (v.processing_status === 'completed') {
-          setViewState('ready'); // return visit — no animation needed
+          setViewState('ready');        // return visit — no animation
+          setAnimateIn(false);
         } else if (v.processing_status === 'failed') {
           setFetchError('Video processing failed. Please try again.');
           setViewState('error');
         } else {
-          setViewState('processing');
+          setViewState('processing');   // first visit — animation on completion
         }
       })
       .catch(err => {
-        if (err.response?.status === 404) {
-          setFetchError('Video not found.');
-        } else {
-          setFetchError('Could not load video. Please refresh.');
-        }
+        setFetchError(
+          err.response?.status === 404
+            ? 'Video not found.'
+            : 'Could not load video. Please refresh.'
+        );
         setViewState('error');
       });
   }, [id]);
-
-  const handleAnimationComplete = useCallback(() => {
-    setViewState('revealing');
-  }, []);
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -135,79 +108,71 @@ export default function VideoDetail() {
         video={video}
         videoId={id}
         onVideoUpdate={setVideo}
-        onComplete={handleAnimationComplete}
+        onComplete={() => {
+          setAnimateIn(true);
+          setViewState('ready');
+        }}
       />
     );
   }
 
-  if (viewState === 'revealing') {
-    return (
-      <DashboardReveal
+  // viewState === 'ready' — two-panel dashboard
+  return (
+    <div className="min-h-screen bg-gray-900 flex overflow-hidden" style={{ height: '100vh' }}>
+      {/* Left: Video-context sidebar */}
+      <VideoSidebar
         video={video}
         user={user}
-        onRevealComplete={() => setViewState('ready')}
+        activeView={activeView}
+        onViewChange={setActiveView}
       />
-    );
-  }
 
-  // viewState === 'ready'
-  return (
-    <ReadyDashboard
-      video={video}
-      user={user}
-      onBack={() => navigate('/dashboard')}
-      onRefresh={handleRefresh}
-      isRefreshing={isRefreshing}
-    />
+      {/* Right: Content area */}
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <VideoAnalyticsView
+          video={video}
+          user={user}
+          activeView={activeView}
+          onViewChange={setActiveView}
+          animateIn={animateIn}
+          onAnimationComplete={() => setAnimateIn(false)}
+          onRefresh={handleRefresh}
+          isRefreshing={isRefreshing}
+        />
+      </main>
+    </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// ProcessingScreen — Step 10
-//
-// Shows the sequential message animation while polling for completion.
-// Transitions via onComplete() when BOTH conditions are met:
-//   1. All 5 steps have played (≥ 9 seconds)
-//   2. video.processing_status === 'completed'
+// ProcessingScreen — sequential step animation + backend polling
 // ─────────────────────────────────────────────────────────────────────────
 
 function ProcessingScreen({ video, videoId, onVideoUpdate, onComplete }) {
-  // Which step is currently active (0–4)
-  const [activeStep, setActiveStep]   = useState(0);
-  // Which steps have their checkmark
-  const [doneSteps,  setDoneSteps]    = useState(new Set());
-  // Whether the full animation has played
-  const [animDone,   setAnimDone]     = useState(false);
-  // Whether the backend says it's done
+  const [activeStep,  setActiveStep]  = useState(0);
+  const [doneSteps,   setDoneSteps]   = useState(new Set());
+  const [animDone,    setAnimDone]    = useState(false);
   const [backendDone, setBackendDone] = useState(
     video?.processing_status === 'completed'
   );
-
   const transitionFiredRef = useRef(false);
 
-  // ── Step animation ──────────────────────────────────────────────────
+  // Step animation
   useEffect(() => {
     const timers = [];
-
     STEPS.forEach((_, idx) => {
-      // Activate this step
       timers.push(setTimeout(() => setActiveStep(idx), idx * STEP_MS));
-      // Mark it done (800ms into its active period)
       timers.push(setTimeout(() => {
         setDoneSteps(prev => new Set([...prev, idx]));
       }, idx * STEP_MS + 800));
     });
-
-    // All steps done
     timers.push(setTimeout(() => setAnimDone(true), ANIMATION_DURATION_MS));
-
     return () => timers.forEach(clearTimeout);
   }, []);
 
-  // ── Backend polling ─────────────────────────────────────────────────
+  // Backend polling
   useEffect(() => {
     if (backendDone) return;
-
     const intervalId = setInterval(() => {
       api.get(`/videos/${videoId}`)
         .then(res => {
@@ -217,37 +182,23 @@ function ProcessingScreen({ video, videoId, onVideoUpdate, onComplete }) {
             setBackendDone(true);
           }
         })
-        .catch(() => {
-          // Silently ignore poll errors
-        });
+        .catch(() => {});
     }, POLL_INTERVAL_MS);
-
-    // Stop polling after 60s regardless — either it's done or we proceed anyway
-    const maxPollTimer = setTimeout(() => {
-      setBackendDone(true);
-    }, 60_000);
-
-    return () => {
-      clearInterval(intervalId);
-      clearTimeout(maxPollTimer);
-    };
+    const maxTimer = setTimeout(() => setBackendDone(true), 60_000);
+    return () => { clearInterval(intervalId); clearTimeout(maxTimer); };
   }, [videoId, backendDone, onVideoUpdate]);
 
-  // ── Transition gate ─────────────────────────────────────────────────
+  // Transition gate
   useEffect(() => {
     if (animDone && backendDone && !transitionFiredRef.current) {
       transitionFiredRef.current = true;
-      // Small pause after last step to let the final checkmark land
       setTimeout(onComplete, 400);
     }
   }, [animDone, backendDone, onComplete]);
 
-  // ── Progress bar percentage ─────────────────────────────────────────
   const completedCount = doneSteps.size;
   const progressPct    = animDone ? 100 : Math.round((completedCount / STEPS.length) * 95);
-
-  // Platform name for step 0's "done" label
-  const platformLabel = video?.source_type
+  const platformLabel  = video?.source_type
     ? (PLATFORM_LABELS[video.source_type] ?? 'Video')
     : 'Video';
 
@@ -258,32 +209,25 @@ function ProcessingScreen({ video, videoId, onVideoUpdate, onComplete }) {
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col">
-      {/* Minimal header */}
       <header className="border-b border-gray-800 px-6 py-3 flex items-center gap-2">
-        {/* ▶︎ = U+25B6 + U+FE0E: variation selector-15 forces text (not emoji) rendering */}
         <span className="text-amber-500 text-xl select-none">{'▶︎'}</span>
         <span className="text-lg font-bold text-amber-500 tracking-tight">VidaPulse</span>
       </header>
 
-      {/* Main content */}
       <div className="flex-1 flex items-center justify-center px-4 py-16">
         <div className="w-full max-w-md">
 
           {/* Animated orb */}
           <div className="flex justify-center mb-10">
             <div className="relative w-20 h-20">
-              {/* Outer ping ring */}
               <span className="absolute inset-0 rounded-full bg-amber-500/20 animate-ping" />
-              {/* Inner steady ring */}
               <span className="absolute inset-2 rounded-full bg-amber-500/10 border border-amber-500/30" />
-              {/* Center dot */}
               <span className="absolute inset-0 flex items-center justify-center">
                 <span className="w-6 h-6 rounded-full bg-amber-500/80" />
               </span>
             </div>
           </div>
 
-          {/* Heading */}
           <h1 className="text-center text-xl font-bold text-gray-50 mb-1">
             Setting up your analytics
           </h1>
@@ -294,34 +238,28 @@ function ProcessingScreen({ video, videoId, onVideoUpdate, onComplete }) {
           )}
           {!video?.title && <div className="mb-8" />}
 
-          {/* Steps list */}
+          {/* Steps */}
           <div className="flex flex-col gap-3 mb-8">
             {STEPS.map((step, idx) => {
               const isDone    = doneSteps.has(idx);
               const isActive  = activeStep === idx && !isDone;
               const isPending = idx > activeStep;
-
               return (
                 <div
                   key={idx}
                   className={`flex items-center gap-3 transition-opacity duration-500
                               ${isPending ? 'opacity-30' : 'opacity-100'}`}
                 >
-                  {/* Status indicator */}
                   <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
-                    {isDone && <CheckCircleIcon className="text-emerald-400" />}
-                    {isActive && (
-                      <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-                    )}
+                    {isDone   && <CheckCircleIcon className="text-emerald-400" />}
+                    {isActive && <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />}
                     {isPending && <DotIcon className="text-gray-600" />}
                   </div>
-
-                  {/* Message */}
                   <span
                     className={`text-sm transition-colors duration-300
-                                ${isDone    ? 'text-emerald-400' : ''}
+                                ${isDone    ? 'text-emerald-400'          : ''}
                                 ${isActive  ? 'text-gray-100 font-medium' : ''}
-                                ${isPending ? 'text-gray-500' : ''}`}
+                                ${isPending ? 'text-gray-500'             : ''}`}
                   >
                     {isDone ? stepDoneLabel(idx) : step.active}
                   </span>
@@ -338,7 +276,6 @@ function ProcessingScreen({ video, videoId, onVideoUpdate, onComplete }) {
             />
           </div>
 
-          {/* Long-wait message — shown after 20s if still not done */}
           {animDone && !backendDone && (
             <p className="text-center text-xs text-gray-600 mt-4 animate-pulse">
               Still processing — this can take a moment…
@@ -347,40 +284,6 @@ function ProcessingScreen({ video, videoId, onVideoUpdate, onComplete }) {
         </div>
       </div>
     </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// DashboardReveal — Step 11
-//
-// Plays the staggered metrics reveal animation, then calls onRevealComplete.
-// ─────────────────────────────────────────────────────────────────────────
-
-function DashboardReveal({ video, user, onRevealComplete }) {
-  return (
-    <VideoAnalyticsView
-      video={video}
-      user={user}
-      animateIn={true}
-      onAnimationComplete={onRevealComplete}
-    />
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// ReadyDashboard — static view for return visits (no entry animation)
-// ─────────────────────────────────────────────────────────────────────────
-
-function ReadyDashboard({ video, user, onBack, onRefresh, isRefreshing }) {
-  return (
-    <VideoAnalyticsView
-      video={video}
-      user={user}
-      animateIn={false}
-      onBack={onBack}
-      onRefresh={onRefresh}
-      isRefreshing={isRefreshing}
-    />
   );
 }
 
@@ -420,14 +323,11 @@ function ErrorState({ message, onBack }) {
   );
 }
 
-// ── Inline SVG icons ─────────────────────────────────────────────────────
-
 function CheckCircleIcon({ className = '' }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-      className={className}
-    >
+      className={className}>
       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
       <polyline points="22 4 12 14.01 9 11.01" />
     </svg>
@@ -441,4 +341,3 @@ function DotIcon({ className = '' }) {
     </svg>
   );
 }
-

@@ -784,4 +784,133 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────
+// GET /api/videos/:id/analytics/daily
+//
+// Daily time-series for a single metric.
+// Query params:
+//   metric  — plays | viewers | avg_watch | completions | watch_seconds
+//   from    — ISO date string (default: video created_at)
+//   to      — ISO date string (default: today)
+//
+// Response: { data: [{ date, value }], total }
+// ─────────────────────────────────────────────────────────────────────────
+
+const DAILY_METRICS = {
+  plays: `
+    SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
+           COUNT(*) FILTER (WHERE play_count > 0) AS value
+    FROM   analytics_sessions
+    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
+    GROUP  BY 1 ORDER BY 1`,
+
+  viewers: `
+    SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
+           COUNT(DISTINCT viewer_cookie) AS value
+    FROM   analytics_sessions
+    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
+    GROUP  BY 1 ORDER BY 1`,
+
+  avg_watch: `
+    SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
+           ROUND(AVG(max_watch_pct)::numeric, 1) AS value
+    FROM   analytics_sessions
+    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3 AND play_count > 0
+    GROUP  BY 1 ORDER BY 1`,
+
+  completions: `
+    SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
+           COUNT(*) FILTER (WHERE reached_end = TRUE) AS value
+    FROM   analytics_sessions
+    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
+    GROUP  BY 1 ORDER BY 1`,
+
+  watch_seconds: `
+    SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
+           COALESCE(SUM(total_watch_seconds), 0) AS value
+    FROM   analytics_sessions
+    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
+    GROUP  BY 1 ORDER BY 1`,
+};
+
+router.get('/:id/analytics/daily', requireAuth, async (req, res, next) => {
+  try {
+    const { rows: [video] } = await pool.query(
+      `SELECT id, created_at FROM videos WHERE id=$1 AND user_id=$2 AND is_active=TRUE`,
+      [req.params.id, req.user.id]
+    );
+    if (!video) return res.status(404).json({ error: 'Video not found' });
+
+    const metric = req.query.metric ?? 'plays';
+    if (!DAILY_METRICS[metric]) {
+      return res.status(400).json({ error: 'Invalid metric', valid: Object.keys(DAILY_METRICS) });
+    }
+
+    // Default from = video creation date, to = today
+    const from = req.query.from
+      ? new Date(req.query.from)
+      : new Date(video.created_at);
+    const to = req.query.to
+      ? new Date(req.query.to + 'T23:59:59Z')
+      : new Date();
+
+    const { rows } = await pool.query(DAILY_METRICS[metric], [req.params.id, from, to]);
+
+    const data  = rows.map(r => ({ date: r.date, value: parseFloat(r.value) || 0 }));
+    const total = data.reduce((s, r) => s + r.value, 0);
+
+    return res.json({ data, total: Math.round(total * 10) / 10 });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// GET /api/videos/:id/analytics/breakdown
+//
+// Categorical breakdowns: device, browser, country
+// Query params:  by=device | browser | country
+// Response: { data: [{ label, count, pct }] }
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get('/:id/analytics/breakdown', requireAuth, async (req, res, next) => {
+  try {
+    const { rows: [video] } = await pool.query(
+      `SELECT id FROM videos WHERE id=$1 AND user_id=$2 AND is_active=TRUE`,
+      [req.params.id, req.user.id]
+    );
+    if (!video) return res.status(404).json({ error: 'Video not found' });
+
+    const by = req.query.by ?? 'device';
+
+    let col;
+    if      (by === 'device')  col = `COALESCE(device_type::text, 'unknown')`;
+    else if (by === 'browser') col = `COALESCE(browser, 'Unknown')`;
+    else if (by === 'country') col = `COALESCE(NULLIF(country_name,''), country_code, 'Unknown')`;
+    else return res.status(400).json({ error: 'Invalid breakdown', valid: ['device','browser','country'] });
+
+    const { rows } = await pool.query(
+      `SELECT ${col} AS label,
+              COUNT(*) AS count
+       FROM   analytics_sessions
+       WHERE  video_id = $1 AND play_count > 0
+       GROUP  BY 1
+       ORDER  BY 2 DESC
+       LIMIT  20`,
+      [req.params.id]
+    );
+
+    const total = rows.reduce((s, r) => s + parseInt(r.count, 10), 0);
+    const data  = rows.map(r => ({
+      label: r.label,
+      count: parseInt(r.count, 10),
+      pct  : total > 0 ? Math.round(parseInt(r.count, 10) / total * 100) : 0,
+    }));
+
+    return res.json({ data, total });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

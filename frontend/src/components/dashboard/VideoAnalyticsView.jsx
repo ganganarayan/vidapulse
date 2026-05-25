@@ -1,53 +1,75 @@
+'use strict';
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import api              from '../../lib/api';
-import { useToast }     from '../../contexts/ToastContext';
-import InsightsSection      from './InsightsSection';
-import HeatmapSection       from './HeatmapSection';
-import ViewerStoriesSection from './ViewerStoriesSection';
-import NotificationBell     from './NotificationBell';
+import { Link }                from 'react-router-dom';
+import api                     from '../../lib/api';
+import { useToast }            from '../../contexts/ToastContext';
+import InsightsSection         from './InsightsSection';
+import HeatmapSection          from './HeatmapSection';
+import ViewerStoriesSection    from './ViewerStoriesSection';
+import NotificationBell        from './NotificationBell';
+import MetricDetailView        from './MetricDetailView';
+import DevicesSection          from './DevicesSection';
+import GeographySection        from './GeographySection';
+import BrowsersSection         from './BrowsersSection';
 
 /**
  * VideoAnalyticsView
  *
- * The full per-video dashboard. Used in two modes:
- *
- *   animateIn={true}  — first-time reveal (Step 11): elements stagger in one
- *                       by one, metrics count up from zero. Calls
- *                       onAnimationComplete when the sequence finishes.
- *
- *   animateIn={false} — static render: all elements immediately visible.
- *                       Used when the user navigates back to an existing video.
+ * Right-panel content area for the per-video dashboard.
+ * Renders different sub-views based on `activeView` prop.
  *
  * Props:
- *   video               — video object from GET /api/videos/:id
- *   user                — user object from AuthContext
- *   animateIn           — boolean (default false)
- *   onAnimationComplete — called when the reveal finishes (animateIn only)
- *   onBack              — optional override for the "All videos" back button
+ *   video               — video object
+ *   user                — user object
+ *   activeView          — current view key (string)
+ *   onViewChange        — (view: string) => void
+ *   animateIn           — boolean (runs reveal animation on first load)
+ *   onAnimationComplete — called when reveal animation finishes
+ *   onRefresh           — optional refresh callback
+ *   isRefreshing        — boolean
  */
 
 // ─────────────────────────────────────────────────────────────────────────
-// Animation stage constants
+// Animation stage constants (overview reveal)
 // ─────────────────────────────────────────────────────────────────────────
 
-// Total stages 0–7. Each stage makes one element group visible.
-const STAGE_DELAYS = [
-  0,     // 0 → 1: header
-  300,   // 1 → 2: video title
-  650,   // 2 → 3: metric card 1
-  950,   // 3 → 4: metric card 2
-  1250,  // 4 → 5: metric card 3
-  1700,  // 5 → 6: judgment text
-  2200,  // 6 → 7: action CTAs
-];
-const COMPLETE_DELAY = 2700; // fires onAnimationComplete
+const STAGE_DELAYS   = [0, 300, 650, 950, 1250, 1700, 2200];
+const COMPLETE_DELAY = 2700;
+
+// ─────────────────────────────────────────────────────────────────────────
+// View labels for top bar breadcrumb
+// ─────────────────────────────────────────────────────────────────────────
+
+const VIEW_LABELS = {
+  overview   : 'Overview',
+  plays      : 'Total Plays',
+  viewers    : 'Unique Viewers',
+  avg_watch  : 'Avg. Watch %',
+  play_rate  : 'Play Rate',
+  completion : 'Completion Rate',
+  dropoff    : 'Drop-off Rate',
+  watch_time : 'Watch Time',
+  rewatches  : 'Re-watches',
+  heatmap    : 'Engagement Heatmap',
+  stories    : 'Viewer Stories',
+  insights   : 'Insights',
+  geography  : 'Geography',
+  devices    : 'Devices',
+  browsers   : 'Browsers',
+  embed      : 'Share & Embed',
+  player     : 'Player Settings',
+};
+
+// Metric views that map to the time-series chart
+const METRIC_VIEWS = new Set([
+  'plays', 'viewers', 'avg_watch', 'play_rate',
+  'completion', 'dropoff', 'watch_time', 'rewatches',
+]);
 
 // ─────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────
 
-/** Format seconds as m:ss or h:mm:ss */
 function fmtSeconds(secs) {
   if (!secs || secs < 0) return '0:00';
   const s = Math.round(secs);
@@ -59,104 +81,45 @@ function fmtSeconds(secs) {
 }
 
 const PLATFORM_LABELS = {
-  youtube     : 'YouTube',
-  vimeo       : 'Vimeo',
-  loom        : 'Loom',
-  zoom        : 'Zoom',
-  google_drive: 'Google Drive',
-  dropbox     : 'Dropbox',
-  mp4_direct  : 'Direct video',
-  hls_stream  : 'HLS stream',
-  other       : 'Video',
+  youtube: 'YouTube', vimeo: 'Vimeo', loom: 'Loom', zoom: 'Zoom',
+  google_drive: 'Google Drive', dropbox: 'Dropbox',
+  mp4_direct: 'Direct video', hls_stream: 'HLS stream', other: 'Video',
 };
 
-/**
- * Derive contextual "judgment text" from the video's current stats.
- * Returns { headline, detail, colorClass }.
- */
 function getJudgment(video) {
   const plays    = video?.total_plays    ?? 0;
   const avgWatch = parseFloat(video?.avg_watch_pct ?? 0);
-
-  if (plays === 0) {
-    return {
-      headline  : 'Your tracker is live.',
-      detail    : 'Share this video and your first insights will appear here automatically once viewers start watching.',
-      colorClass: 'text-gray-300',
-    };
-  }
-
-  if (plays < 10) {
-    return {
-      headline  : `${plays} play${plays !== 1 ? 's' : ''} so far.`,
-      detail    : 'Insights sharpen with more data. Keep sharing to unlock your first analysis.',
-      colorClass: 'text-amber-300',
-    };
-  }
-
-  if (avgWatch >= 70) {
-    return {
-      headline  : 'Exceptional retention.',
-      detail    : `Viewers watch ${avgWatch.toFixed(0)}% on average — well above the 40% industry benchmark. Your content is working.`,
-      colorClass: 'text-emerald-300',
-    };
-  }
-
-  if (avgWatch >= 50) {
-    return {
-      headline  : 'Solid retention.',
-      detail    : `${avgWatch.toFixed(0)}% average watch time. Check the heatmap to find where engagement dips.`,
-      colorClass: 'text-amber-300',
-    };
-  }
-
-  if (avgWatch >= 30) {
-    return {
-      headline  : 'Room to improve.',
-      detail    : `Viewers leave after ${avgWatch.toFixed(0)}% on average. A stronger opening hook could help significantly.`,
-      colorClass: 'text-amber-300',
-    };
-  }
-
-  return {
-    headline  : 'High drop-off detected.',
-    detail    : `Only ${avgWatch.toFixed(0)}% average watch time. Viewers are leaving fast — your intro may need rethinking.`,
-    colorClass: 'text-red-300',
-  };
+  if (plays === 0)    return { headline: 'Your tracker is live.', detail: 'Share this video and your first insights will appear here automatically once viewers start watching.', colorClass: 'text-gray-300' };
+  if (plays < 10)     return { headline: `${plays} play${plays !== 1 ? 's' : ''} so far.`, detail: 'Insights sharpen with more data. Keep sharing to unlock your first analysis.', colorClass: 'text-amber-300' };
+  if (avgWatch >= 70) return { headline: 'Exceptional retention.', detail: `Viewers watch ${avgWatch.toFixed(0)}% on average — well above the 40% industry benchmark.`, colorClass: 'text-emerald-300' };
+  if (avgWatch >= 50) return { headline: 'Solid retention.', detail: `${avgWatch.toFixed(0)}% average watch time. Check the heatmap to find where engagement dips.`, colorClass: 'text-amber-300' };
+  if (avgWatch >= 30) return { headline: 'Room to improve.', detail: `Viewers leave after ${avgWatch.toFixed(0)}% on average. A stronger opening hook could help.`, colorClass: 'text-amber-300' };
+  return { headline: 'High drop-off detected.', detail: `Only ${avgWatch.toFixed(0)}% average watch time. Your intro may need rethinking.`, colorClass: 'text-red-300' };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// useCountUp — animates a number from 0 to `target` over `duration` ms.
-// Starts only when `shouldStart` flips to true.
+// useCountUp
 // ─────────────────────────────────────────────────────────────────────────
 
 function useCountUp(target, duration = 900, shouldStart = true) {
-  const [value, setValue] = useState(target === 0 ? 0 : 0);
-  const rafRef   = useRef(null);
-  const startRef = useRef(null);
+  const [value,    setValue]  = useState(0);
+  const rafRef     = useRef(null);
+  const startRef   = useRef(null);
 
   useEffect(() => {
     if (!shouldStart) return;
     if (target === 0) { setValue(0); return; }
-
     startRef.current = null;
-
-    function tick(timestamp) {
-      if (!startRef.current) startRef.current = timestamp;
-      const elapsed  = timestamp - startRef.current;
+    function tick(ts) {
+      if (!startRef.current) startRef.current = ts;
+      const elapsed  = ts - startRef.current;
       const progress = Math.min(elapsed / duration, 1);
-      // easeOutCubic — fast start, slow finish
-      const eased = 1 - Math.pow(1 - progress, 3);
+      const eased    = 1 - Math.pow(1 - progress, 3);
       setValue(Math.round(target * eased));
-      if (progress < 1) {
-        rafRef.current = requestAnimationFrame(tick);
-      }
+      if (progress < 1) rafRef.current = requestAnimationFrame(tick);
     }
-
     rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [target, duration, shouldStart]);
 
   return value;
@@ -169,88 +132,66 @@ function useCountUp(target, duration = 900, shouldStart = true) {
 export default function VideoAnalyticsView({
   video,
   user,
+  activeView          = 'overview',
+  onViewChange        = () => {},
   animateIn           = false,
   onAnimationComplete = null,
-  onBack              = null,
   onRefresh           = null,
   isRefreshing        = false,
 }) {
-  const navigate = useNavigate();
-  const handleBack = onBack ?? (() => navigate('/dashboard'));
-
-  // stage drives visibility. When animateIn=false, start at max stage so
-  // everything renders immediately.
   const FULL_STAGE = 99;
   const [stage, setStage] = useState(animateIn ? 0 : FULL_STAGE);
 
-  // Run the stage sequence only for animated reveals
   useEffect(() => {
     if (!animateIn) return;
-
-    const timers = STAGE_DELAYS.map((delay, idx) =>
+    const timers  = STAGE_DELAYS.map((delay, idx) =>
       setTimeout(() => setStage(idx + 1), delay)
     );
-
     const doneTimer = onAnimationComplete
       ? setTimeout(onAnimationComplete, COMPLETE_DELAY)
       : null;
-
     return () => {
       timers.forEach(clearTimeout);
       if (doneTimer) clearTimeout(doneTimer);
     };
   }, [animateIn, onAnimationComplete]);
 
-  // Derived display values
   const plays    = video?.total_plays    ?? 0;
   const viewers  = video?.unique_viewers ?? 0;
   const avgWatch = parseFloat(video?.avg_watch_pct ?? 0);
   const hasPlays = plays > 0;
-  const judgment = getJudgment(video);
 
-  // Secondary metrics from session aggregates
   const playRatePct    = parseFloat(video?.play_rate_pct    ?? 0);
-  const completedViews = parseInt(video?.completed_views     ?? 0, 10);
+  const completedViews = parseInt(video?.completed_views    ?? 0, 10);
   const totalWatchSecs = parseInt(video?.total_watch_seconds_sum ?? 0, 10);
   const totalWatchMins = Math.round(totalWatchSecs / 60);
 
-  // Derived / computed metrics
-  const completionRate   = hasPlays ? (completedViews / plays) * 100 : null;
-  const dropoffRate      = completionRate !== null ? (100 - completionRate) : null;
-  const avgWatchSecs     = hasPlays && totalWatchSecs > 0 ? totalWatchSecs / plays : null;
-  const avgWatchPerViewer= viewers > 0 && totalWatchSecs > 0 ? totalWatchSecs / viewers : null;
-  const replayCount      = hasPlays ? Math.max(0, plays - viewers) : null;
-  const replayRate       = hasPlays && plays > 0 ? Math.max(0, (plays - viewers) / plays * 100) : null;
+  const completionRate    = hasPlays ? (completedViews / plays) * 100 : null;
+  const dropoffRate       = completionRate !== null ? (100 - completionRate) : null;
+  const avgWatchSecs      = hasPlays && totalWatchSecs > 0 ? totalWatchSecs / plays : null;
+  const avgWatchPerViewer = viewers > 0 && totalWatchSecs > 0 ? totalWatchSecs / viewers : null;
+  const replayCount       = hasPlays ? Math.max(0, plays - viewers) : null;
+  const replayRate        = hasPlays ? Math.max(0, (plays - viewers) / plays * 100) : null;
+
+  const viewLabel = VIEW_LABELS[activeView] ?? 'Overview';
 
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col">
+    <div className="flex flex-col flex-1 min-h-0">
 
-      {/* ── Header ──────────────────────────────────────────────────── */}
-      <header
-        className={`border-b border-gray-800 px-4 sm:px-6 py-3
-                    flex items-center justify-between
-                    transition-all duration-500
-                    ${stage >= 1 ? 'opacity-100' : 'opacity-0'}`}
-      >
-        <button
-          onClick={handleBack}
-          className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-200 transition-colors"
-        >
-          <BackIcon />
-          All videos
-        </button>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-amber-500 select-none">{'▶︎'}</span>
-            <span className="font-bold text-amber-500 tracking-tight">VidaPulse</span>
-          </div>
-          {user && <PlanBadge plan={user.plan} displayName={user.plan_display_name} />}
+      {/* ── Top bar ──────────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 border-b border-gray-800 px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-gray-500">{video?.title ? video.title.slice(0, 32) + (video.title.length > 32 ? '…' : '') : 'Video'}</span>
+          <span className="text-gray-700">/</span>
+          <span className="font-medium text-gray-300">{viewLabel}</span>
+        </div>
+        <div className="flex items-center gap-2">
           <NotificationBell />
           {onRefresh && (
             <button
               onClick={onRefresh}
               disabled={isRefreshing}
-              className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors disabled:cursor-not-allowed"
+              className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors disabled:opacity-40"
               title="Refresh analytics"
             >
               <RefreshIcon spinning={isRefreshing} />
@@ -264,153 +205,180 @@ export default function VideoAnalyticsView({
             <SettingsNavIcon />
           </Link>
         </div>
-      </header>
+      </div>
 
-      {/* ── Main content ────────────────────────────────────────────── */}
-      <div className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-10">
+      {/* ── Scrollable content ───────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto">
 
-        {/* ── Video title ─────────────────────────────────────────── */}
-        <div
-          className={`mb-8 transition-all duration-500
-                      ${stage >= 2
-                        ? 'opacity-100 translate-y-0'
-                        : 'opacity-0 translate-y-3'}`}
-        >
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-50 leading-tight">
-            {video?.title ?? 'Untitled Video'}
-          </h1>
-          <p className="text-sm text-gray-400 mt-1.5 flex items-center gap-2">
-            <span>{PLATFORM_LABELS[video?.source_type] ?? 'Video'}</span>
-            <span className="text-gray-600">·</span>
-            <span>Added {video?.created_at ? new Date(video.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</span>
-          </p>
-        </div>
+        {/* ── Metric time-series views ──────────────────────────────── */}
+        {METRIC_VIEWS.has(activeView) && (
+          <MetricDetailView videoId={video?.id} metric={activeView} video={video} />
+        )}
 
-        {/* ── 12 Metric cards (4 rows of 3) ───────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-10">
-          {/* Row 1 — Primary KPIs */}
-          <MetricCard
-            label="Total Plays"
-            value={plays}
-            format={n => n.toLocaleString()}
-            visible={stage >= 3}
-            accent="amber"
-          />
-          <MetricCard
-            label="Unique Viewers"
-            value={viewers}
-            format={n => n.toLocaleString()}
-            visible={stage >= 4}
-            accent="indigo"
-          />
-          <MetricCard
-            label="Avg. Watch"
-            value={hasPlays ? avgWatch : null}
-            format={n => `${n.toFixed(0)}%`}
-            visible={stage >= 5}
-            accent="emerald"
-            className="col-span-2 sm:col-span-1"
-          />
-          {/* Row 2 — Engagement rates */}
-          <MetricCard
-            label="Completion Rate"
-            value={completionRate}
-            format={n => `${n.toFixed(0)}%`}
-            visible={stage >= 5}
-            accent="teal"
-          />
-          <MetricCard
-            label="Play Rate"
-            value={hasPlays ? playRatePct : null}
-            format={n => `${n.toFixed(0)}%`}
-            visible={stage >= 5}
-            accent="violet"
-          />
-          <MetricCard
-            label="Drop-off Rate"
-            value={dropoffRate}
-            format={n => `${n.toFixed(0)}%`}
-            visible={stage >= 5}
-            accent="rose"
-          />
-          {/* Row 3 — Time & depth */}
-          <MetricCard
-            label="Total Watch Time"
-            value={hasPlays ? totalWatchMins : null}
-            format={n => n >= 60 ? `${(n / 60).toFixed(1)} hr` : `${n} min`}
-            visible={stage >= 5}
-            accent="sky"
-          />
-          <MetricCard
-            label="Avg. Duration / View"
-            value={avgWatchSecs}
-            format={n => fmtSeconds(n)}
-            visible={stage >= 5}
-            accent="orange"
-          />
-          <MetricCard
-            label="Avg. Watch / Viewer"
-            value={avgWatchPerViewer}
-            format={n => fmtSeconds(n)}
-            visible={stage >= 5}
-            accent="purple"
-          />
-          {/* Row 4 — Volume & repeats */}
-          <MetricCard
-            label="Completions"
-            value={hasPlays ? completedViews : null}
-            format={n => n.toLocaleString()}
-            visible={stage >= 5}
-            accent="pink"
-          />
-          <MetricCard
-            label="Re-watches"
-            value={replayCount}
-            format={n => n.toLocaleString()}
-            visible={stage >= 5}
-            accent="yellow"
-          />
-          <MetricCard
-            label="Replay Rate"
-            value={replayRate}
-            format={n => `${n.toFixed(0)}%`}
-            visible={stage >= 5}
-            accent="amber"
-            className="col-span-2 sm:col-span-1"
-          />
-        </div>
+        {/* ── Engagement sub-views ─────────────────────────────────── */}
+        {activeView === 'heatmap' && (
+          <div className="px-6 py-6">
+            <div className="mb-5">
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
+                Engagement
+              </p>
+              <h2 className="text-2xl font-bold text-gray-50">Engagement Heatmap</h2>
+              <p className="text-xs text-gray-600 mt-1">
+                Per-second viewer retention across the full video timeline.
+              </p>
+            </div>
+            <HeatmapSection videoId={video?.id} video={video} userPlan={user?.plan} />
+          </div>
+        )}
 
-        {/* ── Judgment text ───────────────────────────────────────── */}
-        <div
-          className={`mb-8 transition-all duration-600
-                      ${stage >= 6
-                        ? 'opacity-100 translate-y-0'
-                        : 'opacity-0 translate-y-3'}`}
-        >
-          <p className={`text-lg font-semibold mb-1 ${judgment.colorClass}`}>
-            {judgment.headline}
-          </p>
-          <p className="text-sm text-gray-300 max-w-xl leading-relaxed">
-            {judgment.detail}
-          </p>
-        </div>
+        {activeView === 'stories' && (
+          <div className="px-6 py-6">
+            <div className="mb-5">
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
+                Engagement
+              </p>
+              <h2 className="text-2xl font-bold text-gray-50">Viewer Stories</h2>
+              <p className="text-xs text-gray-600 mt-1">
+                AI-generated narratives about how your audience watched this video.
+              </p>
+            </div>
+            <ViewerStoriesSection videoId={video?.id} userPlan={user?.plan} />
+          </div>
+        )}
 
-        {/* ── Action CTAs ─────────────────────────────────────────── */}
-        <div
-          className={`transition-all duration-500
-                      ${stage >= 7
-                        ? 'opacity-100 translate-y-0'
-                        : 'opacity-0 translate-y-3'}`}
-        >
-          <ActionBar video={video} />
-        </div>
+        {activeView === 'insights' && (
+          <div className="px-6 py-6">
+            <div className="mb-5">
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
+                Engagement
+              </p>
+              <h2 className="text-2xl font-bold text-gray-50">Insights</h2>
+              <p className="text-xs text-gray-600 mt-1">
+                Actionable recommendations generated from your audience data.
+              </p>
+            </div>
+            <InsightsSection
+              videoId={video?.id}
+              insightStatus={video?.insight_status}
+              userPlan={user?.plan}
+            />
+          </div>
+        )}
 
-        {/* ── Analytics sections ──────────────────────────────────── */}
-        {stage >= 7 && (
-          <>
-            <AnalyticsSections video={video} user={user} />
-            <PlayerSettingsSection videoId={video?.id} />
-          </>
+        {/* ── Audience sub-views ───────────────────────────────────── */}
+        {activeView === 'geography' && <GeographySection videoId={video?.id} />}
+        {activeView === 'devices'   && <DevicesSection   videoId={video?.id} />}
+        {activeView === 'browsers'  && <BrowsersSection  videoId={video?.id} />}
+
+        {/* ── Embed view ───────────────────────────────────────────── */}
+        {activeView === 'embed' && (
+          <EmbedView video={video} />
+        )}
+
+        {/* ── Player settings view ─────────────────────────────────── */}
+        {activeView === 'player' && (
+          <PlayerSettingsView videoId={video?.id} />
+        )}
+
+        {/* ── Overview ─────────────────────────────────────────────── */}
+        {activeView === 'overview' && (
+          <div className="max-w-4xl w-full mx-auto px-4 sm:px-6 py-8">
+
+            {/* Video title */}
+            <div
+              className={`mb-7 transition-all duration-500
+                          ${stage >= 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
+            >
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-50 leading-tight">
+                {video?.title ?? 'Untitled Video'}
+              </h1>
+              <p className="text-sm text-gray-400 mt-1.5 flex items-center gap-2">
+                <span>{PLATFORM_LABELS[video?.source_type] ?? 'Video'}</span>
+                <span className="text-gray-600">·</span>
+                <span>
+                  Added {video?.created_at
+                    ? new Date(video.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : '—'}
+                </span>
+              </p>
+            </div>
+
+            {/* Metric cards grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
+              <MetricCard label="Total Plays"       value={plays}          format={n => n.toLocaleString()}                  visible={stage >= 3} accent="amber"   onClick={() => onViewChange('plays')} />
+              <MetricCard label="Unique Viewers"    value={viewers}        format={n => n.toLocaleString()}                  visible={stage >= 4} accent="indigo"  onClick={() => onViewChange('viewers')} />
+              <MetricCard label="Avg. Watch"        value={hasPlays ? avgWatch : null} format={n => `${n.toFixed(0)}%`} visible={stage >= 5} accent="emerald" className="col-span-2 sm:col-span-1" onClick={() => onViewChange('avg_watch')} />
+              <MetricCard label="Completion Rate"   value={completionRate} format={n => `${n.toFixed(0)}%`}                 visible={stage >= 5} accent="teal"    onClick={() => onViewChange('completion')} />
+              <MetricCard label="Play Rate"         value={hasPlays ? playRatePct : null} format={n => `${n.toFixed(0)}%`} visible={stage >= 5} accent="violet"  onClick={() => onViewChange('play_rate')} />
+              <MetricCard label="Drop-off Rate"     value={dropoffRate}    format={n => `${n.toFixed(0)}%`}                 visible={stage >= 5} accent="rose"    onClick={() => onViewChange('dropoff')} />
+              <MetricCard label="Total Watch Time"  value={hasPlays ? totalWatchMins : null} format={n => n >= 60 ? `${(n/60).toFixed(1)} hr` : `${n} min`} visible={stage >= 5} accent="sky" onClick={() => onViewChange('watch_time')} />
+              <MetricCard label="Avg. Duration/View" value={avgWatchSecs}  format={n => fmtSeconds(n)}                      visible={stage >= 5} accent="orange"  onClick={() => onViewChange('avg_watch')} />
+              <MetricCard label="Avg. Watch/Viewer" value={avgWatchPerViewer} format={n => fmtSeconds(n)}                   visible={stage >= 5} accent="purple"  className="col-span-2 sm:col-span-1" onClick={() => onViewChange('avg_watch')} />
+              <MetricCard label="Completions"       value={hasPlays ? completedViews : null} format={n => n.toLocaleString()} visible={stage >= 5} accent="pink"  onClick={() => onViewChange('completion')} />
+              <MetricCard label="Re-watches"        value={replayCount}    format={n => n.toLocaleString()}                  visible={stage >= 5} accent="yellow"  onClick={() => onViewChange('rewatches')} />
+              <MetricCard label="Replay Rate"       value={replayRate}     format={n => `${n.toFixed(0)}%`}                 visible={stage >= 5} accent="amber"   className="col-span-2 sm:col-span-1" onClick={() => onViewChange('rewatches')} />
+            </div>
+
+            {/* Judgment text */}
+            <div
+              className={`mb-8 transition-all duration-500
+                          ${stage >= 6 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
+            >
+              {(() => {
+                const j = getJudgment(video);
+                return (
+                  <>
+                    <p className={`text-lg font-semibold mb-1 ${j.colorClass}`}>{j.headline}</p>
+                    <p className="text-sm text-gray-300 max-w-xl leading-relaxed">{j.detail}</p>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Action bar */}
+            <div
+              className={`transition-all duration-500
+                          ${stage >= 7 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
+            >
+              <ActionBar video={video} onEmbedView={() => onViewChange('embed')} />
+            </div>
+
+            {/* Analytics sections */}
+            {stage >= 7 && (
+              <div className="mt-10 flex flex-col gap-10">
+                <div className="h-px bg-gray-800" />
+
+                {/* Insights */}
+                <InsightsSection
+                  videoId={video?.id}
+                  insightStatus={video?.insight_status}
+                  userPlan={user?.plan}
+                />
+
+                {/* Heatmap — clickable header navigates to dedicated view */}
+                <div>
+                  <button
+                    onClick={() => onViewChange('heatmap')}
+                    className="flex items-center gap-2 mb-4 group w-full text-left"
+                  >
+                    <span className="text-amber-500 text-sm">〰</span>
+                    <h2 className="text-base font-semibold text-gray-200 group-hover:text-gray-100 transition-colors">
+                      Engagement Heatmap
+                    </h2>
+                    <span className="ml-auto text-xs text-gray-600 group-hover:text-gray-400 transition-colors">
+                      View full →
+                    </span>
+                  </button>
+                  <HeatmapSection videoId={video?.id} video={video} userPlan={user?.plan} />
+                </div>
+
+                {/* Viewer Stories */}
+                <ViewerStoriesSection videoId={video?.id} userPlan={user?.plan} />
+
+                <div className="h-px bg-gray-800" />
+              </div>
+            )}
+          </div>
         )}
 
       </div>
@@ -419,14 +387,13 @@ export default function VideoAnalyticsView({
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// MetricCard — a single stat card with optional count-up animation
+// MetricCard — stat card with count-up + click navigation
 // ─────────────────────────────────────────────────────────────────────────
 
-function MetricCard({ label, value, format, visible, accent, className = '' }) {
-  // Counter starts when the card becomes visible
-  const numericValue  = typeof value === 'number' ? value : 0;
-  const countedValue  = useCountUp(numericValue, 900, visible && value !== null);
-  const isNull        = value === null;
+function MetricCard({ label, value, format, visible, accent, className = '', onClick }) {
+  const numericValue = typeof value === 'number' ? value : 0;
+  const counted      = useCountUp(numericValue, 900, visible && value !== null);
+  const isNull       = value === null;
 
   const accentMap = {
     amber  : 'border-t-amber-500/70',
@@ -443,9 +410,11 @@ function MetricCard({ label, value, format, visible, accent, className = '' }) {
   };
 
   return (
-    <div
+    <button
+      onClick={onClick}
       className={`bg-gray-800 border border-gray-700/80 border-t-2 ${accentMap[accent] ?? accentMap.amber}
-                  rounded-xl px-4 py-4 transition-all duration-500
+                  rounded-xl px-4 py-4 text-left transition-all duration-500 group
+                  hover:border-gray-600 hover:bg-gray-700/80 active:scale-[0.98]
                   ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
                   ${className}`}
     >
@@ -453,37 +422,24 @@ function MetricCard({ label, value, format, visible, accent, className = '' }) {
         {label}
       </p>
       <p className="text-3xl font-bold text-gray-50 tabular-nums">
-        {isNull ? <span className="text-gray-600">—</span> : format(countedValue)}
+        {isNull
+          ? <span className="text-gray-600">—</span>
+          : format(counted)
+        }
       </p>
-    </div>
+      <p className="text-[10px] text-gray-600 mt-1.5 group-hover:text-gray-500 transition-colors">
+        View details →
+      </p>
+    </button>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// generateEmbedSnippet — returns a self-contained <iframe> tag.
-// The iframe loads /embed/:videoId which handles the player + all tracking
-// automatically — no extra steps, no scripts on the embedding page.
+// ActionBar — copy link + embed code
 // ─────────────────────────────────────────────────────────────────────────
 
-function generateEmbedSnippet(videoId, origin) {
-  return `<iframe
-  src="${origin}/embed/${videoId}"
-  width="560"
-  height="315"
-  frameborder="0"
-  allow="autoplay; fullscreen; picture-in-picture"
-  allowfullscreen>
-</iframe>`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// ActionBar — copy link + embed code CTA
-// ─────────────────────────────────────────────────────────────────────────
-
-function ActionBar({ video }) {
-  const [copied,      setCopied]      = useState(false);
-  const [embedOpen,   setEmbedOpen]   = useState(false);
-  const [embedCopied, setEmbedCopied] = useState(false);
+function ActionBar({ video, onEmbedView }) {
+  const [copied, setCopied] = useState(false);
 
   function handleCopy() {
     const text = video?.original_url ?? '';
@@ -493,339 +449,229 @@ function ActionBar({ video }) {
       .catch(() => {});
   }
 
-  function handleEmbedOpen() {
-    setEmbedCopied(false);
-    setEmbedOpen(true);
-  }
+  return (
+    <div className="flex flex-wrap gap-3 items-center">
+      <button
+        onClick={handleCopy}
+        className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700
+                   border border-gray-700 text-sm text-gray-200 font-medium
+                   rounded-lg transition-colors"
+      >
+        {copied ? <CheckSmallIcon className="text-emerald-400" /> : <CopyIcon />}
+        {copied ? 'Copied!' : 'Copy video link'}
+      </button>
+      <button
+        onClick={onEmbedView}
+        className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20
+                   border border-amber-500/30 text-sm text-amber-300 font-medium
+                   rounded-lg transition-colors"
+      >
+        <CodeIcon />
+        Get embed code
+      </button>
+    </div>
+  );
+}
 
-  function handleEmbedCopy() {
-    const snippet = generateEmbedSnippet(
-      video?.id ?? '',
-      typeof window !== 'undefined' ? window.location.origin : ''
-    );
+// ─────────────────────────────────────────────────────────────────────────
+// EmbedView — full embed code panel
+// ─────────────────────────────────────────────────────────────────────────
+
+function generateEmbedSnippet(videoId, origin) {
+  return `<iframe\n  src="${origin}/embed/${videoId}"\n  width="560"\n  height="315"\n  frameborder="0"\n  allow="autoplay; fullscreen; picture-in-picture"\n  allowfullscreen>\n</iframe>`;
+}
+
+function EmbedView({ video }) {
+  const [linkCopied,  setLinkCopied]  = useState(false);
+  const [embedCopied, setEmbedCopied] = useState(false);
+
+  const snippet = generateEmbedSnippet(
+    video?.id ?? '',
+    typeof window !== 'undefined' ? window.location.origin : ''
+  );
+
+  function copyLink() {
+    navigator.clipboard.writeText(video?.original_url ?? '')
+      .then(() => { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); })
+      .catch(() => {});
+  }
+  function copyEmbed() {
     navigator.clipboard.writeText(snippet)
       .then(() => { setEmbedCopied(true); setTimeout(() => setEmbedCopied(false), 3000); })
       .catch(() => {});
   }
 
   return (
-    <>
-      <div className="flex flex-wrap gap-3 items-center">
-        <button
-          onClick={handleCopy}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700
-                     border border-gray-700 text-sm text-gray-200 font-medium
-                     rounded-lg transition-colors"
-        >
-          {copied ? <CheckSmallIcon className="text-emerald-400" /> : <CopyIcon />}
-          {copied ? 'Copied!' : 'Copy video link'}
-        </button>
-
-        <button
-          onClick={handleEmbedOpen}
-          className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20
-                     border border-amber-500/30 text-sm text-amber-300 font-medium
-                     rounded-lg transition-colors"
-        >
-          <CodeIcon />
-          Get embed code
-        </button>
+    <div className="px-6 py-6 min-w-0">
+      <div className="mb-6">
+        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
+          Settings
+        </p>
+        <h2 className="text-2xl font-bold text-gray-50">Share & Embed</h2>
+        <p className="text-xs text-gray-600 mt-1">
+          Copy the video link or embed the tracked player on any website.
+        </p>
       </div>
 
-      {/* Embed code modal */}
-      {embedOpen && (
-        <EmbedModal
-          video={video}
-          copied={embedCopied}
-          onCopy={handleEmbedCopy}
-          onClose={() => setEmbedOpen(false)}
-        />
-      )}
-    </>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// EmbedModal — shows the tracking snippet with copy-to-clipboard
-// ─────────────────────────────────────────────────────────────────────────
-
-function EmbedModal({ video, copied, onCopy, onClose }) {
-  const snippet = generateEmbedSnippet(
-    video?.id ?? '',
-    typeof window !== 'undefined' ? window.location.origin : ''
-  );
-
-  // Close on backdrop click
-  function handleBackdrop(e) {
-    if (e.target === e.currentTarget) onClose();
-  }
-
-  // Close on Escape
-  React.useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose(); }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4
-                 bg-black/60 backdrop-blur-sm"
-      onClick={handleBackdrop}
-    >
-      <div className="w-full max-w-2xl bg-gray-900 border border-gray-700
-                      rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4
-                        border-b border-gray-800 flex-shrink-0">
-          <div>
-            <h2 className="text-base font-bold text-gray-50">Embed video</h2>
-            <p className="text-xs text-gray-500 mt-0.5 truncate max-w-sm">
-              {video?.title ?? 'Your video'}
-            </p>
+      <div className="flex flex-col gap-5 max-w-2xl">
+        {/* Copy link */}
+        <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-5">
+          <p className="text-sm font-semibold text-gray-200 mb-1">Video link</p>
+          <p className="text-xs text-gray-500 mb-3">Share the original video URL directly.</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-300 truncate font-mono">
+              {video?.original_url ?? '—'}
+            </code>
+            <button
+              onClick={copyLink}
+              className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600
+                         border border-gray-600 text-xs text-gray-200 font-medium rounded-lg transition-colors flex-shrink-0"
+            >
+              {linkCopied ? <CheckSmallIcon className="text-emerald-400" /> : <CopyIcon />}
+              {linkCopied ? 'Copied' : 'Copy'}
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300
-                       hover:bg-gray-800 transition-colors"
-            aria-label="Close"
-          >
-            <CloseIcon />
-          </button>
         </div>
 
-        {/* Body */}
-        <div className="px-6 py-5 overflow-y-auto flex-1">
-
-          {/* Instructions */}
-          <p className="text-sm text-gray-300 mb-5">
-            Copy the code below and paste it anywhere on your page — on any website, page builder, or canvas.
-            Plays, watch time, and heatmap data will appear in this dashboard automatically.
+        {/* Embed code */}
+        <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-5">
+          <p className="text-sm font-semibold text-gray-200 mb-1">Embed code</p>
+          <p className="text-xs text-gray-500 mb-3">
+            Paste this on any page. Plays, watch time, and heatmap data appear in this dashboard automatically.
           </p>
-
-          {/* Code block */}
           <div className="relative">
-            <pre
-              className="bg-gray-950 border border-gray-800 rounded-xl
-                         p-4 text-xs text-gray-300 font-mono leading-relaxed
-                         overflow-x-auto whitespace-pre-wrap break-all"
-            >
+            <pre className="bg-gray-950 border border-gray-800 rounded-xl p-4 text-xs text-gray-300 font-mono leading-relaxed overflow-x-auto whitespace-pre-wrap break-all">
               {snippet}
             </pre>
           </div>
+          <button
+            onClick={copyEmbed}
+            className="mt-3 flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400
+                       text-gray-900 text-sm font-semibold rounded-lg transition-colors"
+          >
+            {embedCopied
+              ? <><CheckSmallIcon className="text-gray-900" /> Copied!</>
+              : <><CopyIcon /> Copy embed code</>
+            }
+          </button>
         </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-800 flex items-center
-                        justify-between gap-3 flex-shrink-0">
-          <p className="text-xs text-gray-500">
-            Works on any website or page builder · No scripts or extra setup needed
-          </p>
-          <div className="flex gap-2 flex-shrink-0">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200
-                         bg-gray-800 hover:bg-gray-700 border border-gray-700
-                         rounded-lg transition-colors"
-            >
-              Close
-            </button>
-            <button
-              onClick={onCopy}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium
-                         rounded-lg transition-colors
-                         bg-amber-500 hover:bg-amber-400 text-gray-900"
-            >
-              {copied
-                ? <><CheckSmallIcon className="text-gray-900" /> Copied!</>
-                : <><CopyIcon /> Copy embed code</>
-              }
-            </button>
-          </div>
-        </div>
-
       </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// AnalyticsSections
-//
-// Houses the three analytics areas built progressively across Steps 12–14.
-//   Step 12 — InsightsSection (primary insight card + list)  ← live
-//   Step 13 — HeatmapSection (engagement heatmap)            ← live
-//   Step 14 — ViewerStoriesSection (4 narrative story cards) ← live
+// PlayerSettingsView — full player settings panel
 // ─────────────────────────────────────────────────────────────────────────
 
-function AnalyticsSections({ video, user }) {
-  return (
-    <div className="mt-10 flex flex-col gap-10">
-      <div className="h-px bg-gray-800" />
-
-      {/* ── Insights (Step 12 — live) ─────────────────────────────── */}
-      <InsightsSection
-        videoId={video?.id}
-        insightStatus={video?.insight_status}
-        userPlan={user?.plan}
-      />
-
-      {/* ── Heatmap (Step 13 — live) ─────────────────────────────── */}
-      <HeatmapSection
-        videoId={video?.id}
-        video={video}
-        userPlan={user?.plan}
-      />
-
-      {/* ── Viewer Stories (Step 14 — live) ─────────────────────── */}
-      <ViewerStoriesSection
-        videoId={video?.id}
-        userPlan={user?.plan}
-      />
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// PlayerSettingsSection — per-video player controls toggles
-// ─────────────────────────────────────────────────────────────────────────
-
-const DEFAULTS = {
+const PLAYER_DEFAULTS = {
   autoplay: false, autoplay_muted: true,
   show_seek_bar: true, show_play_pause_btn: true, show_playback_speed: true,
   show_fullscreen_btn: true, show_volume_control: true,
   resume_playback: false, loop: false,
 };
 
-function PlayerSettingsSection({ videoId }) {
-  const { showToast } = useToast();
-  const [settings, setSettings] = React.useState(null);
-  const [saving,   setSaving]   = React.useState(false);
-  const [open,     setOpen]     = React.useState(false);
+const PLAYER_ROWS = [
+  { key: 'autoplay',            label: 'Autoplay',            desc: 'Start playing when the page loads' },
+  { key: 'show_play_pause_btn', label: 'Play / Pause Button', desc: 'Show the play and pause button in the control bar' },
+  { key: 'show_seek_bar',       label: 'Seek Bar',            desc: 'Allow viewers to scrub through the video' },
+  { key: 'show_volume_control', label: 'Volume Control',      desc: 'Show volume slider and mute toggle' },
+  { key: 'show_playback_speed', label: 'Playback Speed',      desc: 'Let viewers choose 0.5×, 1×, 1.25×, 1.5×, 2×' },
+  { key: 'show_fullscreen_btn', label: 'Fullscreen Button',   desc: 'Show the fullscreen toggle' },
+  { key: 'resume_playback',     label: 'Resume Playback',     desc: 'Remember where viewers left off last time' },
+  { key: 'loop',                label: 'Loop',                desc: 'Replay the video automatically when it ends' },
+];
 
-  React.useEffect(() => {
-    if (!videoId || !open) return;
+function PlayerSettingsView({ videoId }) {
+  const { showToast } = useToast();
+  const [settings, setSettings] = useState(null);
+  const [saving,   setSaving]   = useState(false);
+
+  useEffect(() => {
+    if (!videoId) return;
     api.get(`/videos/${videoId}/player-settings`)
       .then(r => setSettings(r.data.settings))
-      .catch(() => setSettings({ ...DEFAULTS }));
-  }, [videoId, open]);
+      .catch(() => setSettings({ ...PLAYER_DEFAULTS }));
+  }, [videoId]);
 
   async function toggle(key) {
     const prev = { ...settings };
     const next = { ...settings, [key]: !settings[key] };
-    setSettings(next);   // optimistic update
+    setSettings(next);
     setSaving(true);
     try {
       const { data } = await api.patch(`/videos/${videoId}/player-settings`, next);
       setSettings(data.settings);
       showToast('Player settings saved');
     } catch (err) {
-      setSettings(prev);  // revert on error
+      setSettings(prev);
       showToast(err.response?.data?.message ?? 'Failed to save settings', 'error');
     } finally {
       setSaving(false);
     }
   }
 
-  const ROWS = [
-    { key: 'autoplay',             label: 'Autoplay',            desc: 'Start playing when the page loads' },
-    { key: 'show_play_pause_btn',  label: 'Play / Pause Button', desc: 'Show the play and pause button in the control bar' },
-    { key: 'show_seek_bar',        label: 'Seek Bar',            desc: 'Allow viewers to scrub through the video' },
-    { key: 'show_volume_control',  label: 'Volume Control',      desc: 'Show volume slider and mute toggle in the control bar' },
-    { key: 'show_playback_speed',  label: 'Playback Speed',      desc: 'Let viewers choose 0.5×, 1×, 1.25×, 1.5×, 2×' },
-    { key: 'show_fullscreen_btn',  label: 'Fullscreen Button',   desc: 'Show the fullscreen toggle' },
-    { key: 'resume_playback',      label: 'Resume Playback',     desc: 'Remember where viewers left off last time' },
-    { key: 'loop',                 label: 'Loop',                desc: 'Replay the video automatically when it ends' },
-  ];
-
   return (
-    <div className="mt-8">
-      <div className="h-px bg-gray-800 mb-8" />
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-2 text-sm font-semibold text-gray-300 hover:text-gray-100 transition-colors mb-4"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500">
-          <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-        </svg>
-        Player Settings
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`ml-1 transition-transform ${open ? 'rotate-180' : ''}`}>
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-        {saving && <span className="ml-2 w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />}
-      </button>
-
-      {open && (
-        <div className="bg-gray-800 border border-gray-700 rounded-xl divide-y divide-gray-700/60">
-          {settings === null ? (
-            <div className="px-5 py-6 flex items-center gap-2 text-gray-500 text-sm">
-              <span className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-              Loading settings…
-            </div>
-          ) : (
-            ROWS.map(({ key, label, desc }) => (
-              <div key={key} className="flex items-center justify-between px-5 py-3.5">
-                <div>
-                  <p className="text-sm font-medium text-gray-200">{label}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
-                </div>
-                <button
-                  onClick={() => toggle(key)}
-                  className={`relative inline-flex flex-shrink-0 h-5 w-9 rounded-full transition-colors duration-200
-                    ${settings[key] ? 'bg-amber-500' : 'bg-gray-600'}`}
-                  role="switch"
-                  aria-checked={settings[key]}
-                >
-                  <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 mt-0.5
-                    ${settings[key] ? 'translate-x-4' : 'translate-x-0.5'}`}
-                  />
-                </button>
-              </div>
-            ))
-          )}
+    <div className="px-6 py-6 min-w-0">
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
+            Settings
+          </p>
+          <h2 className="text-2xl font-bold text-gray-50">Player Settings</h2>
+          <p className="text-xs text-gray-600 mt-1">
+            Control how the embedded player looks and behaves.
+          </p>
         </div>
-      )}
+        {saving && (
+          <div className="flex items-center gap-1.5 text-xs text-amber-400">
+            <span className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            Saving…
+          </div>
+        )}
+      </div>
+
+      <div className="max-w-2xl bg-gray-800/40 border border-gray-700/50 rounded-xl divide-y divide-gray-700/40">
+        {settings === null ? (
+          <div className="px-5 py-6 flex items-center gap-2 text-gray-500 text-sm">
+            <span className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            Loading settings…
+          </div>
+        ) : (
+          PLAYER_ROWS.map(({ key, label, desc }) => (
+            <div key={key} className="flex items-center justify-between px-5 py-4">
+              <div>
+                <p className="text-sm font-medium text-gray-200">{label}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+              </div>
+              <button
+                onClick={() => toggle(key)}
+                className={`relative inline-flex flex-shrink-0 h-5 w-9 rounded-full transition-colors duration-200 ml-4
+                  ${settings[key] ? 'bg-amber-500' : 'bg-gray-600'}`}
+                role="switch"
+                aria-checked={settings[key]}
+              >
+                <span
+                  className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 mt-0.5
+                    ${settings[key] ? 'translate-x-4' : 'translate-x-0.5'}`}
+                />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Shared UI pieces
+// Icons
 // ─────────────────────────────────────────────────────────────────────────
-
-function PlanBadge({ plan, displayName }) {
-  const classes = {
-    free          : 'bg-gray-700/60 text-gray-300 border-gray-600',
-    starter       : 'bg-amber-500/10 text-amber-300 border-amber-500/30',
-    pro           : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30',
-    admin_lifetime: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
-  };
-  return (
-    <span className={`hidden sm:inline px-2 py-0.5 text-xs font-medium border rounded-full ${classes[plan] ?? classes.free}`}>
-      {displayName ?? plan}
-    </span>
-  );
-}
-
-// ── Inline SVG icons ─────────────────────────────────────────────────────
-
-function BackIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    >
-      <line x1="19" y1="12" x2="5" y2="12" />
-      <polyline points="12 19 5 12 12 5" />
-    </svg>
-  );
-}
 
 function CopyIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    >
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </svg>
@@ -836,8 +682,7 @@ function CheckSmallIcon({ className = '' }) {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-      className={className}
-    >
+      className={className}>
       <polyline points="20 6 9 17 4 12" />
     </svg>
   );
@@ -846,21 +691,9 @@ function CheckSmallIcon({ className = '' }) {
 function CodeIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    >
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="16 18 22 12 16 6" />
       <polyline points="8 6 2 12 8 18" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    >
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   );
 }
@@ -876,7 +709,7 @@ function RefreshIcon({ spinning = false }) {
       <polyline points="1 20 1 14 7 14" />
       <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
       {spinning && (
-        <style>{`@keyframes vpSpin { from { transform-origin: center; transform: rotate(0deg); } to { transform-origin: center; transform: rotate(360deg); } }`}</style>
+        <style>{`@keyframes vpSpin{from{transform-origin:center;transform:rotate(0deg)}to{transform-origin:center;transform:rotate(360deg)}}`}</style>
       )}
     </svg>
   );
@@ -885,8 +718,7 @@ function RefreshIcon({ spinning = false }) {
 function SettingsNavIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
-    >
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
