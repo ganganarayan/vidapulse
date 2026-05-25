@@ -110,28 +110,41 @@ function generateDefaultTitle(rawUrl) {
 router.get('/', requireAuth, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id,
-              title,
-              description,
-              original_url,
-              source_type,
-              thumbnail_url,
-              duration_seconds,
-              total_plays,
-              unique_viewers,
-              avg_watch_pct,
-              processing_status,
-              insight_status,
-              story_status,
-              primary_drop_off_second,
-              primary_drop_off_pct,
-              created_at,
-              updated_at
-       FROM   videos
-       WHERE  user_id    = $1
-         AND  is_active  = TRUE
-         AND  is_archived = FALSE
-       ORDER  BY created_at DESC
+      `SELECT v.id,
+              v.title,
+              v.description,
+              v.original_url,
+              v.source_type,
+              v.thumbnail_url,
+              v.duration_seconds,
+              v.total_plays,
+              v.unique_viewers,
+              v.avg_watch_pct,
+              v.processing_status,
+              v.insight_status,
+              v.story_status,
+              v.primary_drop_off_second,
+              v.primary_drop_off_pct,
+              v.created_at,
+              v.updated_at,
+              COALESCE(vstats.total_views,    0)  AS total_views,
+              COALESCE(vstats.unique_views,   0)  AS unique_views,
+              COALESCE(vstats.total_viewers,  0)  AS total_viewers,
+              COALESCE(vstats.uniq_viewers,   0)  AS unique_session_viewers
+       FROM   videos v
+       LEFT JOIN LATERAL (
+         SELECT
+           COUNT(*)                                                         AS total_views,
+           COUNT(DISTINCT viewer_id)                                        AS unique_views,
+           COUNT(*) FILTER (WHERE play_count > 0)                          AS total_viewers,
+           COUNT(DISTINCT viewer_id) FILTER (WHERE play_count > 0)         AS uniq_viewers
+         FROM analytics_sessions
+         WHERE video_id = v.id
+       ) vstats ON TRUE
+       WHERE  v.user_id    = $1
+         AND  v.is_active  = TRUE
+         AND  v.is_archived = FALSE
+       ORDER  BY v.created_at DESC
        LIMIT  100`,
       [req.user.id]
     );

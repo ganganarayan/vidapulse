@@ -174,12 +174,12 @@ function VideoCard({ video, onClick, onTitleUpdate }) {
   const [showEdit,    setShowEdit]    = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
 
-  const sourceLabel = SOURCE_LABELS[video.source_type] ?? 'Video';
-  const duration    = fmtDuration(video.duration_seconds);
-  const avgWatch    = video.avg_watch_pct != null
-    ? `${parseFloat(video.avg_watch_pct).toFixed(0)}%` : '—';
-  const playRate    = video.play_rate_pct != null
-    ? `${parseFloat(video.play_rate_pct).toFixed(0)}%` : '0%';
+  const sourceLabel    = SOURCE_LABELS[video.source_type] ?? 'Video';
+  const duration       = fmtDuration(video.duration_seconds);
+  const totalViews     = (video.total_views    ?? 0).toLocaleString();
+  const uniqueViews    = (video.unique_views   ?? 0).toLocaleString();
+  const totalViewers   = (video.total_viewers  ?? 0).toLocaleString();
+  const uniqueViewers  = (video.unique_session_viewers ?? video.unique_viewers ?? 0).toLocaleString();
 
   function handleEmbedCopy(e) {
     e.stopPropagation();
@@ -221,23 +221,21 @@ function VideoCard({ video, onClick, onTitleUpdate }) {
             <p className="font-semibold text-gray-100 truncate">{video.title}</p>
             <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
               <span>{sourceLabel}</span>
-              <span className="text-gray-600">·</span>
-              <span>{avgWatch} avg watch</span>
               {/* Views & Viewers shown as stat columns on sm+; show inline on xs only */}
               <span className="sm:hidden text-gray-600">·</span>
-              <span className="sm:hidden">{video.total_plays ?? 0} plays</span>
+              <span className="sm:hidden">{totalViews} views</span>
               <span className="sm:hidden text-gray-600">·</span>
-              <span className="sm:hidden">{video.unique_viewers ?? 0} viewers</span>
+              <span className="sm:hidden">{uniqueViewers} unique viewers</span>
             </p>
           </button>
 
           {/* Metric columns */}
           <div className="hidden sm:flex items-center gap-5 flex-shrink-0">
-            <StatCol label="Views"   value={(video.total_plays   ?? 0).toLocaleString()} />
-            <StatCol label="Viewers" value={(video.unique_viewers ?? 0).toLocaleString()} />
+            <StatCol label="Total Views"    value={totalViews}   />
+            <StatCol label="Unique Views"   value={uniqueViews}  />
             <div className="hidden lg:block w-px h-8 bg-gray-700" />
-            <StatCol label="Play Rate"  value={playRate}  className="hidden lg:block" />
-            <StatCol label="Engagement" value={avgWatch}  className="hidden lg:block" />
+            <StatCol label="Total Viewers"  value={totalViewers}  className="hidden lg:block" />
+            <StatCol label="Unique Viewers" value={uniqueViewers} className="hidden lg:block" />
           </div>
 
           {/* Action icons */}

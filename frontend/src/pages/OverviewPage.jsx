@@ -70,19 +70,19 @@ export default function OverviewPage() {
 
             {/* ── Stat cards ─────────────────────────────────────── */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard label="Total Videos"   value={data.total_videos.toLocaleString()} icon={<VideoCardIcon />} />
-              <StatCard label="Total Plays"    value={data.total_plays.toLocaleString()}  icon={<PlaysCardIcon />} />
-              <StatCard label="Total Viewers"  value={data.total_viewers.toLocaleString()} icon={<ViewersCardIcon />} />
-              <StatCard label="Avg Watch"      value={`${data.avg_watch_pct}%`}           icon={<WatchCardIcon />} />
+              <StatCard label="Total Views"    value={(data.total_views    ?? 0).toLocaleString()} icon={<PlaysCardIcon />} />
+              <StatCard label="Unique Views"   value={(data.unique_views   ?? 0).toLocaleString()} icon={<ViewersCardIcon />} />
+              <StatCard label="Total Viewers"  value={(data.total_viewers  ?? 0).toLocaleString()} icon={<WatchCardIcon />} />
+              <StatCard label="Unique Viewers" value={(data.unique_viewers ?? 0).toLocaleString()} icon={<VideoCardIcon />} />
             </div>
 
             {/* Watch time highlight */}
             {data.total_watch_seconds > 0 && (
               <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl px-5 py-4 flex items-center gap-4">
                 <ClockBigIcon />
-                <div>
+                <div className="flex-1">
                   <p className="text-2xl font-bold text-amber-400">{fmtWatchTime(data.total_watch_seconds)}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">total watch time across all videos</p>
+                  <p className="text-xs text-gray-400 mt-0.5">total watch time across {data.total_videos} {data.total_videos === 1 ? 'video' : 'videos'}</p>
                 </div>
               </div>
             )}
@@ -197,9 +197,9 @@ function TopVideoRow({ rank, video, onClick }) {
       </div>
 
       <div className="flex items-center gap-5 flex-shrink-0">
-        <MiniStat label="Plays"   value={video.total_plays?.toLocaleString() ?? '0'} />
-        <MiniStat label="Viewers" value={video.unique_viewers?.toLocaleString() ?? '0'} />
-        <MiniStat label="Avg Watch" value={`${parseFloat(video.avg_watch_pct ?? 0).toFixed(0)}%`} />
+        <MiniStat label="Views"          value={(video.total_plays    ?? 0).toLocaleString()} />
+        <MiniStat label="Unique Viewers" value={(video.unique_viewers ?? 0).toLocaleString()} />
+        <MiniStat label="Avg Watch"      value={`${parseFloat(video.avg_watch_pct ?? 0).toFixed(0)}%`} />
       </div>
 
       <ChevronRightIcon />

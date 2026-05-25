@@ -312,46 +312,72 @@ router.put('/preferences', requireAuth, async (req, res, next) => {
 // GET /api/user/overview
 //
 // Aggregate stats across all of the authenticated user's active videos.
+// Four engagement metrics computed from analytics_sessions:
+//   total_views    — all page/session loads (including non-players)
+//   unique_views   — distinct viewers (any visit)
+//   total_viewers  — sessions where the video was actually played
+//   unique_viewers — distinct viewers who played
 // Used by the Overview dashboard page.
 // ─────────────────────────────────────────────────────────────────────────
 
 router.get('/overview', requireAuth, async (req, res, next) => {
   try {
-    // Aggregate totals
-    const { rows: [agg] } = await pool.query(
-      `SELECT
-         COUNT(*)                                                          AS total_videos,
-         COALESCE(SUM(total_plays), 0)                                    AS total_plays,
-         COALESCE(SUM(unique_viewers), 0)                                 AS total_viewers,
-         COALESCE(
-           SUM(avg_watch_pct * total_plays) / NULLIF(SUM(total_plays), 0),
-           0
-         )                                                                AS avg_watch_pct,
-         COALESCE(SUM(total_watch_time_seconds), 0)                       AS total_watch_seconds
-       FROM videos
-       WHERE user_id = $1 AND is_active = TRUE`,
+    // Total active video count
+    const { rows: [vidRow] } = await pool.query(
+      `SELECT COUNT(*) AS total_videos
+       FROM   videos
+       WHERE  user_id = $1 AND is_active = TRUE`,
       [req.user.id]
     );
 
-    // Top 5 videos by plays
+    // Session-level engagement aggregates across all of the user's active videos
+    const { rows: [agg] } = await pool.query(
+      `SELECT
+         COUNT(s.id)                                                       AS total_views,
+         COUNT(DISTINCT s.viewer_id)                                       AS unique_views,
+         COUNT(s.id)    FILTER (WHERE s.play_count > 0)                   AS total_viewers,
+         COUNT(DISTINCT s.viewer_id) FILTER (WHERE s.play_count > 0)      AS unique_viewers,
+         COALESCE(SUM(s.total_watch_seconds), 0)                           AS total_watch_seconds
+       FROM   analytics_sessions s
+       JOIN   videos v ON s.video_id = v.id
+       WHERE  v.user_id = $1 AND v.is_active = TRUE`,
+      [req.user.id]
+    );
+
+    // Top 5 videos by play sessions (most engaged)
     const { rows: topVideos } = await pool.query(
-      `SELECT id, title, total_plays, unique_viewers,
-              ROUND(avg_watch_pct::numeric, 1) AS avg_watch_pct,
-              thumbnail_url, source_type
-       FROM   videos
-       WHERE  user_id = $1 AND is_active = TRUE
-       ORDER  BY total_plays DESC
+      `SELECT v.id,
+              v.title,
+              v.thumbnail_url,
+              v.source_type,
+              COALESCE(vstats.total_plays, 0)         AS total_plays,
+              COALESCE(vstats.unique_viewers, 0)       AS unique_viewers,
+              COALESCE(vstats.avg_watch_pct, 0)        AS avg_watch_pct
+       FROM   videos v
+       LEFT JOIN LATERAL (
+         SELECT
+           COUNT(*)                                                  AS total_plays,
+           COUNT(DISTINCT viewer_id)                                 AS unique_viewers,
+           ROUND(
+             (AVG(max_watch_pct) FILTER (WHERE play_count > 0))::numeric, 1
+           )                                                         AS avg_watch_pct
+         FROM analytics_sessions
+         WHERE video_id = v.id
+       ) vstats ON TRUE
+       WHERE  v.user_id = $1 AND v.is_active = TRUE
+       ORDER  BY vstats.total_plays DESC NULLS LAST
        LIMIT  5`,
       [req.user.id]
     );
 
     return res.json({
-      total_videos       : parseInt(agg.total_videos, 10),
-      total_plays        : parseInt(agg.total_plays, 10),
-      total_viewers      : parseInt(agg.total_viewers, 10),
-      avg_watch_pct      : parseFloat(parseFloat(agg.avg_watch_pct).toFixed(1)),
-      total_watch_seconds: parseInt(agg.total_watch_seconds, 10),
-      top_videos         : topVideos,
+      total_videos        : parseInt(vidRow.total_videos,    10),
+      total_views         : parseInt(agg.total_views,        10),
+      unique_views        : parseInt(agg.unique_views,       10),
+      total_viewers       : parseInt(agg.total_viewers,      10),
+      unique_viewers      : parseInt(agg.unique_viewers,     10),
+      total_watch_seconds : parseFloat(agg.total_watch_seconds),
+      top_videos          : topVideos,
     });
   } catch (err) {
     next(err);

@@ -42,29 +42,32 @@ const COMPLETE_DELAY = 2700;
 // ─────────────────────────────────────────────────────────────────────────
 
 const VIEW_LABELS = {
-  overview   : 'Overview',
-  plays      : 'Total Plays',
-  viewers    : 'Unique Viewers',
-  avg_watch  : 'Avg. Watch %',
-  play_rate  : 'Play Rate',
-  completion : 'Completion Rate',
-  dropoff    : 'Drop-off Rate',
-  watch_time : 'Watch Time',
-  rewatches  : 'Re-watches',
-  heatmap    : 'Engagement Heatmap',
-  stories    : 'Viewer Stories',
-  insights   : 'Insights',
-  geography  : 'Geography',
-  devices    : 'Devices',
-  browsers   : 'Browsers',
-  embed      : 'Share & Embed',
-  player     : 'Player Settings',
+  overview      : 'Overview',
+  plays         : 'Total Views',
+  unique_views  : 'Unique Views',
+  total_viewers : 'Total Viewers',
+  viewers       : 'Unique Viewers',
+  avg_watch     : 'Avg. Watch %',
+  play_rate     : 'Play Rate',
+  completion    : 'Completion Rate',
+  dropoff       : 'Drop-off Rate',
+  watch_time    : 'Watch Time',
+  rewatches     : 'Re-watches',
+  heatmap       : 'Engagement Heatmap',
+  stories       : 'Viewer Stories',
+  insights      : 'Insights',
+  geography     : 'Geography',
+  devices       : 'Devices',
+  browsers      : 'Browsers',
+  embed         : 'Share & Embed',
+  player        : 'Player Settings',
 };
 
 // Metric views that map to the time-series chart
 const METRIC_VIEWS = new Set([
-  'plays', 'viewers', 'avg_watch', 'play_rate',
-  'completion', 'dropoff', 'watch_time', 'rewatches',
+  'plays', 'unique_views', 'total_viewers', 'viewers',
+  'avg_watch', 'play_rate', 'completion', 'dropoff',
+  'watch_time', 'rewatches',
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────
