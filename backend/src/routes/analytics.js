@@ -570,18 +570,64 @@ router.post('/ping', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
+// GET /api/analytics/cta/:videoId
+//
+// CTA tracking link — no JavaScript required on the subscriber's page.
+//
+// The subscriber sets their CTA button's href/URL to:
+//   https://app.vidapulse.in/api/analytics/cta/VIDEO_ID?to=https://their-page.com
+//
+// This endpoint:
+//   1. Validates the video exists
+//   2. Records a cta_click event (session_id = NULL — no player session)
+//   3. 302-redirects the visitor to the destination URL
+//
+// Works everywhere: page builders, email tools, plain HTML — no JS needed.
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get('/cta/:videoId', async (req, res) => {
+  const { videoId } = req.params;
+  const dest = req.query.to ?? '';
+
+  // Validate destination URL — must be http:// or https://
+  const safeDest = (dest.startsWith('http://') || dest.startsWith('https://'))
+    ? dest.slice(0, 2000) : null;
+
+  if (!safeDest) {
+    return res.status(400).send('Missing or invalid "to" destination URL. Usage: /api/analytics/cta/VIDEO_ID?to=https://your-page.com');
+  }
+
+  // Validate videoId is UUID-shaped
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(videoId)) {
+    return res.redirect(safeDest);
+  }
+
+  // Redirect first (< 50 ms) — tracking is fire-and-forget
+  res.redirect(302, safeDest);
+
+  // Background: record the click
+  pool.query(
+    `INSERT INTO analytics_events
+       (session_id, video_id, event_type, occurred_at)
+     SELECT NULL, id, 'cta_click', NOW()
+     FROM   videos
+     WHERE  id = $1 AND is_active = TRUE`,
+    [videoId]
+  ).catch(err => logger.warn(`[analytics/cta] insert failed: ${err.message}`));
+});
+
+// ─────────────────────────────────────────────────────────────────────────
 // POST /api/analytics/event
 //
-// Accepts discrete events from embed pages that fall outside the normal
-// heartbeat flow — currently: cta_click.
-//
-// This endpoint is called by the subscriber's landing page JS:
-//   window.VidaPulse.trackCTA(sessionId, videoId, position?)
+// Accepts discrete events from embed pages — currently: cta_click.
+// session_id is optional; when provided the click is linked to a player
+// session (postMessage approach). When absent (redirect approach), the
+// event is still recorded against the video.
 //
 // Body:
-//   session_id  UUID   — from the session started by the embed player
-//   video_id    UUID
+//   video_id    UUID   — required
 //   event_type  string — currently only 'cta_click'
+//   session_id  UUID   — optional (from the iframe postMessage)
 //   position    number — optional playback position in seconds
 //
 // Response: { ok: true }  (always — same as /ping)
@@ -591,8 +637,7 @@ router.post('/event', async (req, res) => {
   const { session_id, video_id, event_type, position } = req.body ?? {};
   res.json({ ok: true }); // always respond 200 quickly
 
-  // Only accept cta_click for now
-  if (!session_id || !video_id || event_type !== 'cta_click') {
+  if (!video_id || event_type !== 'cta_click') {
     if (event_type && event_type !== 'cta_click') {
       logger.warn(`[analytics/event] unsupported event_type: ${event_type}`);
     }
@@ -600,20 +645,32 @@ router.post('/event', async (req, res) => {
   }
 
   try {
-    const safePosition = position !== null && position !== undefined
+    const safePosition = (position !== null && position !== undefined)
       ? (parseFloat(position) || null) : null;
 
-    // Only insert if the session actually belongs to this video
-    await pool.query(
-      `INSERT INTO analytics_events
-         (session_id, video_id, event_type, video_position, occurred_at)
-       SELECT $1, $2, 'cta_click', $3, NOW()
-       WHERE EXISTS (
-         SELECT 1 FROM analytics_sessions
-         WHERE id = $1 AND video_id = $2
-       )`,
-      [session_id, video_id, safePosition]
-    );
+    if (session_id) {
+      // Session-linked click: verify session belongs to this video
+      await pool.query(
+        `INSERT INTO analytics_events
+           (session_id, video_id, event_type, video_position, occurred_at)
+         SELECT $1, $2, 'cta_click', $3, NOW()
+         WHERE EXISTS (
+           SELECT 1 FROM analytics_sessions
+           WHERE id = $1 AND video_id = $2
+         )`,
+        [session_id, video_id, safePosition]
+      );
+    } else {
+      // Session-less click: verify video exists
+      await pool.query(
+        `INSERT INTO analytics_events
+           (session_id, video_id, event_type, video_position, occurred_at)
+         SELECT NULL, id, 'cta_click', $2, NOW()
+         FROM   videos
+         WHERE  id = $1 AND is_active = TRUE`,
+        [video_id, safePosition]
+      );
+    }
   } catch (err) {
     logger.warn(`[analytics/event] cta_click insert failed: ${err.message}`);
   }

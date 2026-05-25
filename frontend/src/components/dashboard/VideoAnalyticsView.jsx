@@ -489,11 +489,16 @@ function generateEmbedSnippet(videoId, origin) {
 function EmbedView({ video }) {
   const [linkCopied,  setLinkCopied]  = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
+  const [ctaCopied,   setCtaCopied]   = useState(false);
+  const [ctaDest,     setCtaDest]     = useState('');
 
-  const snippet = generateEmbedSnippet(
-    video?.id ?? '',
-    typeof window !== 'undefined' ? window.location.origin : ''
-  );
+  const origin  = typeof window !== 'undefined' ? window.location.origin : '';
+  const snippet = generateEmbedSnippet(video?.id ?? '', origin);
+
+  // Build the CTA tracking URL live as the user types
+  const ctaTrackingUrl = (video?.id && ctaDest.match(/^https?:\/\/.+/))
+    ? `${origin}/api/analytics/cta/${video.id}?to=${encodeURIComponent(ctaDest)}`
+    : '';
 
   function copyLink() {
     navigator.clipboard.writeText(video?.original_url ?? '')
@@ -503,6 +508,12 @@ function EmbedView({ video }) {
   function copyEmbed() {
     navigator.clipboard.writeText(snippet)
       .then(() => { setEmbedCopied(true); setTimeout(() => setEmbedCopied(false), 3000); })
+      .catch(() => {});
+  }
+  function copyCta() {
+    if (!ctaTrackingUrl) return;
+    navigator.clipboard.writeText(ctaTrackingUrl)
+      .then(() => { setCtaCopied(true); setTimeout(() => setCtaCopied(false), 2500); })
       .catch(() => {});
   }
 
@@ -560,6 +571,75 @@ function EmbedView({ video }) {
             }
           </button>
         </div>
+
+        {/* CTA Tracking Link */}
+        <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-5">
+          <div className="flex items-start gap-3 mb-1">
+            <div>
+              <p className="text-sm font-semibold text-gray-200">CTA Tracking Link</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Track clicks on your call-to-action button — no code required.
+                Works in all page builders, email tools, and plain HTML.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 bg-amber-500/5 border border-amber-500/15 rounded-lg px-4 py-3 mb-4 flex items-start gap-2">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+              className="text-amber-400/70 mt-0.5 flex-shrink-0">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="16" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Instead of linking your CTA button directly to your destination page, use the tracking link below.
+              VidaPulse records the click and instantly redirects your visitor — they won't notice any difference.
+            </p>
+          </div>
+
+          <label className="block text-xs font-semibold text-gray-300 mb-1.5">
+            Where should visitors go after clicking?
+          </label>
+          <input
+            type="url"
+            value={ctaDest}
+            onChange={e => { setCtaDest(e.target.value); setCtaCopied(false); }}
+            placeholder="https://your-checkout-page.com"
+            className="w-full bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2
+                       text-sm text-gray-200 placeholder-gray-600
+                       focus:outline-none focus:ring-2 focus:ring-amber-500/40 mb-3"
+          />
+
+          {ctaTrackingUrl ? (
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 mb-1.5">
+                Your CTA tracking link — set this as your button's URL
+              </label>
+              <div className="flex items-start gap-2">
+                <code className="flex-1 bg-gray-950 border border-gray-700 rounded-lg px-3 py-2
+                                  text-[11px] text-amber-300 font-mono break-all leading-relaxed">
+                  {ctaTrackingUrl}
+                </code>
+                <button
+                  onClick={copyCta}
+                  className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-400
+                             text-gray-900 text-xs font-semibold rounded-lg transition-colors mt-0"
+                >
+                  {ctaCopied ? <CheckSmallIcon className="text-gray-900" /> : <CopyIcon />}
+                  {ctaCopied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-500 mt-2">
+                Paste this URL as the href/link on your CTA button. Enable the{' '}
+                <strong className="text-gray-400">CTA Click</strong> alert in Alerts to be notified when it's clicked.
+              </p>
+            </div>
+          ) : ctaDest ? (
+            <p className="text-xs text-red-400">Destination must be a valid URL starting with https://</p>
+          ) : null}
+        </div>
+
       </div>
     </div>
   );

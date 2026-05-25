@@ -99,8 +99,8 @@ router.get('/events', requireAuth, async (req, res, next) => {
          ae.video_position,
          ae.session_id
        FROM   analytics_events ae
-       JOIN   analytics_sessions s ON ae.session_id = s.id
-       JOIN   videos v             ON ae.video_id   = v.id
+       LEFT   JOIN analytics_sessions s ON ae.session_id = s.id
+       JOIN   videos v                  ON ae.video_id   = v.id
        WHERE  v.user_id = $1
        ORDER  BY ae.occurred_at DESC
        LIMIT  50000`,

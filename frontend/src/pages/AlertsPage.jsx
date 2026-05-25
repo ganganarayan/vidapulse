@@ -75,44 +75,7 @@ const DEFAULTS = {
   cta_click       : false,
 };
 
-// ── CTA tracking snippets ──────────────────────────────────────────────────
-
-const CTA_BUTTON_SNIPPET = `<button data-vp-cta>Get Instant Access</button>`;
-
-const CTA_SCRIPT_SNIPPET =
-`<script>
-(function(){
-  var _vps = null;
-  /* Auto-detect API URL from the VidaPulse embed iframe on this page */
-  var _iframe = document.querySelector('iframe[src*="/embed/"]');
-  var _api = _iframe
-    ? _iframe.src.replace(/\\/embed\\/.*/, '/api/analytics/event')
-    : 'https://app.vidapulse.in/api/analytics/event';
-
-  /* Capture session ID posted by the iframe player */
-  window.addEventListener('message', function(e) {
-    if (e.data && e.data.type === 'vidapulse_session') {
-      _vps = e.data;
-    }
-  });
-
-  /* Fire cta_click whenever any [data-vp-cta] element is clicked */
-  document.addEventListener('click', function(e) {
-    var btn = e.target.closest('[data-vp-cta]');
-    if (btn && _vps) {
-      fetch(_api, {
-        method : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body   : JSON.stringify({
-          session_id : _vps.session_id,
-          video_id   : _vps.video_id,
-          event_type : 'cta_click'
-        })
-      }).catch(function() {});
-    }
-  });
-})();
-<\/script>`;
+// (CTA tracking uses redirect links — no code snippets needed)
 
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -256,99 +219,81 @@ export default function AlertsPage() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// CtaSetupGuide — step-by-step instructions for wiring CTA click tracking
+// CtaSetupGuide — tracking link approach (no code required)
 // ─────────────────────────────────────────────────────────────────────────
 
 function CtaSetupGuide() {
-  const [copiedBtn,  setCopiedBtn]  = useState(false);
-  const [copiedScript, setCopiedScript] = useState(false);
-
-  function copy(text, setCopied) {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }).catch(() => {});
-  }
-
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
 
-      {/* Context banner */}
+      {/* What is a tracking link */}
       <div className="flex items-start gap-3 bg-amber-500/5 border border-amber-500/15 rounded-lg px-4 py-3">
         <InfoIcon />
         <div>
-          <p className="text-xs font-semibold text-amber-300 mb-0.5">Two separate pieces of code — same landing page</p>
+          <p className="text-xs font-semibold text-amber-300 mb-0.5">No code required — just change a URL</p>
           <p className="text-xs text-gray-400 leading-relaxed">
-            Your landing page already has the VidaPulse <strong className="text-gray-300">embed iframe</strong>. CTA tracking
-            needs one additional attribute on your button and a small <strong className="text-gray-300">tracking script</strong> added
-            as a separate <code className="text-amber-400/80 text-[11px]">&lt;script&gt;</code> tag — <em>not</em> inside the iframe code.
+            Instead of linking your CTA button directly to your destination page,
+            you use a <strong className="text-gray-300">VidaPulse tracking link</strong> as the button URL.
+            VidaPulse records the click and instantly redirects your visitor.
+            Works in every page builder, funnel tool, and plain HTML — no JavaScript, no code.
           </p>
         </div>
       </div>
 
-      {/* Step 1 */}
-      <div>
-        <p className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-2 flex items-center gap-2">
+      {/* Steps */}
+      <div className="space-y-3">
+        <div className="flex items-start gap-3">
           <StepBadge n="1" />
-          Add <code className="font-mono text-amber-400 text-[11px] bg-amber-500/10 px-1.5 py-0.5 rounded">data-vp-cta</code> to your CTA button
-        </p>
-        <p className="text-xs text-gray-400 mb-2 leading-relaxed">
-          Add the <code className="text-amber-400/80 text-[11px]">data-vp-cta</code> attribute to any button or link you want
-          to track. No other changes to your existing button are needed.
-        </p>
-        <CodeBlock code={CTA_BUTTON_SNIPPET} copied={copiedBtn} onCopy={() => copy(CTA_BUTTON_SNIPPET, setCopiedBtn)} />
-      </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-300">Open the video you want to track</p>
+            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+              Go to your video dashboard and click through to the video's analytics page.
+            </p>
+          </div>
+        </div>
 
-      {/* Step 2 */}
-      <div>
-        <p className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-2 flex items-center gap-2">
+        <div className="flex items-start gap-3">
           <StepBadge n="2" />
-          Add the tracking script to your landing page
-        </p>
-        <p className="text-xs text-gray-400 mb-2 leading-relaxed">
-          Paste this <code className="text-amber-400/80 text-[11px]">&lt;script&gt;</code> block anywhere on the same page
-          as your embed iframe — just before the closing <code className="text-amber-400/80 text-[11px]">&lt;/body&gt;</code> tag is ideal.
-          <strong className="text-gray-300"> Do not paste it inside the iframe embed code.</strong>
-        </p>
-        <CodeBlock code={CTA_SCRIPT_SNIPPET} copied={copiedScript} onCopy={() => copy(CTA_SCRIPT_SNIPPET, setCopiedScript)} tall />
+          <div>
+            <p className="text-xs font-semibold text-gray-300">Open the Share &amp; Embed tab</p>
+            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+              Click <strong className="text-gray-400">Share &amp; Embed</strong> in the left sidebar of that video.
+              Scroll down to the <strong className="text-gray-400">CTA Tracking Link</strong> section.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3">
+          <StepBadge n="3" />
+          <div>
+            <p className="text-xs font-semibold text-gray-300">Enter your destination URL and copy the tracking link</p>
+            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+              Type the page you want visitors to land on after clicking
+              (e.g. your checkout or sign-up page). VidaPulse generates the tracking link instantly.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3">
+          <StepBadge n="4" />
+          <div>
+            <p className="text-xs font-semibold text-gray-300">Set the tracking link as your CTA button's URL</p>
+            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+              Replace your button's current link/href with the tracking link.
+              Your visitors won't notice — they land exactly where they would before.
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* How it works note */}
-      <div className="text-xs text-gray-500 leading-relaxed border-t border-gray-700/40 pt-4">
-        <strong className="text-gray-400">How it works:</strong> The script listens for a message from the VidaPulse
-        iframe (sent as soon as a viewer session is created). When your <code className="text-amber-400/70 text-[11px]">[data-vp-cta]</code> button
-        is clicked, it sends the click event to VidaPulse, linked to that viewer's session. You'll see it appear
-        in the <strong className="text-gray-400">Events log</strong> as a pink <code className="text-amber-400/70 text-[11px]">cta_click</code> badge.
+      {/* Result note */}
+      <div className="text-xs text-gray-500 leading-relaxed border-t border-gray-700/40 pt-3">
+        Every click appears in your <strong className="text-gray-400">Events log</strong> as a
+        pink <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-mono bg-pink-500/15 text-pink-300 border border-pink-500/25">cta click</span> badge.
+        Enable this alert to get an in-app notification each time it fires.
+        Use one tracking link per video — each video has its own link in its Embed tab.
       </div>
 
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// CodeBlock — syntax-highlighted-ish code display with copy button
-// ─────────────────────────────────────────────────────────────────────────
-
-function CodeBlock({ code, copied, onCopy, tall }) {
-  return (
-    <div className="relative group">
-      <pre className={`bg-gray-950 border border-gray-700/60 rounded-lg px-4 py-3 text-[11px] font-mono
-                       text-gray-300 leading-relaxed whitespace-pre-wrap break-all overflow-x-auto
-                       ${tall ? 'max-h-48 overflow-y-auto' : ''}`}>
-        {code}
-      </pre>
-      <button
-        onClick={onCopy}
-        className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1
-                   bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-[10px]
-                   text-gray-400 hover:text-gray-200 transition-colors opacity-0 group-hover:opacity-100"
-      >
-        {copied ? (
-          <><CheckIcon /> Copied</>
-        ) : (
-          <><CopyIcon /> Copy</>
-        )}
-      </button>
     </div>
   );
 }
@@ -391,25 +336,6 @@ function InfoIcon() {
       <circle cx="12" cy="12" r="10"/>
       <line x1="12" y1="16" x2="12" y2="12"/>
       <line x1="12" y1="8" x2="12.01" y2="8"/>
-    </svg>
-  );
-}
-
-function CopyIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12"/>
     </svg>
   );
 }
