@@ -13,9 +13,15 @@ import api from '../lib/api';
  *  - Generate in background (status polling)
  *  - Download CSV when ready
  *
- * Plus the always-available instant downloads:
- *  - Viewer Journey Export (all sessions CSV)
- *  - Events Export (all analytics_events CSV)
+ * Raw data exports (generate→download state machine):
+ *  - Viewer Journey Export (up to 10,000 session rows)
+ *  - Events Log Export (up to 50,000 event rows)
+ *
+ * State machine per raw export:
+ *   idle    → Generate active, Download inactive
+ *   working → Generating… (both disabled)
+ *   ready   → Generate disabled, Download active
+ *   (after download) → back to idle
  */
 
 // ── Available metrics ────────────────────────────────────────────────────
@@ -58,6 +64,19 @@ function fmtDate(iso) {
   });
 }
 
+/**
+ * Derive the UI state for a raw export button pair.
+ * idle    — no pending report, show Generate
+ * working — pending/processing report, show Generating…
+ * ready   — completed and not yet downloaded, show Download
+ */
+function getExportState(latestReport, downloaded) {
+  if (!latestReport || latestReport.status === 'failed' || downloaded) return 'idle';
+  if (latestReport.status === 'pending' || latestReport.status === 'processing') return 'working';
+  if (latestReport.status === 'completed') return 'ready';
+  return 'idle';
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
@@ -73,9 +92,10 @@ export default function ReportsPage() {
   const [reports,         setReports]         = useState([]);
   const [listLoading,     setListLoading]     = useState(true);
 
-  // ── Instant downloads ─────────────────────────────────────────────────
-  const [downloadingVJ,   setDownloadingVJ]   = useState(false);
-  const [downloadingEv,   setDownloadingEv]   = useState(false);
+  // ── Raw export "downloaded" flags ─────────────────────────────────────
+  // Set true after a successful download; reset false when a new export is queued.
+  const [vjDownloaded, setVjDownloaded] = useState(false);
+  const [evDownloaded, setEvDownloaded] = useState(false);
 
   // ── Load report list ─────────────────────────────────────────────────
 
@@ -101,6 +121,21 @@ export default function ReportsPage() {
     return () => clearInterval(id);
   }, [reports]);
 
+  // ── Derived: split reports by kind ────────────────────────────────────
+
+  const customReports = reports.filter(r => r.kind === 'custom');
+
+  const latestVj = reports
+    .filter(r => r.kind === 'viewer_journey')
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] ?? null;
+
+  const latestEv = reports
+    .filter(r => r.kind === 'events_log')
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] ?? null;
+
+  const vjState = getExportState(latestVj, vjDownloaded);
+  const evState = getExportState(latestEv, evDownloaded);
+
   // ── Toggle metric checkbox ─────────────────────────────────────────────
 
   function toggleMetric(key) {
@@ -111,7 +146,7 @@ export default function ReportsPage() {
     });
   }
 
-  // ── Generate report ───────────────────────────────────────────────────
+  // ── Generate custom report ─────────────────────────────────────────────
 
   async function generate() {
     if (selectedMetrics.size === 0) {
@@ -126,6 +161,7 @@ export default function ReportsPage() {
         title,
         metrics   : [...selectedMetrics],
         date_range: dateRange,
+        kind      : 'custom',
       });
       showToast('Report queued — generating in the background');
       setReportTitle('');
@@ -137,9 +173,24 @@ export default function ReportsPage() {
     }
   }
 
-  // ── Download a completed report ───────────────────────────────────────
+  // ── Generate raw export ────────────────────────────────────────────────
 
-  async function downloadReport(id) {
+  async function generateRawExport(kind) {
+    // Reset the "downloaded" flag so the state machine starts fresh
+    if (kind === 'viewer_journey') setVjDownloaded(false);
+    else setEvDownloaded(false);
+    try {
+      await api.post('/reports/generate', { kind });
+      showToast('Export queued — generating in the background');
+      loadList();
+    } catch (err) {
+      showToast(err.response?.data?.error ?? 'Could not queue export', 'error');
+    }
+  }
+
+  // ── Download a report (custom or raw export) ──────────────────────────
+
+  async function downloadReport(id, onSuccess) {
     try {
       const response = await fetch(`/api/reports/download/${id}`, { credentials: 'include' });
       if (!response.ok) throw new Error('Download failed');
@@ -154,47 +205,11 @@ export default function ReportsPage() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+      onSuccess?.();
+      showToast('Download started');
     } catch {
       showToast('Download failed', 'error');
     }
-  }
-
-  // ── Instant viewer-journey download ───────────────────────────────────
-
-  async function downloadViewerJourney() {
-    setDownloadingVJ(true);
-    try {
-      const r    = await fetch('/api/reports/viewer-journey', { credentials: 'include' });
-      if (!r.ok) throw new Error();
-      const blob = await r.blob();
-      const url  = window.URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = `viewer-journey-${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a); a.click(); a.remove();
-      window.URL.revokeObjectURL(url);
-      showToast('Download started');
-    } catch { showToast('Download failed', 'error'); }
-    finally  { setDownloadingVJ(false); }
-  }
-
-  // ── Instant events download ────────────────────────────────────────────
-
-  async function downloadEvents() {
-    setDownloadingEv(true);
-    try {
-      const r    = await fetch('/api/reports/events', { credentials: 'include' });
-      if (!r.ok) throw new Error();
-      const blob = await r.blob();
-      const url  = window.URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = `events-${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a); a.click(); a.remove();
-      window.URL.revokeObjectURL(url);
-      showToast('Download started');
-    } catch { showToast('Download failed', 'error'); }
-    finally  { setDownloadingEv(false); }
   }
 
   return (
@@ -332,12 +347,12 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {/* ── Generated reports list ───────────────────────────────────── */}
-        {(listLoading || reports.length > 0) && (
+        {/* ── Generated custom reports list ─────────────────────────── */}
+        {(listLoading || customReports.length > 0) && (
           <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl overflow-hidden">
             <div className="px-5 py-3.5 border-b border-gray-700/40 flex items-center justify-between">
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Your Reports</p>
-              {reports.some(r => r.status === 'pending' || r.status === 'processing') && (
+              {customReports.some(r => r.status === 'pending' || r.status === 'processing') && (
                 <span className="flex items-center gap-1.5 text-[11px] text-blue-400">
                   <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
                   Generating…
@@ -352,7 +367,7 @@ export default function ReportsPage() {
               </div>
             ) : (
               <div className="divide-y divide-gray-700/40">
-                {reports.map(report => {
+                {customReports.map(report => {
                   const meta = STATUS_META[report.status] ?? STATUS_META.failed;
                   const rangeLabel = DATE_RANGES.find(d => d.key === report.date_range)?.label ?? report.date_range;
                   return (
@@ -397,7 +412,7 @@ export default function ReportsPage() {
           </div>
         )}
 
-        {/* ── Instant raw data exports ─────────────────────────────────── */}
+        {/* ── Raw data exports (generate→download state machine) ──────── */}
         <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl overflow-hidden">
           <div className="px-5 py-3.5 border-b border-gray-700/40">
             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Raw Data Exports</p>
@@ -406,58 +421,97 @@ export default function ReportsPage() {
           <div className="divide-y divide-gray-700/40">
 
             {/* Viewer Journey */}
-            <div className="flex items-center justify-between px-5 py-4 gap-4">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-200">Viewer Journey</p>
-                <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
-                  CSV of every viewer session — watch time, device, country, completion, UTMs.
-                </p>
-                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mt-1.5">
-                  On demand · up to 10,000 rows
-                </p>
-              </div>
-              <button
-                onClick={downloadViewerJourney}
-                disabled={downloadingVJ}
-                className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5
-                           bg-gray-700 hover:bg-gray-600 border border-gray-600
-                           text-gray-200 text-xs font-medium rounded-lg transition-colors
-                           disabled:opacity-60"
-              >
-                <DownloadIcon />
-                {downloadingVJ ? 'Preparing…' : 'Download'}
-              </button>
-            </div>
+            <RawExportRow
+              label="Viewer Journey"
+              desc="Every viewer session — watch time, device, country, completion, UTMs."
+              rowLimit="up to 10,000 rows"
+              state={vjState}
+              latestReport={latestVj}
+              onGenerate={() => generateRawExport('viewer_journey')}
+              onDownload={() => downloadReport(latestVj?.id, () => setVjDownloaded(true))}
+            />
 
-            {/* Events CSV */}
-            <div className="flex items-center justify-between px-5 py-4 gap-4">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-200">Events Log</p>
-                <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
-                  CSV of every play, pause, seek, CTA click, and completion event — timestamped to the second.
-                </p>
-                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mt-1.5">
-                  On demand · up to 50,000 rows
-                </p>
-              </div>
-              <button
-                onClick={downloadEvents}
-                disabled={downloadingEv}
-                className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5
-                           bg-gray-700 hover:bg-gray-600 border border-gray-600
-                           text-gray-200 text-xs font-medium rounded-lg transition-colors
-                           disabled:opacity-60"
-              >
-                <DownloadIcon />
-                {downloadingEv ? 'Preparing…' : 'Download'}
-              </button>
-            </div>
+            {/* Events Log */}
+            <RawExportRow
+              label="Events Log"
+              desc="Every play, pause, seek, CTA click, and completion event — timestamped to the second."
+              rowLimit="up to 50,000 rows"
+              state={evState}
+              latestReport={latestEv}
+              onGenerate={() => generateRawExport('events_log')}
+              onDownload={() => downloadReport(latestEv?.id, () => setEvDownloaded(true))}
+            />
 
           </div>
         </div>
 
       </div>
     </AppLayout>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// RawExportRow — generate→download state machine per raw export type
+//
+//   state = 'idle'    → Generate active, no Download
+//   state = 'working' → Generating… (both disabled)
+//   state = 'ready'   → Generate inactive/dimmed, Download active
+// ─────────────────────────────────────────────────────────────────────────
+
+function RawExportRow({ label, desc, rowLimit, state, latestReport, onGenerate, onDownload }) {
+  const rowCount = latestReport?.row_count;
+
+  return (
+    <div className="flex items-center justify-between px-5 py-4 gap-4">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-200">{label}</p>
+        <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{desc}</p>
+        <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mt-1.5">
+          On demand · {rowCount != null && state === 'ready' ? `${rowCount.toLocaleString()} rows` : rowLimit}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {/* Generate button — active in idle, disabled in working/ready */}
+        <button
+          onClick={onGenerate}
+          disabled={state === 'working' || state === 'ready'}
+          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium
+                      transition-colors border
+                      ${state === 'idle'
+                        ? 'bg-gray-700 hover:bg-gray-600 border-gray-600 text-gray-200'
+                        : 'bg-gray-800/40 border-gray-700/40 text-gray-500 cursor-not-allowed'
+                      }`}
+        >
+          {state === 'working' ? (
+            <>
+              <span className="w-3 h-3 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+              Generating…
+            </>
+          ) : (
+            <>
+              <GenerateIcon />
+              Generate
+            </>
+          )}
+        </button>
+
+        {/* Download button — active only in ready state */}
+        <button
+          onClick={onDownload}
+          disabled={state !== 'ready'}
+          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium
+                      transition-colors border
+                      ${state === 'ready'
+                        ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/30 text-emerald-300'
+                        : 'bg-gray-800/40 border-gray-700/40 text-gray-600 cursor-not-allowed'
+                      }`}
+        >
+          <DownloadIcon />
+          Download
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -489,7 +543,7 @@ function DownloadIcon() {
 
 function GenerateIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="23 4 23 10 17 10"/>
       <polyline points="1 20 1 14 7 14"/>

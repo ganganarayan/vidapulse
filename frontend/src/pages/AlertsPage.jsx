@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import AppLayout from '../components/AppLayout';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
 
 /**
@@ -56,10 +57,11 @@ const ALERT_RULES = [
     desc:  'Notify me when a viewer watches more than 90% of a video — a strong intent signal.',
   },
   {
-    key:   'cta_click',
-    title: 'CTA Click',
-    desc:  'Alert me when a viewer clicks the call-to-action button on a video page.',
+    key:      'cta_click',
+    title:    'CTA Click',
+    desc:     'Alert me when a viewer clicks the call-to-action button on a video page.',
     hasSetup: true,
+    proOnly:  true,
   },
 ];
 
@@ -81,6 +83,8 @@ const DEFAULTS = {
 
 export default function AlertsPage() {
   const { showToast }    = useToast();
+  const { user }         = useAuth();
+  const isPro            = user?.plan === 'pro' || user?.plan === 'admin_lifetime';
   const [prefs,   setPrefs]   = useState(DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(null);
@@ -157,10 +161,24 @@ export default function AlertsPage() {
                     <div className="px-5 py-4 gap-4">
                       <div className="flex items-center justify-between gap-4">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-200">{rule.title}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-gray-200">{rule.title}</p>
+                            {rule.proOnly && !isPro && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold
+                                               bg-amber-500/15 text-amber-400 border border-amber-500/25
+                                               rounded-full uppercase tracking-wide">
+                                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                  strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                </svg>
+                                Pro
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{rule.desc}</p>
-                          {/* Setup guide toggle — only for CTA Click */}
-                          {rule.hasSetup && (
+                          {/* Setup guide toggle — only for CTA Click, only for Pro users */}
+                          {rule.hasSetup && isPro && (
                             <button
                               onClick={() => setCtaOpen(o => !o)}
                               className="mt-2 flex items-center gap-1 text-xs text-amber-400/80 hover:text-amber-300 transition-colors"
@@ -170,20 +188,39 @@ export default function AlertsPage() {
                               <ChevronIcon open={ctaOpen} />
                             </button>
                           )}
+                          {rule.proOnly && !isPro && (
+                            <a
+                              href="/upgrade"
+                              className="mt-1.5 inline-flex items-center text-xs text-amber-400/70 hover:text-amber-300 transition-colors"
+                            >
+                              Upgrade to Pro to enable →
+                            </a>
+                          )}
                         </div>
-                        <button
-                          onClick={() => toggle(rule.key)}
-                          disabled={saving === rule.key}
-                          className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors duration-200
-                            ${prefs[rule.key] ? 'bg-amber-500' : 'bg-gray-600'}
-                            ${saving === rule.key ? 'opacity-60' : ''}`}
-                          role="switch"
-                          aria-checked={prefs[rule.key]}
-                        >
-                          <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 mt-0.5
-                            ${prefs[rule.key] ? 'translate-x-4' : 'translate-x-0.5'}`}
-                          />
-                        </button>
+                        {rule.proOnly && !isPro ? (
+                          /* Non-Pro: dimmed locked indicator */
+                          <div
+                            className="relative inline-flex h-5 w-9 flex-shrink-0 rounded-full bg-gray-700 opacity-40 cursor-not-allowed"
+                            title="Upgrade to Pro to enable"
+                          >
+                            <span className="inline-block h-4 w-4 rounded-full bg-white shadow mt-0.5 translate-x-0.5" />
+                          </div>
+                        ) : (
+                          /* Normal toggle */
+                          <button
+                            onClick={() => toggle(rule.key)}
+                            disabled={saving === rule.key}
+                            className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors duration-200
+                              ${prefs[rule.key] ? 'bg-amber-500' : 'bg-gray-600'}
+                              ${saving === rule.key ? 'opacity-60' : ''}`}
+                            role="switch"
+                            aria-checked={prefs[rule.key]}
+                          >
+                            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 mt-0.5
+                              ${prefs[rule.key] ? 'translate-x-4' : 'translate-x-0.5'}`}
+                            />
+                          </button>
+                        )}
                       </div>
                     </div>
 

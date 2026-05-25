@@ -3,10 +3,9 @@
 /**
  * Reports API — /api/reports
  *
- *   GET  /api/reports/viewer-journey     — instant CSV download of all viewer sessions
- *   GET  /api/reports/events             — CSV download of analytics_events
  *   GET  /api/reports/list               — list user's generated reports
  *   POST /api/reports/generate           — queue a background report (returns report_id)
+ *                                          kind: 'custom' | 'viewer_journey' | 'events_log'
  *   GET  /api/reports/download/:id       — stream CSV when report is completed
  */
 
@@ -35,91 +34,7 @@ function buildCsv(headers, rows) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// GET /api/reports/viewer-journey
-// Instant CSV download — every viewer session for this user's videos.
-// ─────────────────────────────────────────────────────────────────────────
-
-router.get('/viewer-journey', requireAuth, async (req, res, next) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT
-         v.title               AS video,
-         s.started_at          AS session_start,
-         s.ended_at            AS session_end,
-         ROUND(s.total_watch_seconds::numeric, 1) AS watch_seconds,
-         ROUND(s.max_watch_pct::numeric, 1)       AS max_watch_pct,
-         s.reached_end         AS completed,
-         s.play_count,
-         s.device_type,
-         s.browser,
-         s.os,
-         s.country_name        AS country,
-         s.city,
-         s.page_url            AS page,
-         s.referrer_url        AS referrer,
-         s.utm_source,
-         s.utm_medium,
-         s.utm_campaign
-       FROM   analytics_sessions s
-       JOIN   videos v ON s.video_id = v.id
-       WHERE  v.user_id = $1
-       ORDER  BY s.started_at DESC
-       LIMIT  10000`,
-      [req.user.id]
-    );
-
-    const HEADERS = [
-      'video','session_start','session_end','watch_seconds','max_watch_pct',
-      'completed','play_count','device_type','browser','os','country','city',
-      'page','referrer','utm_source','utm_medium','utm_campaign',
-    ];
-
-    const csv  = buildCsv(HEADERS, rows);
-    const date = new Date().toISOString().slice(0, 10);
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="viewer-journey-${date}.csv"`);
-    return res.send(csv);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────
-// GET /api/reports/events
-// Instant CSV download — all analytics_events for this user's videos.
-// ─────────────────────────────────────────────────────────────────────────
-
-router.get('/events', requireAuth, async (req, res, next) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT
-         ae.occurred_at,
-         ae.event_type,
-         v.title          AS video,
-         ae.video_position,
-         ae.session_id
-       FROM   analytics_events ae
-       LEFT   JOIN analytics_sessions s ON ae.session_id = s.id
-       JOIN   videos v                  ON ae.video_id   = v.id
-       WHERE  v.user_id = $1
-       ORDER  BY ae.occurred_at DESC
-       LIMIT  50000`,
-      [req.user.id]
-    );
-
-    const HEADERS = ['occurred_at','event_type','video','video_position','session_id'];
-    const csv  = buildCsv(HEADERS, rows);
-    const date = new Date().toISOString().slice(0, 10);
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="events-${date}.csv"`);
-    return res.send(csv);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────
-// Allowed metrics and their SQL SELECT expressions
+// Allowed metrics and their SQL SELECT expressions (custom reports only)
 // ─────────────────────────────────────────────────────────────────────────
 
 const METRIC_EXPRS = {
@@ -140,40 +55,66 @@ const VALID_DATE_RANGES = {
   'all_time': '',
 };
 
+// Maps date_range key → extra JOIN condition for analytics_sessions
+const DATE_JOIN_CONDITIONS = {
+  '7_days' : `AND s.started_at >= NOW() - INTERVAL '7 days'`,
+  '30_days': `AND s.started_at >= NOW() - INTERVAL '30 days'`,
+  '90_days': `AND s.started_at >= NOW() - INTERVAL '90 days'`,
+  'all_time': '',
+};
+
+const VALID_KINDS = ['custom', 'viewer_journey', 'events_log'];
+
 // ─────────────────────────────────────────────────────────────────────────
 // POST /api/reports/generate
-// Creates a user_reports row, responds with the report_id, then generates
-// the CSV asynchronously in the background.
+//
+// Queues a background report of any kind. Responds immediately with
+// report_id; generation runs async.
+//
+// Body:
+//   kind       string  'custom' (default) | 'viewer_journey' | 'events_log'
+//   title      string  optional — auto-named by kind if omitted
+//   metrics    array   required for kind='custom', ignored otherwise
+//   date_range string  optional for custom reports (default '30_days')
 // ─────────────────────────────────────────────────────────────────────────
 
 router.post('/generate', requireAuth, async (req, res, next) => {
-  const { title, metrics, date_range } = req.body ?? {};
+  const { title, metrics, date_range, kind: rawKind } = req.body ?? {};
 
-  if (!metrics || !Array.isArray(metrics) || metrics.length === 0) {
-    return res.status(400).json({ error: 'metrics array required' });
-  }
+  const kind = VALID_KINDS.includes(rawKind) ? rawKind : 'custom';
 
-  const safeTitle    = (typeof title === 'string' ? title : 'Custom Report').trim().slice(0, 255) || 'Custom Report';
+  // Validate metrics for custom reports
+  let safeMetrics   = [];
   const safeDateRange = VALID_DATE_RANGES[date_range] !== undefined ? date_range : '30_days';
 
-  // Only keep metric keys that exist in METRIC_EXPRS
-  const safeMetrics = metrics.filter(m => typeof m === 'string' && METRIC_EXPRS[m]);
-  if (safeMetrics.length === 0) {
-    return res.status(400).json({ error: 'no valid metrics provided', valid: Object.keys(METRIC_EXPRS) });
+  if (kind === 'custom') {
+    if (!metrics || !Array.isArray(metrics) || metrics.length === 0) {
+      return res.status(400).json({ error: 'metrics array required' });
+    }
+    safeMetrics = metrics.filter(m => typeof m === 'string' && METRIC_EXPRS[m]);
+    if (safeMetrics.length === 0) {
+      return res.status(400).json({ error: 'no valid metrics provided', valid: Object.keys(METRIC_EXPRS) });
+    }
   }
+
+  // Default title per kind
+  const defaultTitle = kind === 'viewer_journey' ? 'Viewer Journey Export'
+                     : kind === 'events_log'      ? 'Events Log Export'
+                     : (DATE_RANGES_LABELS[safeDateRange] ?? safeDateRange) + ' Report';
+  const safeTitle = (typeof title === 'string' ? title : '').trim().slice(0, 255) || defaultTitle;
 
   try {
     const { rows: [report] } = await pool.query(
-      `INSERT INTO user_reports (user_id, title, metrics, date_range, status)
-       VALUES ($1, $2, $3::jsonb, $4, 'pending')
+      `INSERT INTO user_reports (user_id, title, metrics, date_range, status, kind)
+       VALUES ($1, $2, $3::jsonb, $4, 'pending', $5)
        RETURNING id`,
-      [req.user.id, safeTitle, JSON.stringify(safeMetrics), safeDateRange]
+      [req.user.id, safeTitle, JSON.stringify(safeMetrics), safeDateRange, kind]
     );
 
     res.json({ report_id: report.id, status: 'pending' });
 
     // Background generation — response already sent
-    _generateReport(report.id, req.user.id, safeMetrics, safeDateRange)
+    _generateReport(report.id, req.user.id, kind, safeMetrics, safeDateRange)
       .catch(err => logger.warn(`[reports/generate] bg generation failed for ${report.id}: ${err.message}`));
 
   } catch (err) {
@@ -181,15 +122,23 @@ router.post('/generate', requireAuth, async (req, res, next) => {
   }
 });
 
+// Human-readable labels for date range keys (used in auto-title)
+const DATE_RANGES_LABELS = {
+  '7_days' : 'Last 7 Days',
+  '30_days': 'Last 30 Days',
+  '90_days': 'Last 90 Days',
+  'all_time': 'All Time',
+};
+
 // ─────────────────────────────────────────────────────────────────────────
 // GET /api/reports/list
-// Returns up to 50 of the user's most recent reports (any status).
+// Returns up to 50 of the user's most recent reports (any status, any kind).
 // ─────────────────────────────────────────────────────────────────────────
 
 router.get('/list', requireAuth, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, title, metrics, date_range, status, row_count,
+      `SELECT id, title, kind, metrics, date_range, status, row_count,
               error_message, created_at, updated_at
        FROM   user_reports
        WHERE  user_id = $1
@@ -212,7 +161,7 @@ router.get('/list', requireAuth, async (req, res, next) => {
 router.get('/download/:id', requireAuth, async (req, res, next) => {
   try {
     const { rows: [report] } = await pool.query(
-      `SELECT id, title, status, csv_data, created_at
+      `SELECT id, title, kind, status, csv_data, created_at
        FROM   user_reports
        WHERE  id = $1 AND user_id = $2`,
       [req.params.id, req.user.id]
@@ -235,50 +184,28 @@ router.get('/download/:id', requireAuth, async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// _generateReport — background CSV generation
-// Runs after the HTTP response is sent; updates user_reports.status.
+// _generateReport — background CSV generation dispatcher
 //
-// Uses a LEFT JOIN with an ON-clause date filter so that videos with
-// zero sessions in the selected range still appear in the output (with 0).
+// Marks the report as 'processing', then delegates to the appropriate
+// generator based on `kind`, then marks 'completed' or 'failed'.
 // ─────────────────────────────────────────────────────────────────────────
 
-// Maps date_range key → extra JOIN condition for analytics_sessions
-const DATE_JOIN_CONDITIONS = {
-  '7_days' : `AND s.started_at >= NOW() - INTERVAL '7 days'`,
-  '30_days': `AND s.started_at >= NOW() - INTERVAL '30 days'`,
-  '90_days': `AND s.started_at >= NOW() - INTERVAL '90 days'`,
-  'all_time': '',
-};
-
-async function _generateReport(reportId, userId, metrics, dateRange) {
-  // Mark as processing immediately
+async function _generateReport(reportId, userId, kind, metrics, dateRange) {
   await pool.query(
     `UPDATE user_reports SET status = 'processing', updated_at = NOW() WHERE id = $1`,
     [reportId]
   );
 
   try {
-    const joinDateCond = DATE_JOIN_CONDITIONS[dateRange] ?? '';
-    const metricSql   = metrics.map(m => METRIC_EXPRS[m]).join(',\n         ');
+    let csv, rowCount;
 
-    const { rows } = await pool.query(
-      `SELECT
-         v.title       AS video_title,
-         v.source_type,
-         ${metricSql}
-       FROM   videos v
-       LEFT   JOIN analytics_sessions s
-              ON  s.video_id = v.id
-              ${joinDateCond}
-       WHERE  v.user_id   = $1
-         AND  v.is_active = TRUE
-       GROUP  BY v.id, v.title, v.source_type
-       ORDER  BY v.title ASC`,
-      [userId]
-    );
-
-    const headers = ['video_title', 'source_type', ...metrics];
-    const csv     = buildCsv(headers, rows);
+    if (kind === 'viewer_journey') {
+      ({ csv, rowCount } = await _generateViewerJourney(userId));
+    } else if (kind === 'events_log') {
+      ({ csv, rowCount } = await _generateEventsLog(userId));
+    } else {
+      ({ csv, rowCount } = await _generateCustom(userId, metrics, dateRange));
+    }
 
     await pool.query(
       `UPDATE user_reports
@@ -287,10 +214,10 @@ async function _generateReport(reportId, userId, metrics, dateRange) {
            row_count  = $2,
            updated_at = NOW()
        WHERE id = $3`,
-      [csv, rows.length, reportId]
+      [csv, rowCount, reportId]
     );
 
-    logger.info(`[reports/_generate] report ${reportId} completed (${rows.length} rows)`);
+    logger.info(`[reports/_generate] report ${reportId} (${kind}) completed (${rowCount} rows)`);
 
   } catch (err) {
     logger.error(`[reports/_generate] report ${reportId} failed: ${err.message}`);
@@ -304,6 +231,96 @@ async function _generateReport(reportId, userId, metrics, dateRange) {
     ).catch(() => {});
     throw err;
   }
+}
+
+// ─── Generator: Viewer Journey ─────────────────────────────────────────────
+
+async function _generateViewerJourney(userId) {
+  const { rows } = await pool.query(
+    `SELECT
+       v.title               AS video,
+       s.started_at          AS session_start,
+       s.ended_at            AS session_end,
+       ROUND(s.total_watch_seconds::numeric, 1) AS watch_seconds,
+       ROUND(s.max_watch_pct::numeric, 1)       AS max_watch_pct,
+       s.reached_end         AS completed,
+       s.play_count,
+       s.device_type,
+       s.browser,
+       s.os,
+       s.country_name        AS country,
+       s.city,
+       s.page_url            AS page,
+       s.referrer_url        AS referrer,
+       s.utm_source,
+       s.utm_medium,
+       s.utm_campaign
+     FROM   analytics_sessions s
+     JOIN   videos v ON s.video_id = v.id
+     WHERE  v.user_id = $1
+     ORDER  BY s.started_at DESC
+     LIMIT  10000`,
+    [userId]
+  );
+
+  const HEADERS = [
+    'video','session_start','session_end','watch_seconds','max_watch_pct',
+    'completed','play_count','device_type','browser','os','country','city',
+    'page','referrer','utm_source','utm_medium','utm_campaign',
+  ];
+  const csv = buildCsv(HEADERS, rows);
+  return { csv, rowCount: rows.length };
+}
+
+// ─── Generator: Events Log ────────────────────────────────────────────────
+
+async function _generateEventsLog(userId) {
+  const { rows } = await pool.query(
+    `SELECT
+       ae.occurred_at,
+       ae.event_type,
+       v.title          AS video,
+       ae.video_position,
+       ae.session_id
+     FROM   analytics_events ae
+     LEFT   JOIN analytics_sessions s ON ae.session_id = s.id
+     JOIN   videos v                  ON ae.video_id   = v.id
+     WHERE  v.user_id = $1
+     ORDER  BY ae.occurred_at DESC
+     LIMIT  50000`,
+    [userId]
+  );
+
+  const HEADERS = ['occurred_at','event_type','video','video_position','session_id'];
+  const csv = buildCsv(HEADERS, rows);
+  return { csv, rowCount: rows.length };
+}
+
+// ─── Generator: Custom metric report ─────────────────────────────────────
+
+async function _generateCustom(userId, metrics, dateRange) {
+  const joinDateCond = DATE_JOIN_CONDITIONS[dateRange] ?? '';
+  const metricSql   = metrics.map(m => METRIC_EXPRS[m]).join(',\n         ');
+
+  const { rows } = await pool.query(
+    `SELECT
+       v.title       AS video_title,
+       v.source_type,
+       ${metricSql}
+     FROM   videos v
+     LEFT   JOIN analytics_sessions s
+            ON  s.video_id = v.id
+            ${joinDateCond}
+     WHERE  v.user_id   = $1
+       AND  v.is_active = TRUE
+     GROUP  BY v.id, v.title, v.source_type
+     ORDER  BY v.title ASC`,
+    [userId]
+  );
+
+  const headers = ['video_title', 'source_type', ...metrics];
+  const csv     = buildCsv(headers, rows);
+  return { csv, rowCount: rows.length };
 }
 
 module.exports = router;

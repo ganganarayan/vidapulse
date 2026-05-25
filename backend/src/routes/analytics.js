@@ -605,13 +605,18 @@ router.get('/cta/:videoId', async (req, res) => {
   // Redirect first (< 50 ms) — tracking is fire-and-forget
   res.redirect(302, safeDest);
 
-  // Background: record the click
+  // Background: record the click — only tracked for Pro / admin_lifetime plan owners.
+  // The redirect always happens regardless of plan; only the analytics recording is gated.
   pool.query(
     `INSERT INTO analytics_events
        (session_id, video_id, event_type, occurred_at)
-     SELECT NULL, id, 'cta_click', NOW()
-     FROM   videos
-     WHERE  id = $1 AND is_active = TRUE`,
+     SELECT NULL, v.id, 'cta_click', NOW()
+     FROM   videos v
+     JOIN   users u ON u.id = v.user_id
+     JOIN   plans p ON p.id = u.plan_id
+     WHERE  v.id = $1
+       AND  v.is_active = TRUE
+       AND  p.name IN ('pro', 'admin_lifetime')`,
     [videoId]
   ).catch(err => logger.warn(`[analytics/cta] insert failed: ${err.message}`));
 });
