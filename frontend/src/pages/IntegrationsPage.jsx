@@ -88,7 +88,9 @@ function WebhookCard({ isAdmin }) {
       .then(r => {
         const s = r.data.settings;
         setSettings(s);
-        setUrl(s?.endpoint_url ?? '');
+        // Only populate if stored value is a real URL — ignore stale test data (emails, etc.)
+        const storedUrl = s?.endpoint_url ?? '';
+        setUrl(storedUrl.startsWith('http://') || storedUrl.startsWith('https://') ? storedUrl : '');
         setSecret(s?.secret_key ?? '');
         setIsActive(s?.is_active ?? false);
       })
@@ -99,9 +101,15 @@ function WebhookCard({ isAdmin }) {
   useEffect(() => { load(); }, [load]);
 
   async function save() {
+    // Validate: if a URL is provided it must be a proper https endpoint
+    const trimmed = url.trim();
+    if (trimmed && !trimmed.startsWith('https://') && !trimmed.startsWith('http://')) {
+      showToast('Endpoint URL must start with https://', 'error');
+      return;
+    }
     setSaving(true);
     try {
-      await api.put('/admin/webhook', { endpoint_url: url, secret_key: secret, is_active: isActive });
+      await api.put('/admin/webhook', { endpoint_url: trimmed, secret_key: secret, is_active: isActive });
       showToast('Webhook saved');
       setTestResult(null);
     } catch (err) {
@@ -135,7 +143,7 @@ function WebhookCard({ isAdmin }) {
           <div>
             <h2 className="text-base font-semibold text-gray-100">Webhook</h2>
             <p className="text-xs text-gray-400">
-              Receive real-time event notifications at your endpoint URL.
+              Send real-time analytics events to your own server or automation tool (Make, Zapier, etc.).
             </p>
           </div>
           <div className="ml-auto">

@@ -139,17 +139,15 @@ export default function AlertsPage() {
               </div>
             </div>
 
-            {/* Webhook note */}
+            {/* Delivery note */}
             <div className="mt-5 bg-gray-800/20 border border-gray-700/40 rounded-xl px-5 py-4 flex items-start gap-3">
-              <WebhookIcon />
+              <BellNoteIcon />
               <div>
-                <p className="text-xs font-semibold text-gray-300 mb-0.5">Alerts fire via your Webhook</p>
+                <p className="text-xs font-semibold text-gray-300 mb-0.5">How you'll be notified</p>
                 <p className="text-xs text-gray-500 leading-relaxed">
-                  When a rule triggers, VidaPulse sends a POST request to your configured webhook endpoint.
-                  Set up your endpoint in{' '}
-                  <a href="/integrations" className="text-amber-400 hover:text-amber-300 underline underline-offset-2">
-                    Integrations
-                  </a>.
+                  When a rule triggers you receive an <strong className="text-gray-400">in-app notification</strong> (bell icon, top right)
+                  and a <strong className="text-gray-400">browser push alert</strong> — make sure browser notifications are allowed for this site.
+                  Rules are evaluated in real time as analytics data comes in.
                 </p>
               </div>
             </div>
@@ -172,12 +170,13 @@ function BellIcon() {
   );
 }
 
-function WebhookIcon() {
+function BellNoteIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
-      className="text-gray-500 mt-0.5 flex-shrink-0">
-      <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11A2.99 2.99 0 0 0 18 8a3 3 0 1 0 0-6 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81A3 3 0 0 0 6 9a3 3 0 1 0 0 6 3 3 0 0 0 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65a3 3 0 1 0 3-3z"/>
+      className="text-amber-400/70 mt-0.5 flex-shrink-0">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+      <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
     </svg>
   );
 }
