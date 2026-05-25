@@ -18,6 +18,7 @@ const logger                     = require('../config/logger');
 const { requireAuth }            = require('../middleware/requireAuth');
 const { planGate, videoLimitGate } = require('../middleware/planGate');
 const { emitEvent }              = require('../services/behavioralEventService');
+const { fetchDuration }          = require('../services/durationService');
 
 // ─────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -149,6 +150,28 @@ router.get('/', requireAuth, async (req, res, next) => {
       [req.user.id]
     );
 
+    // ── Backfill missing durations (fire-and-forget) ──────────────────────
+    // For any video that still has no duration and is a queryable platform,
+    // kick off a background fetch so it appears on next page load.
+    const needsDuration = rows.filter(
+      v => v.duration_seconds == null && ['youtube', 'vimeo', 'loom'].includes(v.source_type)
+    );
+    if (needsDuration.length > 0) {
+      Promise.allSettled(
+        needsDuration.map(v =>
+          fetchDuration(v.original_url, v.source_type).then(secs => {
+            if (!secs) return;
+            return pool.query(
+              `UPDATE videos SET duration_seconds = $1, updated_at = NOW() WHERE id = $2`,
+              [secs, v.id]
+            ).then(() =>
+              logger.info(`[videos/list] Backfilled duration ${secs}s for video ${v.id}`)
+            );
+          })
+        )
+      ).catch(() => {});
+    }
+
     return res.json({ videos: rows });
   } catch (err) {
     next(err);
@@ -215,21 +238,32 @@ router.post('/', requireAuth, videoLimitGate, async (req, res, next) => {
     const playableUrl      = isReadyNow ? url : null;
     const usingIframe      = isIframe;
 
+    // ── Fetch duration (non-blocking, best-effort) ────────────────────────
+    // Run before the INSERT so the value is available immediately in the
+    // response. Times out at 6 s and returns null — never blocks on failure.
+    const durationSeconds = await fetchDuration(url, sourceType);
+    if (durationSeconds) {
+      logger.info(`[videos] Fetched duration ${durationSeconds}s for ${sourceType} (${url})`);
+    }
+
     // ── Insert video ──────────────────────────────────────────────────────
     const { rows: [video] } = await pool.query(
       `INSERT INTO videos
          (user_id, title, original_url, source_type,
           processing_status, using_iframe_fallback, playable_url,
+          duration_seconds,
           insight_status, story_status)
        VALUES
-         ($1, $2, $3, $4, $5, $6, $7, 'pending', 'pending')
+         ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', 'pending')
        RETURNING
          id, title, original_url, source_type, playable_url, thumbnail_url,
+         duration_seconds,
          total_plays, unique_viewers, avg_watch_pct,
          processing_status, using_iframe_fallback,
          insight_status, story_status,
          created_at`,
-      [req.user.id, videoTitle, url, sourceType, processingStatus, usingIframe, playableUrl]
+      [req.user.id, videoTitle, url, sourceType, processingStatus, usingIframe, playableUrl,
+       durationSeconds ?? null]
     );
 
     logger.info(`[videos] Created video ${video.id} (${sourceType}) for user ${req.user.id}`);
@@ -339,6 +373,26 @@ router.get('/:id', requireAuth, async (req, res, next) => {
         logger.info(`[videos] self-healed processing_status for ${video.id} (${video.source_type})`);
         video = healed;
       }
+    }
+
+    // ── Self-heal missing duration (fire-and-forget) ──────────────────────
+    // If duration_seconds is still NULL for a platform we can query, fetch it
+    // in the background and persist it — no need to block this response.
+    if (
+      video.duration_seconds == null &&
+      ['youtube', 'vimeo', 'loom'].includes(video.source_type)
+    ) {
+      fetchDuration(video.original_url, video.source_type)
+        .then(secs => {
+          if (!secs) return;
+          pool.query(
+            `UPDATE videos SET duration_seconds = $1, updated_at = NOW() WHERE id = $2`,
+            [secs, video.id]
+          ).then(() =>
+            logger.info(`[videos] Backfilled duration ${secs}s for video ${video.id}`)
+          ).catch(() => {});
+        })
+        .catch(() => {});
     }
 
     // Attach extra session-aggregate stats (non-fatal if sessions table is empty)
