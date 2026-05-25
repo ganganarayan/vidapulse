@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { ThemeToggle } from '../contexts/ThemeContext';
 import api from '../lib/api';
 
 /**
@@ -46,11 +47,12 @@ function AppSidebar() {
   return (
     <aside className="w-56 flex-shrink-0 border-r border-gray-800 flex flex-col bg-gray-900">
       {/* Logo */}
-      <div className="px-5 py-4 border-b border-gray-800">
+      <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
         <Link to="/dashboard" className="flex items-center gap-2 group">
           <span className="text-amber-500 text-xl leading-none select-none">{'▶︎'}</span>
           <span className="text-base font-bold text-amber-500 tracking-tight">VidaPulse</span>
         </Link>
+        <ThemeToggle />
       </div>
 
       {/* Navigation */}
@@ -147,7 +149,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
   return (
     <aside className="w-56 flex-shrink-0 border-r border-gray-800 flex flex-col bg-gray-900">
       {/* Logo / back */}
-      <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-3">
+      <div className="px-4 py-4 border-b border-gray-800 flex items-center gap-2">
         <button
           onClick={() => navigate('/dashboard')}
           className="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0"
@@ -155,10 +157,11 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
         >
           <BackIcon />
         </button>
-        <Link to="/dashboard" className="flex items-center gap-1.5 min-w-0">
+        <Link to="/dashboard" className="flex items-center gap-1.5 min-w-0 flex-1">
           <span className="text-amber-500 text-lg leading-none select-none flex-shrink-0">{'▶︎'}</span>
           <span className="text-sm font-bold text-amber-500 tracking-tight truncate">VidaPulse</span>
         </Link>
+        <ThemeToggle className="flex-shrink-0" />
       </div>
 
       {/* Video title */}

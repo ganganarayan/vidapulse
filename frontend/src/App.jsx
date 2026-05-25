@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider }         from './contexts/ToastContext';
+import { ThemeProvider }         from './contexts/ThemeContext';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import Login             from './pages/Login';
 import Register          from './pages/Register';
@@ -71,6 +72,7 @@ function AdminRoute({ children }) {
 
 export default function App() {
   return (
+    <ThemeProvider>
     <AuthProvider>
       <ToastProvider>
       <BrowserRouter>
@@ -159,5 +161,6 @@ export default function App() {
       </BrowserRouter>
       </ToastProvider>
     </AuthProvider>
+    </ThemeProvider>
   );
 }

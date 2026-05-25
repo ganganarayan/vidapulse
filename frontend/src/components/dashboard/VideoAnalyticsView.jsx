@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link }                from 'react-router-dom';
 import api                     from '../../lib/api';
 import { useToast }            from '../../contexts/ToastContext';
+import { ThemeToggle }         from '../../contexts/ThemeContext';
 import InsightsSection         from './InsightsSection';
 import HeatmapSection          from './HeatmapSection';
 import ViewerStoriesSection    from './ViewerStoriesSection';
@@ -185,13 +186,14 @@ export default function VideoAnalyticsView({
           <span className="text-gray-600">/</span>
           <span className="font-semibold text-gray-200">{viewLabel}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
           <NotificationBell />
           {onRefresh && (
             <button
               onClick={onRefresh}
               disabled={isRefreshing}
-              className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors disabled:opacity-40"
+              className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors disabled:opacity-40"
               title="Refresh analytics"
             >
               <RefreshIcon spinning={isRefreshing} />
@@ -199,7 +201,7 @@ export default function VideoAnalyticsView({
           )}
           <Link
             to="/account"
-            className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
+            className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
             title="Settings"
           >
             <SettingsNavIcon />

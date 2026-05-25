@@ -24,3 +24,109 @@
     @apply outline-none ring-2 ring-amber-500 ring-offset-2 ring-offset-gray-900;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   LIGHT MODE OVERRIDES
+   Activated when data-theme="light" is set on <html>.
+   Uses attribute-selector specificity (0,2,0) to beat
+   Tailwind utility classes (0,1,0).
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Body ───────────────────────────────────────────────────── */
+[data-theme="light"] body {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+/* ── Autofill (light mode inputs) ───────────────────────────── */
+[data-theme="light"] input:-webkit-autofill,
+[data-theme="light"] input:-webkit-autofill:hover,
+[data-theme="light"] input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px #f1f5f9 inset;
+  -webkit-text-fill-color: #0f172a;
+}
+
+/* ── Focus ring offset ──────────────────────────────────────── */
+[data-theme="light"] .focus-brand:focus {
+  --tw-ring-offset-color: #ffffff;
+}
+
+/* ── Solid backgrounds ──────────────────────────────────────── */
+[data-theme="light"] .bg-gray-950 { background-color: #f1f5f9; }
+[data-theme="light"] .bg-gray-900 { background-color: #ffffff; }
+[data-theme="light"] .bg-gray-800 { background-color: #f8fafc; }
+[data-theme="light"] .bg-gray-700 { background-color: #e2e8f0; }
+[data-theme="light"] .bg-gray-600 { background-color: #cbd5e1; }
+[data-theme="light"] .bg-gray-500 { background-color: #94a3b8; }
+
+/* ── Opacity backgrounds ────────────────────────────────────── */
+[data-theme="light"] .bg-gray-950\/60  { background-color: rgb(241 245 249 / 0.6);  }
+[data-theme="light"] .bg-gray-900\/60  { background-color: rgb(255 255 255 / 0.85); }
+[data-theme="light"] .bg-gray-800\/40  { background-color: #f8fafc; }
+[data-theme="light"] .bg-gray-800\/60  { background-color: #f1f5f9; }
+[data-theme="light"] .bg-gray-700\/80  { background-color: rgb(226 232 240 / 0.85); }
+[data-theme="light"] .bg-gray-700\/50  { background-color: rgb(226 232 240 / 0.6);  }
+[data-theme="light"] .bg-gray-700\/40  { background-color: rgb(226 232 240 / 0.4);  }
+[data-theme="light"] .bg-gray-700\/30  { background-color: rgb(226 232 240 / 0.3);  }
+[data-theme="light"] .bg-gray-600\/40  { background-color: rgb(203 213 225 / 0.4);  }
+[data-theme="light"] .bg-gray-600\/50  { background-color: rgb(203 213 225 / 0.5);  }
+
+/* ── Hover backgrounds ──────────────────────────────────────── */
+[data-theme="light"] .hover\:bg-gray-800:hover       { background-color: #f1f5f9; }
+[data-theme="light"] .hover\:bg-gray-700:hover       { background-color: #e2e8f0; }
+[data-theme="light"] .hover\:bg-gray-700\/80:hover   { background-color: rgb(226 232 240 / 0.8); }
+[data-theme="light"] .hover\:bg-gray-600:hover       { background-color: #cbd5e1; }
+
+/* ── Active / group-hover backgrounds ──────────────────────── */
+[data-theme="light"] .group:hover .group-hover\:bg-gray-800 { background-color: #f1f5f9; }
+
+/* ── Text colors ────────────────────────────────────────────── */
+[data-theme="light"] .text-gray-50  { color: #0f172a; }
+[data-theme="light"] .text-gray-100 { color: #0f172a; }
+[data-theme="light"] .text-gray-200 { color: #1e293b; }
+[data-theme="light"] .text-gray-300 { color: #334155; }
+[data-theme="light"] .text-gray-400 { color: #475569; }
+[data-theme="light"] .text-gray-500 { color: #64748b; }
+[data-theme="light"] .text-gray-600 { color: #94a3b8; }
+
+/* ── Hover text ─────────────────────────────────────────────── */
+[data-theme="light"] .hover\:text-gray-50:hover  { color: #0f172a; }
+[data-theme="light"] .hover\:text-gray-100:hover { color: #1e293b; }
+[data-theme="light"] .hover\:text-gray-200:hover { color: #1e293b; }
+[data-theme="light"] .hover\:text-gray-300:hover { color: #334155; }
+[data-theme="light"] .hover\:text-gray-400:hover { color: #475569; }
+
+/* ── Placeholder text ───────────────────────────────────────── */
+[data-theme="light"] .placeholder-gray-600::placeholder { color: #94a3b8; }
+[data-theme="light"] .placeholder-gray-500::placeholder { color: #64748b; }
+
+/* ── Border colors ──────────────────────────────────────────── */
+[data-theme="light"] .border-gray-900 { border-color: #e2e8f0; }
+[data-theme="light"] .border-gray-800 { border-color: #e2e8f0; }
+[data-theme="light"] .border-gray-700 { border-color: #cbd5e1; }
+[data-theme="light"] .border-gray-600 { border-color: #94a3b8; }
+
+/* ── Opacity borders ────────────────────────────────────────── */
+[data-theme="light"] .border-gray-800\/50  { border-color: rgb(226 232 240 / 0.7); }
+[data-theme="light"] .border-gray-700\/50  { border-color: rgb(203 213 225 / 0.8); }
+[data-theme="light"] .border-gray-700\/40  { border-color: rgb(203 213 225 / 0.6); }
+
+/* ── Border-top color ───────────────────────────────────────── */
+[data-theme="light"] .border-t-gray-700 { border-top-color: #cbd5e1; }
+
+/* ── Divide colors ──────────────────────────────────────────── */
+[data-theme="light"] .divide-gray-800 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e2e8f0;
+}
+[data-theme="light"] .divide-gray-700\/40 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgb(203 213 225 / 0.5);
+}
+
+/* ── Ring offset (focus states) ─────────────────────────────── */
+[data-theme="light"] .ring-offset-gray-900 {
+  --tw-ring-offset-color: #ffffff;
+}
+
+/* ── Skeleton loading bars ──────────────────────────────────── */
+[data-theme="light"] .animate-pulse .bg-gray-700\/40 { background-color: rgb(226 232 240 / 0.5); }
+[data-theme="light"] .animate-pulse .bg-gray-600\/40 { background-color: rgb(203 213 225 / 0.5); }
