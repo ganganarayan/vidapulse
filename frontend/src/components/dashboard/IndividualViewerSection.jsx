@@ -273,8 +273,9 @@ function ProViewerContent({ status, data, onRetry }) {
               style={{ minWidth: '60px', textAlign: 'right' }}>Watched</span>
       </div>
 
-      {/* Viewer rows */}
-      <div className="px-4 py-1">
+      {/* Viewer rows — fixed-height scrollable window.
+          Each row ≈ 42px; 420px shows ~10 rows before scrolling. */}
+      <div className="px-4 py-1 overflow-y-auto" style={{ maxHeight: '420px' }}>
         {sessions.map((s, i) => (
           <ViewerRow key={s.id} session={s} index={i} />
         ))}
@@ -309,7 +310,7 @@ function FakeViewerGrid() {
         <span className="flex-1 text-[10px] text-gray-600 uppercase tracking-wider font-medium">Timeline</span>
         <span className="text-[10px] text-gray-600 uppercase tracking-wider font-medium flex-shrink-0" style={{ minWidth: '60px', textAlign: 'right' }}>Watched</span>
       </div>
-      <div className="px-4 py-1">
+      <div className="px-4 py-1 overflow-y-auto" style={{ maxHeight: '420px' }}>
         {sessions.map((s, i) => <ViewerRow key={s.id} session={s} index={i} />)}
       </div>
     </div>
@@ -324,11 +325,11 @@ function ViewerGridSkeleton() {
   return (
     <div className="bg-gray-800/40 border border-gray-700/40 rounded-2xl overflow-hidden animate-pulse">
       <div className="h-9 border-b border-gray-700/40" />
-      <div className="px-4 py-2 flex flex-col gap-3">
-        {[...Array(8)].map((_, i) => (
+      <div className="px-4 py-2 flex flex-col gap-3 overflow-y-auto" style={{ maxHeight: '420px' }}>
+        {[...Array(10)].map((_, i) => (
           <div key={i} className="flex items-center gap-3 py-1.5">
             <div className="h-3 w-16 bg-gray-700/40 rounded" />
-            <div className="flex-1 h-5 bg-gray-700/30 rounded-sm" style={{ opacity: 1 - i * 0.08 }} />
+            <div className="flex-1 h-5 bg-gray-700/30 rounded-sm" style={{ opacity: 1 - i * 0.07 }} />
             <div className="h-3 w-10 bg-gray-700/30 rounded" />
           </div>
         ))}
