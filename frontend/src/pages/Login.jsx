@@ -20,20 +20,11 @@ export default function Login() {
   const [password,  setPassword]  = useState('');
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState('');
-  const [providers, setProviders] = useState({ google: false });
-
   // Pick up any OAuth error from query params
   useEffect(() => {
     const errKey = searchParams.get('error');
     if (errKey && OAUTH_ERRORS[errKey]) setError(OAUTH_ERRORS[errKey]);
   }, [searchParams]);
-
-  // Ask the backend which OAuth providers are configured
-  useEffect(() => {
-    api.get('/auth/providers')
-      .then(res => setProviders(res.data))
-      .catch(() => {}); // silently ignore — buttons just won't show
-  }, []);
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -55,11 +46,8 @@ export default function Login() {
   }
 
   function handleGoogleLogin() {
-    // Redirect to backend — backend handles the OAuth flow and redirects back
     window.location.href = '/api/auth/oauth/google';
   }
-
-  const showOAuth = providers.google;
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center px-4 py-12">
@@ -84,33 +72,27 @@ export default function Login() {
           </div>
         )}
 
-        {/* OAuth buttons */}
-        {showOAuth && (
-          <>
-            <div className="flex flex-col gap-3 mb-5">
-              {providers.google && (
-                <button
-                  onClick={handleGoogleLogin}
-                  className="flex items-center justify-center gap-3 w-full py-2.5 px-4
-                             bg-white text-gray-800 font-medium text-sm rounded-lg
-                             hover:bg-gray-100 transition-colors"
-                >
-                  <GoogleIcon />
-                  Continue with Google
-                </button>
-              )}
-            </div>
+        {/* Google OAuth */}
+        <div className="mb-5">
+          <button
+            onClick={handleGoogleLogin}
+            className="flex items-center justify-center gap-3 w-full py-2.5 px-4
+                       bg-white text-gray-800 font-medium text-sm rounded-lg
+                       hover:bg-gray-100 transition-colors"
+          >
+            <GoogleIcon />
+            Continue with Google
+          </button>
+        </div>
 
-            <div className="relative mb-5">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-700" />
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="bg-gray-800 px-3 text-gray-500">or sign in with email</span>
-              </div>
-            </div>
-          </>
-        )}
+        <div className="relative mb-5">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-700" />
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-gray-800 px-3 text-gray-500">or sign in with email</span>
+          </div>
+        </div>
 
         {/* Email/password form */}
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
@@ -168,17 +150,16 @@ export default function Login() {
         {/* Sign up note */}
         <p className="mt-5 text-center text-xs text-gray-500">
           Don't have an account?{' '}
-          {showOAuth
-            ? <span className="text-gray-400">Sign up with Google above.</span>
-            : <span className="text-gray-400">Contact support to get access.</span>
-          }
+          <Link to="/register" className="text-amber-400 hover:text-amber-300 font-medium transition-colors">
+            Create free account →
+          </Link>
         </p>
       </div>
     </div>
   );
 }
 
-// ── Brand SVG icons ───────────────────────────────────────────
+// ── Brand SVG icon ────────────────────────────────────────────
 
 function GoogleIcon() {
   return (
