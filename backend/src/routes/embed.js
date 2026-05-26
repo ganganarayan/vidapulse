@@ -162,7 +162,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
               }
               if(e.data===S.ENDED){
                 if(on){on=false;secs+=d-t0;ivs.push([t0,d]);}
-                maxP=100;ping('end');
+                maxP=100;_ended=true;ping('end');
               }
             }
           }
@@ -194,7 +194,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
             ping('pause');}
         });
         p.on('ended',function(){
-          maxP=100;ping('end');
+          maxP=100;_ended=true;ping('end');
         });
         p.on('timeupdate',function(d){
           p.getDuration().then(function(dur){
@@ -574,7 +574,12 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         });
         v.addEventListener('ended',function(){
           if(on){on=false;var e=v.currentTime;curPos=e;secs+=e-t0;ivs.push([t0,e]);}
-          maxP=100;curPos=v.duration||curPos;ping('end');
+          maxP=100;curPos=v.duration||curPos;
+          /* Mark complete BEFORE pinging so _onUnload (pagehide / beforeunload)
+             does not fire a second ping if the user closes the tab right after
+             the video finishes. */
+          _ended=true;
+          ping('end');
         });
         v.addEventListener('seeked',function(){
           curPos=v.currentTime;
@@ -709,10 +714,15 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
     function savePos(t){if(RESUME&&t>5){try{localStorage.setItem(rpKey,t);}catch(_){}}}
     function loadPos(){try{return RESUME?parseFloat(localStorage.getItem(rpKey)||'0'):0;}catch(_){return 0;}}
 
-    /* Fire final end ping on page unload.
+    /* Flush remaining watch data on page unload.
        iOS Safari does NOT reliably fire 'beforeunload' — it fires 'pagehide' instead.
        Desktop browsers fire both. The _ended guard prevents double-counting on
-       browsers that fire both events (Chrome, Firefox, Edge on desktop). */
+       browsers that fire both events (Chrome, Firefox, Edge on desktop).
+
+       IMPORTANT: send 'heartbeat', NOT 'end'. Page-close is NOT completion —
+       the video 'ended' event is the only authoritative signal for reached_end.
+       Sending 'end' here was setting reached_end=true for every page-close,
+       inflating the completion rate to ~100% regardless of watch depth. */
     var _ended=false;
     function _onUnload(){
       if(_ended)return;
@@ -724,7 +734,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         savePos(now);
         secs+=now-t0;ivs.push([t0,now]);
       }
-      ping('end');
+      ping('heartbeat');
     }
     window.addEventListener('beforeunload',_onUnload);
     /* pagehide: fires reliably on iOS Safari (and all modern browsers).

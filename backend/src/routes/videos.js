@@ -678,17 +678,25 @@ router.get('/:id/stories', requireAuth, async (req, res, next) => {
 
 router.get('/:id/heatmap', requireAuth, planGate('heatmap'), async (req, res, next) => {
   try {
-    // Ownership check + pull cached drop-off / duration from the video row
+    // Ownership check + pull cached drop-off / duration from the video row.
+    // total_players = sessions where the viewer actually pressed play (play_count > 0).
+    // We use this as the 100% denominator for the retention heatmap so that the
+    // chart correctly shows "what % of viewers who played watched this second".
+    // We do NOT use the videos.unique_viewers column because it may lag behind and
+    // counts page-loads (not actual plays), causing the retention baseline to be wrong.
     const { rows: [video] } = await pool.query(
-      `SELECT id,
-              duration_seconds,
-              primary_drop_off_second,
-              primary_drop_off_pct,
-              unique_viewers
-       FROM   videos
-       WHERE  id        = $1
-         AND  user_id   = $2
-         AND  is_active = TRUE`,
+      `SELECT v.id,
+              v.duration_seconds,
+              v.primary_drop_off_second,
+              v.primary_drop_off_pct,
+              (SELECT COUNT(*)
+               FROM   analytics_sessions s
+               WHERE  s.video_id  = v.id
+                 AND  s.play_count > 0) AS total_players
+       FROM   videos v
+       WHERE  v.id        = $1
+         AND  v.user_id   = $2
+         AND  v.is_active = TRUE`,
       [req.params.id, req.user.id]
     );
 
@@ -718,7 +726,7 @@ router.get('/:id/heatmap', requireAuth, planGate('heatmap'), async (req, res, ne
       drop_off_second : video.primary_drop_off_second,
       drop_off_pct    : video.primary_drop_off_pct,
       duration_seconds: durationSeconds,
-      total_viewers   : video.unique_viewers,
+      total_viewers   : Number(video.total_players) || 0,
     });
   } catch (err) {
     next(err);
