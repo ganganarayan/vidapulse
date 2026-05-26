@@ -44,17 +44,17 @@ function EventBadge({ type }) {
   );
 }
 
-function fmtTime(iso) {
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+// Under 1 hour → relative string; at or over 1 hour → null (use TimestampCell)
+function fmtRelTime(iso) {
   if (!iso) return '—';
-  const d = new Date(iso);
-  const diff = Date.now() - d.getTime();
+  const diff = Date.now() - new Date(iso).getTime();
   const s = Math.floor(diff / 1000);
   if (s < 60)  return `${s}s ago`;
   const m = Math.floor(s / 60);
   if (m < 60)  return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24)  return `${h}h ago`;
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return null; // caller should render the two-line absolute form
 }
 
 function fmtAbsTime(iso) {
@@ -64,6 +64,32 @@ function fmtAbsTime(iso) {
     day: 'numeric', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
   });
+}
+
+// Two-line absolute: dd/mm/yy on top, hh:mm:ss below
+function TimestampCell({ iso }) {
+  if (!iso) return <span className="text-gray-500">—</span>;
+  const rel = fmtRelTime(iso);
+  if (rel !== null) {
+    return (
+      <span className="text-gray-400 text-xs tabular-nums" title={fmtAbsTime(iso)}>
+        {rel}
+      </span>
+    );
+  }
+  const d  = new Date(iso);
+  const dd = pad2(d.getDate());
+  const mm = pad2(d.getMonth() + 1);
+  const yy = String(d.getFullYear()).slice(2);
+  const hh = pad2(d.getHours());
+  const mn = pad2(d.getMinutes());
+  const ss = pad2(d.getSeconds());
+  return (
+    <div className="text-gray-400 text-xs tabular-nums leading-tight text-right">
+      <div>{dd}/{mm}/{yy}</div>
+      <div className="text-gray-500">{hh}:{mn}:{ss}</div>
+    </div>
+  );
 }
 
 function shortSession(uuid) {
@@ -203,12 +229,7 @@ export default function EventsPage() {
                       </span>
                     </td>
                     <td className="px-6 py-3 text-right">
-                      <span
-                        className="text-gray-400 text-xs tabular-nums"
-                        title={fmtAbsTime(ev.occurred_at)}
-                      >
-                        {fmtTime(ev.occurred_at)}
-                      </span>
+                      <TimestampCell iso={ev.occurred_at} />
                     </td>
                   </tr>
                 ))}

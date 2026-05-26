@@ -282,9 +282,10 @@ function CtaSetupGuide() {
         <div className="flex items-start gap-3">
           <StepBadge n="1" />
           <div>
-            <p className="text-xs font-semibold text-gray-300">Open the video you want to track</p>
+            <p className="text-xs font-semibold text-gray-300">Go to Analytics → CTA Tracking</p>
             <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-              Go to your video dashboard and click through to the video's analytics page.
+              Click <strong className="text-gray-400">CTA Tracking</strong> in the left sidebar
+              (under the Analytics section).
             </p>
           </div>
         </div>
@@ -292,10 +293,11 @@ function CtaSetupGuide() {
         <div className="flex items-start gap-3">
           <StepBadge n="2" />
           <div>
-            <p className="text-xs font-semibold text-gray-300">Open the Share &amp; Embed tab</p>
+            <p className="text-xs font-semibold text-gray-300">Click "+ Add link" and fill in the details</p>
             <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-              Click <strong className="text-gray-400">Share &amp; Embed</strong> in the left sidebar of that video.
-              Scroll down to the <strong className="text-gray-400">CTA Tracking Link</strong> section.
+              Give your link a <strong className="text-gray-400">button name</strong> (e.g. "Buy Now"),
+              an optional <strong className="text-gray-400">page name</strong> (e.g. "Sales Page"),
+              and the <strong className="text-gray-400">destination URL</strong> where visitors land.
             </p>
           </div>
         </div>
@@ -303,10 +305,10 @@ function CtaSetupGuide() {
         <div className="flex items-start gap-3">
           <StepBadge n="3" />
           <div>
-            <p className="text-xs font-semibold text-gray-300">Enter your destination URL and copy the tracking link</p>
+            <p className="text-xs font-semibold text-gray-300">Copy the tracking link</p>
             <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-              Type the page you want visitors to land on after clicking
-              (e.g. your checkout or sign-up page). VidaPulse generates the tracking link instantly.
+              Click <strong className="text-gray-400">Copy</strong> next to the link.
+              VidaPulse generates a unique redirect URL for each button.
             </p>
           </div>
         </div>
@@ -327,8 +329,8 @@ function CtaSetupGuide() {
       <div className="text-xs text-gray-500 leading-relaxed border-t border-gray-700/40 pt-3">
         Every click appears in your <strong className="text-gray-400">Events log</strong> as a
         pink <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-mono bg-pink-500/15 text-pink-300 border border-pink-500/25">cta click</span> badge.
-        Enable this alert to get an in-app notification each time it fires.
-        Use one tracking link per video — each video has its own link in its Embed tab.
+        Enable this alert to get notified each time it fires.
+        You can have up to 20 tracking links per account — deleting a link does not remove its past events.
       </div>
 
     </div>

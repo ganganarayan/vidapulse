@@ -25,6 +25,7 @@ import EventsPage        from './pages/EventsPage';
 import FunnelsPage       from './pages/FunnelsPage';
 import AlertsPage        from './pages/AlertsPage';
 import ReportsPage       from './pages/ReportsPage';
+import CTATrackingPage   from './pages/CTATrackingPage';
 
 /**
  * ProtectedRoute
@@ -140,10 +141,11 @@ export default function App() {
           />
 
           {/* ── Analytics pages (all authenticated users) ───────── */}
-          <Route path="/events"  element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
-          <Route path="/funnels" element={<ProtectedRoute><FunnelsPage /></ProtectedRoute>} />
-          <Route path="/alerts"  element={<ProtectedRoute><AlertsPage /></ProtectedRoute>} />
-          <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
+          <Route path="/events"       element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
+          <Route path="/funnels"      element={<ProtectedRoute><FunnelsPage /></ProtectedRoute>} />
+          <Route path="/cta-tracking" element={<ProtectedRoute><CTATrackingPage /></ProtectedRoute>} />
+          <Route path="/alerts"       element={<ProtectedRoute><AlertsPage /></ProtectedRoute>} />
+          <Route path="/reports"      element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
 
           {/* ── Integrations (all authenticated users) ───────────── */}
           <Route

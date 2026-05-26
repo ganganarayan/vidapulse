@@ -634,10 +634,11 @@ router.get('/cta/link/:ctaId', async (req, res) => {
       `SELECT c.id, c.cta_name, c.page_name, c.destination_url, c.video_id,
               p.name AS plan_name
        FROM   video_cta_links c
-       JOIN   videos v ON v.id = c.video_id
-       JOIN   users  u ON u.id = v.user_id
+       JOIN   users  u ON u.id = c.user_id
        JOIN   plans  p ON p.id = u.plan_id
-       WHERE  c.id = $1 AND v.is_active = TRUE`,
+       LEFT JOIN videos v ON v.id = c.video_id
+       WHERE  c.id = $1
+         AND  (c.video_id IS NULL OR v.is_active = TRUE)`,
       [ctaId]
     );
     ctaLink = row;
@@ -647,7 +648,7 @@ router.get('/cta/link/:ctaId', async (req, res) => {
   }
 
   if (!ctaLink) {
-    return res.status(404).send('CTA link not found or video is inactive.');
+    return res.status(404).send('CTA link not found.');
   }
 
   // Redirect immediately — tracking is fire-and-forget

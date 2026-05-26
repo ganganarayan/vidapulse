@@ -3,19 +3,25 @@
 /**
  * CTA Links API — /api/cta-links
  *
- * Manages per-video CTA tracking links (Pro plan only).
- * Each link stores a button name, optional page name, and destination URL.
- * Tracking URL: GET /api/analytics/cta/link/:ctaLinkId  (in analytics.js)
+ * Account-level CTA tracking links (Pro plan only).
+ * Links are NOT tied to a specific video — they belong to the user account.
+ * Max 20 links per user at any time.
  *
- *   GET    /api/cta-links/video/:videoId  — list CTA links for a video
- *   POST   /api/cta-links                 — create a new CTA link
- *   DELETE /api/cta-links/:id             — delete a CTA link
+ * Deleting a link does NOT remove its events from analytics_events.
+ * The event's metadata (cta_link_id, cta_name, etc.) is preserved in the
+ * events log permanently.
+ *
+ *   GET    /api/cta-links       — list all CTA links for the authenticated user
+ *   POST   /api/cta-links       — create a new CTA link (max 20 per account)
+ *   DELETE /api/cta-links/:id   — delete a CTA link (events are retained)
  */
 
-const express        = require('express');
-const router         = express.Router();
-const { pool }       = require('../config/database');
-const { requireAuth }= require('../middleware/requireAuth');
+const express         = require('express');
+const router          = express.Router();
+const { pool }        = require('../config/database');
+const { requireAuth } = require('../middleware/requireAuth');
+
+const MAX_CTA_LINKS = 20;
 
 // ── Pro plan check helper ────────────────────────────────────────────────
 
@@ -37,36 +43,33 @@ async function requirePro(userId, res) {
   return isPro;
 }
 
-// ── GET /api/cta-links/video/:videoId ────────────────────────────────────
-// List all CTA links for a video. Video must belong to the authenticated user.
-// Available on all plans (read-only access for future reference).
+// ── GET /api/cta-links ───────────────────────────────────────────────────
+// List all CTA links for the authenticated user.
 
-router.get('/video/:videoId', requireAuth, async (req, res, next) => {
+router.get('/', requireAuth, async (req, res, next) => {
   try {
-    const { rows: [video] } = await pool.query(
-      `SELECT id FROM videos WHERE id = $1 AND user_id = $2 AND is_active = TRUE`,
-      [req.params.videoId, req.user.id]
-    );
-    if (!video) return res.status(404).json({ error: 'video_not_found' });
-
     const { rows } = await pool.query(
       `SELECT id, cta_name, page_name, destination_url, created_at
        FROM   video_cta_links
-       WHERE  video_id = $1
+       WHERE  user_id = $1
        ORDER  BY created_at ASC`,
-      [req.params.videoId]
+      [req.user.id]
     );
-    return res.json({ cta_links: rows });
+    return res.json({
+      cta_links: rows,
+      total    : rows.length,
+      limit    : MAX_CTA_LINKS,
+    });
   } catch (err) {
     next(err);
   }
 });
 
 // ── POST /api/cta-links ──────────────────────────────────────────────────
-// Create a new CTA tracking link. Pro plan required.
+// Create a new account-level CTA tracking link. Pro plan required.
+// Max MAX_CTA_LINKS links per user — returns 400 if limit is reached.
 //
 // Body:
-//   video_id        UUID    — required
 //   cta_name        string  — required ("Buy Now", "Sign Up", etc.)
 //   page_name       string  — optional ("Sales Page", "Email Funnel")
 //   destination_url string  — required (http:// or https://)
@@ -75,30 +78,34 @@ router.post('/', requireAuth, async (req, res, next) => {
   try {
     if (!await requirePro(req.user.id, res)) return;
 
-    const { video_id, cta_name, page_name, destination_url } = req.body ?? {};
+    // Enforce 20-link cap
+    const { rows: [cnt] } = await pool.query(
+      `SELECT COUNT(*) AS n FROM video_cta_links WHERE user_id = $1`,
+      [req.user.id]
+    );
+    if (Number(cnt.n) >= MAX_CTA_LINKS) {
+      return res.status(400).json({
+        error  : 'limit_reached',
+        message: `You can have at most ${MAX_CTA_LINKS} CTA tracking links. Delete an existing link to add a new one.`,
+      });
+    }
 
-    if (!video_id)             return res.status(400).json({ error: 'video_id required' });
-    if (!cta_name?.trim())     return res.status(400).json({ error: 'cta_name required' });
+    const { cta_name, page_name, destination_url } = req.body ?? {};
+
+    if (!cta_name?.trim())        return res.status(400).json({ error: 'cta_name required' });
     if (!destination_url?.trim()) return res.status(400).json({ error: 'destination_url required' });
 
     const safeDest = destination_url.trim();
     if (!safeDest.startsWith('http://') && !safeDest.startsWith('https://')) {
-      return res.status(400).json({ error: 'destination_url must start with http:// or https://' });
+      return res.status(400).json({ message: 'Destination must start with https://' });
     }
 
-    // Verify video belongs to this user
-    const { rows: [video] } = await pool.query(
-      `SELECT id FROM videos WHERE id = $1 AND user_id = $2 AND is_active = TRUE`,
-      [video_id, req.user.id]
-    );
-    if (!video) return res.status(404).json({ error: 'video_not_found' });
-
     const { rows: [ctaLink] } = await pool.query(
-      `INSERT INTO video_cta_links (video_id, cta_name, page_name, destination_url)
+      `INSERT INTO video_cta_links (user_id, cta_name, page_name, destination_url)
        VALUES ($1, $2, $3, $4)
        RETURNING id, cta_name, page_name, destination_url, created_at`,
       [
-        video_id,
+        req.user.id,
         cta_name.trim().slice(0, 200),
         page_name?.trim().slice(0, 200) || null,
         safeDest.slice(0, 2000),
@@ -111,17 +118,14 @@ router.post('/', requireAuth, async (req, res, next) => {
 });
 
 // ── DELETE /api/cta-links/:id ────────────────────────────────────────────
-// Delete a CTA link. The link must belong to a video owned by this user.
+// Delete a CTA link. Ownership verified via user_id.
+// Analytics events that recorded this link's clicks are NOT deleted —
+// they remain permanently in the events log.
 
 router.delete('/:id', requireAuth, async (req, res, next) => {
   try {
-    // Use USING to join videos and verify ownership in a single DELETE
     const { rowCount } = await pool.query(
-      `DELETE FROM video_cta_links c
-       USING  videos v
-       WHERE  c.id       = $1
-         AND  c.video_id = v.id
-         AND  v.user_id  = $2`,
+      `DELETE FROM video_cta_links WHERE id = $1 AND user_id = $2`,
       [req.params.id, req.user.id]
     );
     if (rowCount === 0) return res.status(404).json({ error: 'not_found' });

@@ -61,10 +61,11 @@ function AppSidebar() {
         <SidebarItem to="/videos"    icon={<VideoIcon />}  label="Videos"   active={active('/videos')} />
 
         <SidebarDivider label="Analytics" />
-        <SidebarItem to="/events"  icon={<EventsIcon />}  label="Events"   active={active('/events')} />
-        <SidebarItem to="/funnels" icon={<FunnelIcon />}  label="Funnels"  active={active('/funnels')} />
-        <SidebarItem to="/reports" icon={<ReportsIcon />} label="Reports"  active={active('/reports')} />
-        <SidebarItem to="/alerts"  icon={<BellIcon />}    label="Alerts"   active={active('/alerts')} />
+        <SidebarItem to="/events"       icon={<EventsIcon />}  label="Events"       active={active('/events')} />
+        <SidebarItem to="/funnels"      icon={<FunnelIcon />}  label="Funnels"      active={active('/funnels')} />
+        <SidebarItem to="/cta-tracking" icon={<CtaIcon />}     label="CTA Tracking" active={active('/cta-tracking')} />
+        <SidebarItem to="/reports"      icon={<ReportsIcon />} label="Reports"      active={active('/reports')} />
+        <SidebarItem to="/alerts"       icon={<BellIcon />}    label="Alerts"       active={active('/alerts')} />
 
         <SidebarDivider label="Account" />
         <SidebarItem to="/account"       icon={<SettingsIcon />}    label="Settings"       active={active('/account')} />
@@ -290,6 +291,7 @@ function UsersIcon()        { return I(<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 
 function ActivityIcon()     { return I(<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>); }
 function HeatmapIcon()      { return I(<><rect x="3" y="3" width="4" height="4" rx="1"/><rect x="10" y="3" width="4" height="4" rx="1"/><rect x="17" y="3" width="4" height="4" rx="1"/><rect x="3" y="10" width="4" height="4" rx="1"/><rect x="10" y="10" width="4" height="4" rx="1"/><rect x="17" y="10" width="4" height="4" rx="1"/><rect x="3" y="17" width="4" height="4" rx="1"/><rect x="10" y="17" width="4" height="4" rx="1"/><rect x="17" y="17" width="4" height="4" rx="1"/></>); }
 function FunnelIcon()       { return I(<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>); }
+function CtaIcon()          { return I(<><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/></>); }
 function EventsIcon()       { return I(<><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>); }
 function ReportsIcon()      { return I(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></>); }
 function BellIcon()         { return I(<><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></>); }
