@@ -969,20 +969,40 @@ router.get('/:id/analytics/breakdown', requireAuth, async (req, res, next) => {
 
     const by = req.query.by ?? 'device';
 
-    let col;
-    if      (by === 'device')  col = `COALESCE(device_type::text, 'unknown')`;
-    else if (by === 'browser') col = `COALESCE(browser, 'Unknown')`;
-    else if (by === 'country') col = `COALESCE(NULLIF(country_name,''), country_code, 'Unknown')`;
-    else return res.status(400).json({ error: 'Invalid breakdown', valid: ['device','browser','country'] });
+    const BREAKDOWN_COLS = {
+      device      : `COALESCE(INITCAP(device_type::text), 'Unknown')`,
+      browser     : `COALESCE(NULLIF(browser,''), 'Unknown')`,
+      country     : `COALESCE(NULLIF(country_name,''), NULLIF(country_code,''), 'Unknown')`,
+      city        : `COALESCE(NULLIF(city,''), 'Unknown')`,
+      region      : `COALESCE(NULLIF(region,''), 'Unknown')`,
+      utm_source  : `COALESCE(NULLIF(utm_source,''), '(none)')`,
+      utm_medium  : `COALESCE(NULLIF(utm_medium,''), '(none)')`,
+      utm_campaign: `COALESCE(NULLIF(utm_campaign,''), '(none)')`,
+      utm_term    : `COALESCE(NULLIF(utm_term,''), '(none)')`,
+      utm_content : `COALESCE(NULLIF(utm_content,''), '(none)')`,
+      referrer    : `COALESCE(NULLIF(REGEXP_REPLACE(referrer_url, '^https?://([^/]+).*$', '\\1'), ''), '(direct)')`,
+      domain      : `COALESCE(NULLIF(domain,''), '(direct)')`,
+    };
+
+    const col = BREAKDOWN_COLS[by];
+    if (!col) {
+      return res.status(400).json({ error: 'Invalid breakdown', valid: Object.keys(BREAKDOWN_COLS) });
+    }
+
+    // UTM and referrer breakdowns include sessions with 0 plays (page loads)
+    // All other breakdowns filter to actual plays only
+    const playFilter = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','referrer','domain'].includes(by)
+      ? ''
+      : 'AND play_count > 0';
 
     const { rows } = await pool.query(
       `SELECT ${col} AS label,
               COUNT(*) AS count
        FROM   analytics_sessions
-       WHERE  video_id = $1 AND play_count > 0
+       WHERE  video_id = $1 ${playFilter}
        GROUP  BY 1
        ORDER  BY 2 DESC
-       LIMIT  20`,
+       LIMIT  25`,
       [req.params.id]
     );
 
@@ -990,10 +1010,162 @@ router.get('/:id/analytics/breakdown', requireAuth, async (req, res, next) => {
     const data  = rows.map(r => ({
       label: r.label,
       count: parseInt(r.count, 10),
-      pct  : total > 0 ? Math.round(parseInt(r.count, 10) / total * 100) : 0,
+      pct  : total > 0 ? parseFloat((parseInt(r.count, 10) / total * 100).toFixed(1)) : 0,
     }));
 
     return res.json({ data, total });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// GET /api/videos/:id/retention
+//
+// Returns a viewer retention curve computed from heatmap aggregate data.
+// For each second bucket: what % of the maximum-viewer second is still watching.
+//
+// Response: { data: [{ second, pct }], duration_seconds, total_viewers }
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get('/:id/retention', requireAuth, async (req, res, next) => {
+  try {
+    const { rows: [video] } = await pool.query(
+      `SELECT id, duration_seconds, unique_viewers
+       FROM   videos
+       WHERE  id = $1 AND user_id = $2 AND is_active = TRUE`,
+      [req.params.id, req.user.id]
+    );
+    if (!video) return res.status(404).json({ error: 'Video not found' });
+
+    const { rows: heatmap } = await pool.query(
+      `SELECT second_bucket, first_watches + replays AS total
+       FROM   analytics_heatmap_aggregate
+       WHERE  video_id = $1
+       ORDER  BY second_bucket ASC`,
+      [req.params.id]
+    );
+
+    if (heatmap.length === 0) {
+      return res.json({ data: [], duration_seconds: video.duration_seconds, total_viewers: video.unique_viewers });
+    }
+
+    // Max viewers at any second = the peak (usually the very first second)
+    const maxViewers = Math.max(...heatmap.map(r => parseInt(r.total, 10)), 1);
+
+    const data = heatmap.map(r => ({
+      second: parseInt(r.second_bucket, 10),
+      pct   : Math.min(100, Math.round(parseInt(r.total, 10) / maxViewers * 100)),
+    }));
+
+    let durationSeconds = video.duration_seconds ? parseFloat(video.duration_seconds) : null;
+    if (!durationSeconds && heatmap.length > 0) {
+      durationSeconds = Math.max(...heatmap.map(r => r.second_bucket)) + 5;
+    }
+
+    return res.json({ data, duration_seconds: durationSeconds, total_viewers: video.unique_viewers });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// GET /api/videos/:id/viewer-engagement
+//
+// Individual viewer engagement rows. Pro plan only.
+// Returns the last 60 sessions with their watch intervals bucketed for
+// a per-viewer timeline visualisation.
+//
+// Response: { sessions: [{ id, viewer_num, date, device, country, city,
+//   max_watch_pct, play_count, reached_end, segments: [[start_pct, end_pct, pass]] }],
+//   duration_seconds }
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get('/:id/viewer-engagement', requireAuth, planGate('heatmap'), async (req, res, next) => {
+  try {
+    const { rows: [video] } = await pool.query(
+      `SELECT id, duration_seconds
+       FROM   videos
+       WHERE  id = $1 AND user_id = $2 AND is_active = TRUE`,
+      [req.params.id, req.user.id]
+    );
+    if (!video) return res.status(404).json({ error: 'Video not found' });
+
+    const durationSeconds = video.duration_seconds ? parseFloat(video.duration_seconds) : null;
+
+    // Fetch last 60 sessions (most recent first)
+    const { rows: sessions } = await pool.query(
+      `SELECT s.id,
+              ROW_NUMBER() OVER (ORDER BY s.started_at DESC) AS viewer_num,
+              s.started_at,
+              s.device_type,
+              s.browser,
+              s.country_name,
+              s.city,
+              s.max_watch_pct,
+              s.play_count,
+              s.reached_end
+       FROM   analytics_sessions s
+       WHERE  s.video_id = $1
+       ORDER  BY s.started_at DESC
+       LIMIT  60`,
+      [req.params.id]
+    );
+
+    if (sessions.length === 0) {
+      return res.json({ sessions: [], duration_seconds: durationSeconds });
+    }
+
+    const sessionIds = sessions.map(s => s.id);
+
+    // Fetch all watch intervals for these sessions
+    const { rows: intervals } = await pool.query(
+      `SELECT session_id, start_second, end_second, watch_pass
+       FROM   analytics_watch_intervals
+       WHERE  session_id = ANY($1::uuid[])
+       ORDER  BY session_id, start_second`,
+      [sessionIds]
+    );
+
+    // Group intervals by session_id
+    const intervalMap = {};
+    for (const iv of intervals) {
+      if (!intervalMap[iv.session_id]) intervalMap[iv.session_id] = [];
+      intervalMap[iv.session_id].push(iv);
+    }
+
+    const dur = durationSeconds || 1;
+
+    const result = sessions.map(s => {
+      const ivs = intervalMap[s.id] || [];
+      // Convert absolute seconds to [start_pct, end_pct, watch_pass] for the frontend
+      const segments = ivs.map(iv => [
+        Math.min(100, (parseFloat(iv.start_second) / dur) * 100),
+        Math.min(100, (parseFloat(iv.end_second)   / dur) * 100),
+        iv.watch_pass,
+      ]).filter(([a, b]) => b > a);
+
+      // Fallback: if no intervals stored but max_watch_pct > 0, synthesise a segment
+      if (segments.length === 0 && parseFloat(s.max_watch_pct) > 0) {
+        segments.push([0, parseFloat(s.max_watch_pct), 1]);
+      }
+
+      return {
+        id          : s.id,
+        viewer_num  : parseInt(s.viewer_num, 10),
+        date        : s.started_at,
+        device      : s.device_type || 'unknown',
+        browser     : s.browser,
+        country     : s.country_name,
+        city        : s.city,
+        max_watch_pct: parseFloat(s.max_watch_pct) || 0,
+        play_count  : parseInt(s.play_count, 10) || 0,
+        reached_end : s.reached_end,
+        segments,
+      };
+    });
+
+    return res.json({ sessions: result, duration_seconds: durationSeconds });
   } catch (err) {
     next(err);
   }

@@ -44,16 +44,24 @@ function parseBrowser(ua) {
   return 'Other';
 }
 
-/** Look up country from an IP address (handles IPv4-mapped IPv6) */
+/** Look up geo data from an IP address (handles IPv4-mapped IPv6) */
 function lookupCountry(ip) {
-  if (!ip) return { code: null, name: null };
+  if (!ip) return { code: null, name: null, city: null, region: null, timezone: null, lat: null, lng: null };
   const ipv4 = ip.replace(/^::ffff:/i, '');
   try {
     const geo = geoip.lookup(ipv4);
-    if (!geo?.country) return { code: null, name: null };
-    return { code: geo.country, name: ISO_NAMES[geo.country] || geo.country };
+    if (!geo?.country) return { code: null, name: null, city: null, region: null, timezone: null, lat: null, lng: null };
+    return {
+      code    : geo.country,
+      name    : ISO_NAMES[geo.country] || geo.country,
+      city    : geo.city     || null,
+      region  : geo.region   || null,
+      timezone: geo.timezone || null,
+      lat     : geo.ll?.[0]  ?? null,
+      lng     : geo.ll?.[1]  ?? null,
+    };
   } catch {
-    return { code: null, name: null };
+    return { code: null, name: null, city: null, region: null, timezone: null, lat: null, lng: null };
   }
 }
 
@@ -250,10 +258,12 @@ router.post('/session', async (req, res) => {
           device_type, browser, os,
           screen_width, screen_height,
           user_agent, ip_address,
-          country_code, country_name,
+          country_code, country_name, city, region, timezone,
+          latitude, longitude,
           started_at)
        VALUES
-         ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::inet,$18,$19,NOW())
+         ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::inet,
+          $18,$19,$20,$21,$22,$23,$24,NOW())
        RETURNING id`,
       [
         video_id,
@@ -275,6 +285,11 @@ router.post('/session', async (req, res) => {
         realIp       || null,
         geo.code     || null,
         geo.name     || null,
+        geo.city     || null,
+        geo.region   || null,
+        geo.timezone || null,
+        geo.lat      ?? null,
+        geo.lng      ?? null,
       ]
     );
 

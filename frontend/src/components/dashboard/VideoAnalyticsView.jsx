@@ -8,10 +8,12 @@ import InsightsSection         from './InsightsSection';
 import HeatmapSection          from './HeatmapSection';
 import ViewerStoriesSection    from './ViewerStoriesSection';
 import NotificationBell        from './NotificationBell';
-import MetricDetailView        from './MetricDetailView';
-import DevicesSection          from './DevicesSection';
-import GeographySection        from './GeographySection';
-import BrowsersSection         from './BrowsersSection';
+import MetricDetailView            from './MetricDetailView';
+import DevicesSection              from './DevicesSection';
+import GeographySection            from './GeographySection';
+import BrowsersSection             from './BrowsersSection';
+import IndividualViewerSection     from './IndividualViewerSection';
+import TrafficSourcesSection       from './TrafficSourcesSection';
 
 /**
  * VideoAnalyticsView
@@ -59,6 +61,7 @@ const VIEW_LABELS = {
   geography     : 'Geography',
   devices       : 'Devices',
   browsers      : 'Browsers',
+  traffic       : 'Traffic Sources',
   embed         : 'Share & Embed',
   player        : 'Player Settings',
 };
@@ -222,17 +225,25 @@ export default function VideoAnalyticsView({
 
         {/* ── Engagement sub-views ─────────────────────────────────── */}
         {activeView === 'heatmap' && (
-          <div className="px-6 py-6">
-            <div className="mb-5">
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
-                Engagement
-              </p>
-              <h2 className="text-2xl font-bold text-gray-50">Engagement Heatmap</h2>
-              <p className="text-xs text-gray-400 mt-1">
-                Per-second viewer retention across the full video timeline.
-              </p>
+          <div className="px-6 py-6 flex flex-col gap-10">
+            {/* Viewer Retention Curve */}
+            <div>
+              <div className="mb-5">
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
+                  Engagement
+                </p>
+                <h2 className="text-2xl font-bold text-gray-50">Viewer Retention</h2>
+                <p className="text-xs text-gray-400 mt-1">
+                  Percentage of viewers still watching at each point in the video.
+                </p>
+              </div>
+              <HeatmapSection videoId={video?.id} video={video} userPlan={user?.plan} />
             </div>
-            <HeatmapSection videoId={video?.id} video={video} userPlan={user?.plan} />
+
+            {/* Individual Viewer Engagement */}
+            <div>
+              <IndividualViewerSection videoId={video?.id} userPlan={user?.plan} />
+            </div>
           </div>
         )}
 
@@ -271,9 +282,10 @@ export default function VideoAnalyticsView({
         )}
 
         {/* ── Audience sub-views ───────────────────────────────────── */}
-        {activeView === 'geography' && <GeographySection videoId={video?.id} />}
-        {activeView === 'devices'   && <DevicesSection   videoId={video?.id} />}
-        {activeView === 'browsers'  && <BrowsersSection  videoId={video?.id} />}
+        {activeView === 'geography' && <GeographySection      videoId={video?.id} />}
+        {activeView === 'devices'   && <DevicesSection         videoId={video?.id} />}
+        {activeView === 'browsers'  && <BrowsersSection        videoId={video?.id} />}
+        {activeView === 'traffic'   && <TrafficSourcesSection  videoId={video?.id} />}
 
         {/* ── Embed view ───────────────────────────────────────────── */}
         {activeView === 'embed' && (
@@ -376,6 +388,9 @@ export default function VideoAnalyticsView({
                   </button>
                   <HeatmapSection videoId={video?.id} video={video} userPlan={user?.plan} />
                 </div>
+
+                {/* Individual Viewer Engagement */}
+                <IndividualViewerSection videoId={video?.id} userPlan={user?.plan} />
 
                 {/* Viewer Stories */}
                 <ViewerStoriesSection videoId={video?.id} userPlan={user?.plan} />
