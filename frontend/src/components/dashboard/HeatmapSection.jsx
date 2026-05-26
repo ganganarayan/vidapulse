@@ -182,9 +182,11 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
 
   if (!buckets || buckets.length === 0) return null;
 
-  const W = 100; // viewBox width units (%)
-  const H = 100; // viewBox height units (%)
-  const PAD_L = 8;  // left padding (for Y labels)
+  const W = 100; // viewBox width units
+  const H = 100; // viewBox height units
+  // PAD_L is 0: Y-axis labels live outside the SVG in a sibling div,
+  // so the SVG data fills the full width → hover position aligns exactly.
+  const PAD_L = 0;
   const PAD_B = 8;  // bottom padding (for X labels)
   const CHART_W = W - PAD_L;
   const CHART_H_SVG = H - PAD_B;
@@ -192,7 +194,7 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
   // Map bucket index to SVG coordinates
   const n = buckets.length;
   const pts = buckets.map((b, i) => {
-    const x = PAD_L + (i / (n - 1)) * CHART_W;
+    const x = n > 1 ? (i / (n - 1)) * CHART_W : 0;
     const y = CHART_H_SVG - (b.pct / 100) * CHART_H_SVG;
     return { x, y, pct: b.pct, second: b.second };
   });
@@ -218,16 +220,17 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
   // Area fill: close to bottom
   const areaPath = linePath
     + ` L ${sampled[sampled.length - 1].x} ${CHART_H_SVG}`
-    + ` L ${PAD_L} ${CHART_H_SVG} Z`;
+    + ` L 0 ${CHART_H_SVG} Z`;
 
-  // Gradient stops derived from sampled points
-  const gradientStops = sampled.map((p, i) => ({
-    offset: `${((p.x - PAD_L) / CHART_W * 100).toFixed(1)}%`,
-    color : retentionColor(p.pct),
+  // Gradient stops derived from sampled points (offset = x as % of CHART_W)
+  const gradientStops = sampled.map((p) => ({
+    offset : `${(p.x / CHART_W * 100).toFixed(1)}%`,
+    color  : retentionColor(p.pct),
     opacity: 0.55,
   }));
 
-  // Hover logic
+  // Hover logic — relX is 0..1 fraction of the SVG element width.
+  // Since PAD_L=0, data spans the full SVG width, so bucket index maps directly.
   function handleMouseMove(e) {
     if (!svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
@@ -239,10 +242,10 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
   let hoverBucket = null;
   let hoverSvgX   = null;
   if (hoverX !== null && buckets.length > 0) {
-    const hIdx = Math.round(hoverX * (buckets.length - 1));
-    hoverBucket = buckets[Math.max(0, Math.min(buckets.length - 1, hIdx))];
-    const p     = pts[Math.max(0, Math.min(pts.length - 1, hIdx))];
-    hoverSvgX   = p?.x;
+    const hIdx      = Math.round(hoverX * (buckets.length - 1));
+    const clampedIdx = Math.max(0, Math.min(buckets.length - 1, hIdx));
+    hoverBucket = buckets[clampedIdx];
+    hoverSvgX   = pts[clampedIdx]?.x;
   }
 
   // Average retention
@@ -320,7 +323,7 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
               {[25, 50, 75].map(pct => {
                 const y = CHART_H_SVG - (pct / 100) * CHART_H_SVG;
                 return (
-                  <line key={pct} x1={PAD_L} y1={y} x2={W} y2={y}
+                  <line key={pct} x1="0" y1={y} x2={W} y2={y}
                     stroke="rgba(55,65,81,0.5)" strokeWidth="0.4" />
                 );
               })}
@@ -369,7 +372,7 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
 
               {/* Drop-off marker */}
               {dropOffSecond != null && durationSeconds > 0 && (() => {
-                const doX = PAD_L + (dropOffSecond / durationSeconds) * CHART_W;
+                const doX = (dropOffSecond / durationSeconds) * CHART_W;
                 return (
                   <line x1={doX} y1={0} x2={doX} y2={CHART_H_SVG}
                     stroke="rgba(248,113,113,0.5)" strokeWidth="0.6" strokeDasharray="1.5 1.5" />
@@ -379,8 +382,8 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
           </div>
         </div>
 
-        {/* X-axis time labels */}
-        <div className="flex justify-between pl-8 mt-1 text-[9px] text-gray-500 font-mono">
+        {/* X-axis time labels — aligned with SVG data (no left offset since Y labels are in sibling div) */}
+        <div className="flex justify-between pl-7 mt-1 text-[9px] text-gray-500 font-mono">
           <span>0:00</span>
           {durationSeconds > 0 && [0.25, 0.5, 0.75].map(f => (
             <span key={f}>{formatTime(durationSeconds * f)}</span>

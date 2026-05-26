@@ -6,11 +6,41 @@ import { BreakdownChart, BreakdownSkeleton } from './DevicesSection';
 /**
  * TrafficSourcesSection
  *
- * Full UTM + traffic source breakdown.
- * Shows: Referrer Domain, UTM Source, UTM Medium, UTM Campaign, UTM Term, UTM Content.
- *
+ * Full viewer breakdown: Devices, Browsers, Geography + UTM tracking.
  * Uses GET /api/videos/:id/analytics/breakdown?by=<key>
  */
+
+// Audience panels (device, browser, geography) shown first
+const AUDIENCE_PANELS = [
+  {
+    key  : 'device',
+    label: 'Devices',
+    desc : 'Desktop, mobile, and tablet breakdown',
+    icon : '💻',
+    colors: ['#34d399','#818cf8','#f59e0b','#f87171','#38bdf8'],
+  },
+  {
+    key  : 'browser',
+    label: 'Browsers',
+    desc : 'Which browser viewers are using',
+    icon : '🌐',
+    colors: ['#38bdf8','#f59e0b','#f87171','#818cf8','#34d399','#c084fc'],
+  },
+  {
+    key  : 'country',
+    label: 'Countries',
+    desc : 'Where in the world your viewers are watching from',
+    icon : '🌍',
+    colors: ['#f59e0b','#818cf8','#34d399','#f87171','#38bdf8','#c084fc','#2dd4bf'],
+  },
+  {
+    key  : 'city',
+    label: 'Cities',
+    desc : 'City-level viewer location breakdown',
+    icon : '📍',
+    colors: ['#fb923c','#818cf8','#34d399','#f87171','#38bdf8','#c084fc','#2dd4bf'],
+  },
+];
 
 const UTM_PANELS = [
   {
@@ -176,27 +206,47 @@ export default function TrafficSourcesSection({ videoId }) {
         </p>
         <h2 className="text-2xl font-bold text-gray-50">Traffic Sources</h2>
         <p className="text-xs text-gray-400 mt-1">
-          Where your viewers are coming from and which campaigns drive the most engagement.
+          Where your viewers are coming from, how they browse, and which campaigns drive the most engagement.
         </p>
       </div>
 
-      {/* UTM tip */}
-      <div className="mb-6 flex items-start gap-3 bg-indigo-500/8 border border-indigo-500/20 rounded-xl px-4 py-3">
-        <span className="text-indigo-400 mt-0.5 flex-shrink-0">◈</span>
-        <div>
-          <p className="text-xs font-medium text-indigo-300 mb-0.5">Add UTM parameters to your links</p>
-          <p className="text-xs text-gray-400 leading-relaxed">
-            Append <code className="bg-gray-800 px-1 py-0.5 rounded text-indigo-300 text-[11px]">?utm_source=email&amp;utm_medium=newsletter&amp;utm_campaign=launch</code> to the page
-            URL where your video is embedded to see granular source breakdowns here.
-          </p>
+      {/* ── Audience: Device / Browser / Geography ────────────────────── */}
+      <div className="mb-3">
+        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-3">
+          Viewer Profile
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {AUDIENCE_PANELS.map(panel => (
+            <UtmPanel key={panel.key} videoId={videoId} panel={panel} />
+          ))}
         </div>
       </div>
 
-      {/* Grid of panels */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {UTM_PANELS.map(panel => (
-          <UtmPanel key={panel.key} videoId={videoId} panel={panel} />
-        ))}
+      <div className="h-px bg-gray-800/60 my-6" />
+
+      {/* ── UTM parameters ────────────────────────────────────────────── */}
+      <div>
+        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-3">
+          UTM Parameters
+        </p>
+
+        {/* UTM tip */}
+        <div className="mb-4 flex items-start gap-3 bg-indigo-500/8 border border-indigo-500/20 rounded-xl px-4 py-3">
+          <span className="text-indigo-400 mt-0.5 flex-shrink-0">◈</span>
+          <div>
+            <p className="text-xs font-medium text-indigo-300 mb-0.5">Add UTM parameters to your links</p>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Append <code className="bg-gray-800 px-1 py-0.5 rounded text-indigo-300 text-[11px]">?utm_source=email&amp;utm_medium=newsletter&amp;utm_campaign=launch</code> to the page
+              URL where your video is embedded to see granular source breakdowns here.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {UTM_PANELS.map(panel => (
+            <UtmPanel key={panel.key} videoId={videoId} panel={panel} />
+          ))}
+        </div>
       </div>
     </div>
   );
