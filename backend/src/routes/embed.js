@@ -97,14 +97,15 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
   const { id, title, source_type } = video;
 
   // Individual player settings — every control has its own toggle
-  const autoplay          = ps.autoplay            ?? false;
-  const showPlayPause     = ps.show_play_pause_btn  ?? true;
-  const showSeekBar       = ps.show_seek_bar        ?? true;
-  const showSpeed         = ps.show_playback_speed  ?? true;
-  const showFullscreen    = ps.show_fullscreen_btn  ?? true;
-  const showVolumeControl = ps.show_volume_control  ?? true;
-  const resumePlay        = ps.resume_playback      ?? false;
-  const loopVideo         = ps.loop                ?? false;
+  const autoplay          = ps.autoplay              ?? false;
+  const showPlayPause     = ps.show_play_pause_btn   ?? true;
+  const showSeekBar       = ps.show_seek_bar         ?? true;
+  const showSpeed         = ps.show_playback_speed   ?? true;
+  const showFullscreen    = ps.show_fullscreen_btn   ?? true;
+  const showVolumeControl = ps.show_volume_control   ?? true;
+  const showRewindFwd     = ps.show_rewind_forward   ?? true;
+  const resumePlay        = ps.resume_playback       ?? false;
+  const loopVideo         = ps.loop                 ?? false;
 
   // Show the control bar only if at least one individual control is enabled
   const anyControls = showPlayPause || showSeekBar || showSpeed || showFullscreen || showVolumeControl;
@@ -234,10 +235,26 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
     const leftGroup  = (volHtml || skHtml) ? `<div id="vp-left">${volHtml}${skHtml}</div>`  : '';
     const rightGroup = (spSel || fsBtn)    ? `<div id="vp-right">${spSel}${fsBtn}</div>` : '';
 
-    // ── Center overlay: [🔇 Unmute] [▶ Big Play/Pause]  (only if toggle is on)
-    const centerHtml = showPlayPause
-      ? `<div id="vp-center">
-           <button id="vp-mute-c" title="Unmute">
+    // ── Skip back / forward buttons (↺10 and 10↻)
+    //    Only rendered when show_rewind_forward is on.
+    //    Uses rotate-ccw / rotate-cw Feather icons with "10" label below.
+    const skipBackBtn = showRewindFwd
+      ? `<button id="vp-rwd" class="vp-skip-btn" title="Rewind 10s">
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+             <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.99"/>
+           </svg><span>10</span>
+         </button>` : '';
+    const skipFwdBtn = showRewindFwd
+      ? `<button id="vp-fwd" class="vp-skip-btn" title="Forward 10s">
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+             <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3.99"/>
+           </svg><span>10</span>
+         </button>` : '';
+
+    // ── Center overlay: [↺10]  [🔇 Mute]  [▶ Play/Pause]  [10↻]
+    //    Show the overlay div whenever at least one center element is enabled.
+    const mutePlayHtml = showPlayPause
+      ? `<button id="vp-mute-c" title="Unmute">
              <svg id="vp-mute-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
                <line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>
@@ -247,7 +264,10 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
              <svg id="vp-play-icon" width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
                <polygon points="5 3 19 12 5 21 5 3"/>
              </svg>
-           </button>
+           </button>` : '';
+    const centerHtml = (showPlayPause || showRewindFwd)
+      ? `<div id="vp-center">
+           ${skipBackBtn}${mutePlayHtml}${skipFwdBtn}
          </div>` : '';
 
     /* Resume prompt — only rendered when the "Resume playback" setting is on.
@@ -292,6 +312,17 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
       /* Resume button gets a subtle amber accent */
       #vp-res-cont{border-color:rgba(245,158,11,0.45);}
       #vp-res-cont:hover{background:rgba(245,158,11,0.18);}
+
+      /* ── Skip back / forward buttons ────────────────── */
+      .vp-skip-btn{
+        display:flex;flex-direction:column;align-items:center;justify-content:center;
+        gap:3px;width:42px;height:42px;border-radius:50%;
+        background:rgba(0,0,0,.42);border:none;color:#fff;cursor:pointer;
+        transition:background .15s,transform .15s;touch-action:manipulation;
+      }
+      .vp-skip-btn:hover{background:rgba(0,0,0,.68);transform:scale(1.1);}
+      .vp-skip-btn:active{transform:scale(.9);}
+      .vp-skip-btn span{font-size:9px;font-family:sans-serif;font-weight:700;line-height:1;}
 
       /* ── Center overlay ─────────────────────────────── */
       #vp-center{
@@ -548,6 +579,20 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         syncMuteIcon();
         syncVolIcon();
         syncPausedClass(); /* adds vp-paused if starting stopped */
+
+        /* ── Skip back 10 / forward 10 ──────────────── */
+        var rwdBtn=document.getElementById('vp-rwd');
+        var fwdBtn=document.getElementById('vp-fwd');
+        rwdBtn&&rwdBtn.addEventListener('click',function(e){
+          e.stopPropagation();
+          v.currentTime=Math.max(0,v.currentTime-10);
+          setUI(true);
+        });
+        fwdBtn&&fwdBtn.addEventListener('click',function(e){
+          e.stopPropagation();
+          v.currentTime=Math.min(v.duration||Infinity,v.currentTime+10);
+          setUI(true);
+        });
 
         /* ── Video state events ─────────────────────── */
         v.addEventListener('play',function(){

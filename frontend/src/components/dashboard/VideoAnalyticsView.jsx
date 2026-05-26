@@ -853,6 +853,7 @@ const PLAYER_DEFAULTS = {
   autoplay: false, autoplay_muted: true,
   show_seek_bar: true, show_play_pause_btn: true, show_playback_speed: true,
   show_fullscreen_btn: true, show_volume_control: true,
+  show_rewind_forward: true,
   resume_playback: false, loop: false,
 };
 
@@ -863,6 +864,7 @@ const PLAYER_ROWS = [
   { key: 'show_volume_control', label: 'Volume Control',      desc: 'Show volume slider and mute toggle' },
   { key: 'show_playback_speed', label: 'Playback Speed',      desc: 'Let viewers choose 0.5×, 1×, 1.25×, 1.5×, 2×' },
   { key: 'show_fullscreen_btn', label: 'Fullscreen Button',   desc: 'Show the fullscreen toggle' },
+  { key: 'show_rewind_forward', label: 'Rewind / Forward',    desc: 'Show ↺10s and 10↻s skip buttons in the center overlay' },
   { key: 'resume_playback',     label: 'Resume Playback',     desc: 'Prompt viewers to resume or restart when they return to the video' },
   { key: 'loop',                label: 'Loop',                desc: 'Replay the video automatically when it ends' },
 ];
