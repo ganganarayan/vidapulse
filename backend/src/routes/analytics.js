@@ -630,6 +630,15 @@ router.get('/cta/link/:ctaId', async (req, res) => {
 
   // Record click with full metadata (Pro/admin_lifetime plan only)
   if (ctaLink.plan_name === 'pro' || ctaLink.plan_name === 'admin_lifetime') {
+    // Capture device/browser/country from the redirect request itself
+    const clickIp      = getClientIp(req);
+    const clickGeo     = lookupCountry(clickIp);
+    const clickBrowser = parseBrowser(req.headers['user-agent']);
+    const uaStr        = (req.headers['user-agent'] || '').toLowerCase();
+    const clickDevice  = /mobile|android|iphone|ipad/.test(uaStr) ? 'mobile'
+                       : /tablet/.test(uaStr)                      ? 'tablet'
+                       : 'desktop';
+
     pool.query(
       `INSERT INTO analytics_events
          (session_id, video_id, event_type, occurred_at, metadata)
@@ -641,6 +650,11 @@ router.get('/cta/link/:ctaId', async (req, res) => {
           cta_name       : ctaLink.cta_name,
           page_name      : ctaLink.page_name || null,
           destination_url: ctaLink.destination_url,
+          device         : clickDevice,
+          browser        : clickBrowser,
+          country        : clickGeo.name,
+          country_code   : clickGeo.code,
+          city           : clickGeo.city,
         }),
       ]
     ).catch(err => logger.warn(`[analytics/cta/link] insert failed: ${err.message}`));

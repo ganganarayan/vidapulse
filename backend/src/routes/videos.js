@@ -1020,6 +1020,73 @@ router.get('/:id/analytics/breakdown', requireAuth, async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
+// GET /api/videos/:id/cta-analytics
+//
+// CTA click analytics: total clicks, per-link breakdown, device/browser/
+// country breakdown from analytics_events metadata JSONB.
+// Pro plan only. Returns 200 with empty data if no clicks yet.
+//
+// Response:
+//   { total_clicks, by_link: [{cta_name, clicks, pct}],
+//     by_device: [{label, count, pct}],
+//     by_browser: [{label, count, pct}],
+//     by_country: [{label, count, pct}] }
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get('/:id/cta-analytics', requireAuth, planGate('heatmap'), async (req, res, next) => {
+  try {
+    const { rows: [video] } = await pool.query(
+      `SELECT id FROM videos WHERE id=$1 AND user_id=$2 AND is_active=TRUE`,
+      [req.params.id, req.user.id]
+    );
+    if (!video) return res.status(404).json({ error: 'Video not found' });
+
+    // All CTA click events for this video
+    const { rows: events } = await pool.query(
+      `SELECT metadata
+       FROM   analytics_events
+       WHERE  video_id   = $1
+         AND  event_type = 'cta_click'
+       ORDER  BY occurred_at DESC
+       LIMIT  5000`,
+      [req.params.id]
+    );
+
+    const total = events.length;
+    if (total === 0) {
+      return res.json({ total_clicks: 0, by_link: [], by_device: [], by_browser: [], by_country: [] });
+    }
+
+    function breakdownFrom(key, fallback = 'Unknown') {
+      const counts = {};
+      events.forEach(e => {
+        const v = e.metadata?.[key] || fallback;
+        counts[v] = (counts[v] || 0) + 1;
+      });
+      return Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15)
+        .map(([label, count]) => ({ label, count, pct: parseFloat((count / total * 100).toFixed(1)) }));
+    }
+
+    const byLink = breakdownFrom('cta_name', '(unnamed)');
+    const byDevice = breakdownFrom('device', 'Unknown');
+    const byBrowser = breakdownFrom('browser', 'Unknown');
+    const byCountry = breakdownFrom('country', 'Unknown');
+
+    return res.json({
+      total_clicks: total,
+      by_link     : byLink,
+      by_device   : byDevice,
+      by_browser  : byBrowser,
+      by_country  : byCountry,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
 // GET /api/videos/:id/retention
 //
 // Returns a viewer retention curve computed from heatmap aggregate data.

@@ -164,7 +164,13 @@ export default function WebhookSettings() {
             <div>
               <label className="block text-xs text-gray-400 mb-1.5">Endpoint URL</label>
               <input
-                type="url"
+                type="text"
+                inputMode="url"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                name="webhook_endpoint_url"
                 value={url}
                 onChange={e => setUrl(e.target.value)}
                 placeholder="https://hook.us1.make.com/…"

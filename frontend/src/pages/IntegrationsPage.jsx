@@ -200,7 +200,13 @@ function WebhookCard({ isAdmin }) {
               Endpoint URL
             </label>
             <input
-              type="url"
+              type="text"
+              inputMode="url"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck="false"
+              name="webhook_endpoint_url"
               value={url}
               onChange={e => setUrl(e.target.value)}
               placeholder="https://your-server.com/webhook"
@@ -217,6 +223,8 @@ function WebhookCard({ isAdmin }) {
             <div className="flex gap-2">
               <input
                 type={showSecret ? 'text' : 'password'}
+                autoComplete="new-password"
+                name="webhook_secret_key"
                 value={secret}
                 onChange={e => setSecret(e.target.value)}
                 placeholder="your-hmac-secret"

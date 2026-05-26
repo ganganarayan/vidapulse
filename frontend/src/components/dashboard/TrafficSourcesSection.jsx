@@ -1,7 +1,8 @@
 'use strict';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../lib/api';
 import { BreakdownChart, BreakdownSkeleton } from './DevicesSection';
+import { Link } from 'react-router-dom';
 
 /**
  * TrafficSourcesSection
@@ -193,6 +194,138 @@ function UtmPanel({ videoId, panel }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// CtaAnalyticsSection — CTA click breakdown (device / browser / country)
+// ─────────────────────────────────────────────────────────────────────────
+
+const CTA_BREAKDOWN_COLORS = ['#f59e0b','#818cf8','#34d399','#f87171','#38bdf8','#c084fc','#2dd4bf'];
+
+function CtaAnalyticsSection({ videoId }) {
+  const [status, setStatus] = useState('loading');
+  const [data,   setData]   = useState(null);
+  const [retry,  setRetry]  = useState(0);
+
+  useEffect(() => {
+    if (!videoId) return;
+    let cancelled = false;
+    setStatus('loading');
+    api.get(`/videos/${videoId}/cta-analytics`)
+      .then(res => {
+        if (cancelled) return;
+        setData(res.data);
+        setStatus('loaded');
+      })
+      .catch(err => {
+        if (cancelled) return;
+        // 403 = not Pro — show upgrade prompt
+        setStatus(err.response?.status === 403 ? 'upgrade' : 'error');
+      });
+    return () => { cancelled = true; };
+  }, [videoId, retry]);
+
+  if (status === 'loading') {
+    return (
+      <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl px-5 py-6 animate-pulse">
+        <div className="h-4 w-32 bg-gray-700/50 rounded mb-4" />
+        <div className="grid grid-cols-2 gap-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-24 bg-gray-700/30 rounded-lg" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'upgrade') {
+    return (
+      <div className="bg-gray-800/30 border border-gray-700/40 border-dashed rounded-xl px-5 py-6 text-center">
+        <p className="text-sm font-medium text-gray-300 mb-1">CTA Click Tracking is a Pro feature</p>
+        <p className="text-xs text-gray-500 mb-3">Upgrade to track which CTA buttons viewers click and see device/geo breakdowns.</p>
+        <Link to="/upgrade" className="text-xs text-amber-400 hover:text-amber-300 underline underline-offset-2">
+          Upgrade to Pro →
+        </Link>
+      </div>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="text-xs text-gray-500 py-4 text-center">
+        Could not load CTA analytics.{' '}
+        <button onClick={() => setRetry(r => r + 1)} className="text-amber-400 hover:text-amber-300">Retry</button>
+      </div>
+    );
+  }
+
+  const { total_clicks, by_link, by_device, by_browser, by_country } = data ?? {};
+
+  if (!total_clicks) {
+    return (
+      <div className="bg-gray-800/30 border border-gray-700/40 border-dashed rounded-xl px-5 py-7 text-center">
+        <p className="text-2xl mb-2">🔗</p>
+        <p className="text-sm text-gray-400 font-medium mb-1">No CTA clicks yet</p>
+        <p className="text-xs text-gray-600">
+          Create tracking links in the <strong className="text-gray-400">Share & Embed</strong> tab and share them.
+          Each click records the viewer's device, browser, and location.
+        </p>
+      </div>
+    );
+  }
+
+  const miniPanels = [
+    { label: 'By Button',  data: by_link,    icon: '🔗' },
+    { label: 'By Device',  data: by_device,  icon: '💻' },
+    { label: 'By Browser', data: by_browser, icon: '🌐' },
+    { label: 'By Country', data: by_country, icon: '🌍' },
+  ];
+
+  return (
+    <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-700/40">
+        <span className="text-xl">🎯</span>
+        <div>
+          <h3 className="text-sm font-semibold text-gray-200">CTA Click Analytics</h3>
+          <p className="text-xs text-gray-500">Who clicked your CTA links and how</p>
+        </div>
+        <div className="ml-auto text-right">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Total Clicks</p>
+          <p className="text-xl font-bold text-amber-400">{total_clicks.toLocaleString()}</p>
+        </div>
+      </div>
+
+      {/* Mini breakdown grids */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y divide-gray-700/40 sm:divide-y-0 sm:divide-x">
+        {miniPanels.map(({ label, data: rows, icon }) => (
+          <div key={label} className="px-5 py-4">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium mb-3 flex items-center gap-1.5">
+              <span>{icon}</span>{label}
+            </p>
+            {rows && rows.length > 0 ? rows.slice(0, 5).map((row, i) => {
+              const color = CTA_BREAKDOWN_COLORS[i % CTA_BREAKDOWN_COLORS.length];
+              const barW  = rows[0].count > 0 ? (row.count / rows[0].count) * 100 : 0;
+              return (
+                <div key={row.label} className="mb-2.5">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-xs text-gray-300 truncate max-w-[60%]">{row.label}</span>
+                    <span className="text-xs font-bold" style={{ color }}>{row.pct}%</span>
+                  </div>
+                  <div className="h-1.5 bg-gray-700/50 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-700"
+                         style={{ width: `${barW}%`, backgroundColor: color }} />
+                  </div>
+                </div>
+              );
+            }) : (
+              <p className="text-xs text-gray-600">—</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // TrafficSourcesSection — main export
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -209,6 +342,16 @@ export default function TrafficSourcesSection({ videoId }) {
           Where your viewers are coming from, how they browse, and which campaigns drive the most engagement.
         </p>
       </div>
+
+      {/* ── CTA Click Tracking ───────────────────────────────────────── */}
+      <div className="mb-6">
+        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-3">
+          Click Tracking
+        </p>
+        <CtaAnalyticsSection videoId={videoId} />
+      </div>
+
+      <div className="h-px bg-gray-800/60 mb-6" />
 
       {/* ── Audience: Device / Browser / Geography ────────────────────── */}
       <div className="mb-3">
