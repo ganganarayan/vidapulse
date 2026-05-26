@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import api from '../lib/api';
+import { useWebhookAlerts } from '../hooks/useWebhookAlerts';
 
 /**
  * WebhookSettings — /admin/webhook
@@ -26,11 +27,16 @@ export default function WebhookSettings() {
   const [firesThisHr, setFiresThisHr] = useState(0);
   const [nextFireAt,  setNextFireAt]  = useState(null);
 
+  // Contact webhook alert status
+  const webhookAlerts = useWebhookAlerts({ enabled: true });
+
   // Form state (mirrors webhook_settings)
-  const [url,      setUrl]      = useState('');
-  const [secret,   setSecret]   = useState('');
-  const [isActive, setIsActive] = useState(false);
-  const [notes,    setNotes]    = useState('');
+  const [url,             setUrl]             = useState('');
+  const [notifUrl,        setNotifUrl]        = useState('');
+  const [secret,          setSecret]          = useState('');
+  const [apiToken,        setApiToken]        = useState('');
+  const [isActive,        setIsActive]        = useState(false);
+  const [notes,           setNotes]           = useState('');
 
   // Governor form state
   const [hourlyCap, setHourlyCap] = useState(25);
@@ -46,7 +52,8 @@ export default function WebhookSettings() {
   const [testResult, setTestResult] = useState(null); // { ok, statusCode, durationMs, responseBody }
 
   // Misc UI
-  const [showSecret, setShowSecret] = useState(false);
+  const [showSecret,   setShowSecret]   = useState(false);
+  const [showApiToken, setShowApiToken] = useState(false);
 
   // ── Load settings ──────────────────────────────────────────────────────
   const loadSettings = useCallback(async () => {
@@ -63,10 +70,12 @@ export default function WebhookSettings() {
       setNextFireAt(data.next_fire_at);
 
       // Sync form
-      setUrl(s.webhook_url   ?? '');
-      setSecret(s.webhook_secret ?? '');
-      setIsActive(s.is_active    ?? false);
-      setNotes(s.notes           ?? '');
+      setUrl(s.webhook_url              ?? '');
+      setNotifUrl(s.notification_webhook_url ?? '');
+      setSecret(s.webhook_secret        ?? '');
+      setApiToken(s.api_token           ?? '');
+      setIsActive(s.is_active           ?? false);
+      setNotes(s.notes                  ?? '');
       setHourlyCap(g.hourly_cap  ?? 25);
       setIsPaused(g.is_paused    ?? false);
     } catch (err) {
@@ -89,10 +98,12 @@ export default function WebhookSettings() {
     setSaveMsg('');
     try {
       await api.patch('/admin/webhook-settings', {
-        webhook_url   : url    || null,
-        webhook_secret: secret || null,
-        is_active     : isActive,
-        notes         : notes  || null,
+        webhook_url              : url      || null,
+        notification_webhook_url : notifUrl || null,
+        webhook_secret           : secret   || null,
+        api_token                : apiToken || null,
+        is_active                : isActive,
+        notes                    : notes    || null,
       });
       setSaveMsg('settings-ok');
       setTimeout(() => setSaveMsg(''), 3000);
@@ -150,6 +161,16 @@ export default function WebhookSettings() {
 
       <div className="max-w-2xl mx-auto flex flex-col gap-8">
 
+        {/* ── Contact Webhook Status Banner ────────────────────────── */}
+        {webhookAlerts.paused && (
+          <WebhookAlertBanner
+            queuedCount  = {webhookAlerts.queuedCount}
+            pausedAt     = {webhookAlerts.pausedAt}
+            pausedReason = {webhookAlerts.pausedReason}
+            onRefresh    = {webhookAlerts.refresh}
+          />
+        )}
+
         {/* ── Section 1: Endpoint Config ────────────────────────────── */}
         <section className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6">
           <h2 className="text-sm font-semibold text-gray-300 mb-1">Webhook Endpoint</h2>
@@ -180,6 +201,31 @@ export default function WebhookSettings() {
               />
             </div>
 
+            {/* Notification Webhook URL */}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5">
+                Failure Notification URL <span className="text-gray-600">(optional — different automation)</span>
+              </label>
+              <input
+                type="text"
+                inputMode="url"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                value={notifUrl}
+                onChange={e => setNotifUrl(e.target.value)}
+                placeholder="https://login.vidapulse.in/api/automations/…/execute"
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5
+                           text-sm text-gray-100 placeholder-gray-600
+                           focus:outline-none focus:border-red-500/60 transition-colors"
+              />
+              <p className="text-xs text-gray-600 mt-1">
+                Fired immediately on any webhook failure. Sends <code className="text-red-400/80 text-[10px]">event_type=webhook_failure_alert</code>{' '}
+                with error details — triggers WhatsApp/email in your CRM.
+              </p>
+            </div>
+
             {/* Secret */}
             <div>
               <label className="block text-xs text-gray-400 mb-1.5">Signing Secret (optional)</label>
@@ -203,6 +249,32 @@ export default function WebhookSettings() {
               </div>
               <p className="text-xs text-gray-600 mt-1">
                 Sent as <code className="text-amber-600 text-[10px]">X-VidaPulse-Signature</code> header with each request.
+              </p>
+            </div>
+
+            {/* API Token */}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5">API Token (optional)</label>
+              <div className="relative">
+                <input
+                  type={showApiToken ? 'text' : 'password'}
+                  value={apiToken}
+                  onChange={e => setApiToken(e.target.value)}
+                  placeholder="Sent as api_token query param"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 pr-10
+                             text-sm text-gray-100 placeholder-gray-600
+                             focus:outline-none focus:border-amber-500/60 transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiToken(s => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400"
+                >
+                  {showApiToken ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
+              <p className="text-xs text-gray-600 mt-1">
+                Appended as <code className="text-amber-600 text-[10px]">?api_token=…</code> to every contact webhook request.
               </p>
             </div>
 
@@ -388,8 +460,121 @@ export default function WebhookSettings() {
           </form>
         </section>
 
+        {/* ── Section 4: Webhook Log Link ───────────────────────── */}
+        <section className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6">
+          <h2 className="text-sm font-semibold text-gray-300 mb-1">Contact Webhook Log</h2>
+          <p className="text-xs text-gray-500 mb-4">
+            A full audit trail of every outbound contact webhook — sent params, HTTP status, and response body.
+          </p>
+          <Link
+            to="/admin/webhook-log"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600
+                       text-sm text-gray-200 font-medium rounded-lg transition-colors border border-gray-600"
+          >
+            View webhook log →
+          </Link>
+        </section>
+
       </div>
     </AdminShell>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Webhook Alert Banner
+// ─────────────────────────────────────────────────────────────────────────
+
+function WebhookAlertBanner({ queuedCount, pausedAt, pausedReason, onRefresh }) {
+  const [resolving, setResolving] = useState('');
+  const [resolveMsg,setResolveMsg]= useState('');
+
+  async function handleUnpause() {
+    setResolving('unpause');
+    setResolveMsg('');
+    try {
+      await api.post('/admin/contact-webhook/unpause');
+      setResolveMsg('Unpaused. Queued events will not be resent automatically — use "Resend queued" in Webhook Log.');
+      await onRefresh();
+    } catch {
+      setResolveMsg('Failed to unpause. Refresh and try again.');
+    } finally {
+      setResolving('');
+    }
+  }
+
+  async function handleResend() {
+    setResolving('resend');
+    setResolveMsg('');
+    try {
+      const { data } = await api.post('/admin/contact-webhook/resend-queued');
+      if (data.nowPaused) {
+        setResolveMsg(`Resend failed again after ${data.sent} — webhook re-paused. Fix the endpoint first.`);
+      } else {
+        setResolveMsg(`✓ Resent ${data.sent} of ${data.total} queued webhooks successfully.`);
+      }
+      await onRefresh();
+    } catch {
+      setResolveMsg('Resend request failed. Check your connection.');
+    } finally {
+      setResolving('');
+    }
+  }
+
+  const pausedTime = pausedAt
+    ? new Date(pausedAt).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+    : null;
+
+  return (
+    <div className="bg-red-500/8 border border-red-500/30 rounded-xl p-5">
+      <div className="flex items-start gap-3">
+        <span className="text-red-400 text-xl mt-0.5 flex-shrink-0">⚠</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-red-300">Contact webhook is paused</p>
+          {pausedTime && (
+            <p className="text-xs text-red-400/70 mt-0.5">Paused at {pausedTime}</p>
+          )}
+          {pausedReason && (
+            <p className="text-xs text-red-400/60 mt-1 font-mono break-all">{pausedReason}</p>
+          )}
+          {queuedCount > 0 && (
+            <p className="text-xs text-amber-300 mt-2">
+              <strong>{queuedCount}</strong> event{queuedCount !== 1 ? 's' : ''} queued and waiting to be resent.
+            </p>
+          )}
+
+          <div className="flex items-center gap-2 mt-4 flex-wrap">
+            <button
+              onClick={handleResend}
+              disabled={!!resolving || queuedCount === 0}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50
+                         text-xs font-semibold text-gray-900 rounded-lg transition-colors"
+            >
+              {resolving === 'resend' ? 'Resending…' : `Resend ${queuedCount > 0 ? `${queuedCount} queued` : 'queued'}`}
+            </button>
+            <button
+              onClick={handleUnpause}
+              disabled={!!resolving}
+              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50
+                         text-xs font-medium text-gray-200 rounded-lg border border-gray-600 transition-colors"
+            >
+              {resolving === 'unpause' ? 'Unpausing…' : 'Unpause only (discard queue)'}
+            </button>
+            <Link
+              to="/admin/webhook-log"
+              className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 transition-colors"
+            >
+              View full log →
+            </Link>
+          </div>
+
+          {resolveMsg && (
+            <p className={`text-xs mt-3 ${resolveMsg.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'}`}>
+              {resolveMsg}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

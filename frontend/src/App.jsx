@@ -26,6 +26,7 @@ import FunnelsPage       from './pages/FunnelsPage';
 import AlertsPage        from './pages/AlertsPage';
 import ReportsPage       from './pages/ReportsPage';
 import CTATrackingPage   from './pages/CTATrackingPage';
+import AdminWebhookLog   from './pages/AdminWebhookLog';
 
 /**
  * ProtectedRoute
@@ -197,6 +198,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <OnboardingHealth />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/webhook-log"
+            element={
+              <AdminRoute>
+                <AdminWebhookLog />
               </AdminRoute>
             }
           />

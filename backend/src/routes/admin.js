@@ -31,6 +31,11 @@ const env             = require('../config/env');
 const logger          = require('../config/logger');
 const { requireAuth, requireAdmin } = require('../middleware/requireAuth');
 const { testWebhook } = require('../services/webhookSender');
+const {
+  resendQueuedWebhooks,
+  unpauseWebhook,
+  getContactWebhookStatus,
+} = require('../services/contactWebhookSender');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // requireImpersonating guard
@@ -233,19 +238,23 @@ function _isInternalHost(urlStr) {
   }
 }
 
+const _urlFieldSchema = z.string()
+  .url('Must be a valid URL')
+  .max(2000)
+  .refine(u => u.startsWith('https://'), { message: 'Must use HTTPS' })
+  .refine(u => !_isInternalHost(u),      { message: 'Must point to a public external host' })
+  .nullable()
+  .optional();
+
 const updateSettingsSchema = z.object({
-  webhook_url   : z.string()
-    .url('Must be a valid URL')
-    .max(2000)
-    .refine(u => u.startsWith('https://'), { message: 'Webhook URL must use HTTPS' })
-    .refine(u => !_isInternalHost(u),      { message: 'Webhook URL must point to a public external host' })
-    .nullable()
-    .optional(),
-  webhook_secret: z.string().max(200).nullable().optional(),
-  is_active     : z.boolean().optional(),
-  notes         : z.string().max(2000).nullable().optional(),
-  hourly_cap    : z.number().int().min(1).max(1000).optional(),
-  is_paused     : z.boolean().optional(),
+  webhook_url              : _urlFieldSchema,
+  notification_webhook_url : _urlFieldSchema,
+  webhook_secret           : z.string().max(200).nullable().optional(),
+  api_token                : z.string().max(500).nullable().optional(),
+  is_active                : z.boolean().optional(),
+  notes                    : z.string().max(2000).nullable().optional(),
+  hourly_cap               : z.number().int().min(1).max(1000).optional(),
+  is_paused                : z.boolean().optional(),
 }).strict();
 
 router.patch('/webhook-settings', async (req, res, next) => {
@@ -264,10 +273,12 @@ router.patch('/webhook-settings', async (req, res, next) => {
     const settingsVals    = [];
     let   p               = 1;
 
-    if (settingsFields.webhook_url    !== undefined) { settingsClauses.push(`webhook_url    = $${p++}`); settingsVals.push(settingsFields.webhook_url);    }
-    if (settingsFields.webhook_secret !== undefined) { settingsClauses.push(`webhook_secret = $${p++}`); settingsVals.push(settingsFields.webhook_secret); }
-    if (settingsFields.is_active      !== undefined) { settingsClauses.push(`is_active      = $${p++}`); settingsVals.push(settingsFields.is_active);      }
-    if (settingsFields.notes          !== undefined) { settingsClauses.push(`notes          = $${p++}`); settingsVals.push(settingsFields.notes);          }
+    if (settingsFields.webhook_url              !== undefined) { settingsClauses.push(`webhook_url              = $${p++}`); settingsVals.push(settingsFields.webhook_url);              }
+    if (settingsFields.notification_webhook_url !== undefined) { settingsClauses.push(`notification_webhook_url = $${p++}`); settingsVals.push(settingsFields.notification_webhook_url); }
+    if (settingsFields.webhook_secret           !== undefined) { settingsClauses.push(`webhook_secret           = $${p++}`); settingsVals.push(settingsFields.webhook_secret);           }
+    if (settingsFields.api_token                !== undefined) { settingsClauses.push(`api_token                = $${p++}`); settingsVals.push(settingsFields.api_token);                }
+    if (settingsFields.is_active                !== undefined) { settingsClauses.push(`is_active                = $${p++}`); settingsVals.push(settingsFields.is_active);                }
+    if (settingsFields.notes                    !== undefined) { settingsClauses.push(`notes                    = $${p++}`); settingsVals.push(settingsFields.notes);                    }
 
     if (settingsClauses.length > 0) {
       settingsClauses.push(`updated_at = NOW()`);
@@ -794,6 +805,136 @@ router.get('/analytics-diag', requireAuth, requireAdmin, async (req, res, next) 
       ping_db_smoke_test: pingTest,
       videos,
       recent_sessions: recent,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/contact-webhook-status
+//
+// Returns live pause state + queued count. Polled by the frontend every 30 s.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/contact-webhook-status', async (req, res, next) => {
+  try {
+    const status = await getContactWebhookStatus();
+    return res.json(status);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/admin/contact-webhook/unpause
+//
+// Clears the pause flag without resending queued entries.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/contact-webhook/unpause', async (req, res, next) => {
+  try {
+    await unpauseWebhook();
+    logger.info(`[admin] Contact webhook unpaused by user ${req.user.id}`);
+    return res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/admin/contact-webhook/resend-queued
+//
+// Unpauses the webhook and re-fires every queued entry in order.
+// Returns { sent, failed, total, nowPaused }.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/contact-webhook/resend-queued', async (req, res, next) => {
+  try {
+    const result = await resendQueuedWebhooks();
+    logger.info(
+      `[admin] Contact webhook resend by user ${req.user.id}` +
+      ` — sent=${result.sent} failed=${result.failed} total=${result.total}`
+    );
+    return res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/contact-webhook-log
+//
+// Paginated log of every outbound contact webhook fire.
+//
+// Query params:
+//   page    — 1-based (default 1)
+//   limit   — rows per page (default 50, max 200)
+//   status  — optional: 'sent' | 'failed'
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/contact-webhook-log', async (req, res, next) => {
+  try {
+    const page   = Math.max(1, parseInt(req.query.page  ?? '1',   10) || 1);
+    const limit  = Math.min(200, Math.max(1, parseInt(req.query.limit ?? '50', 10) || 50));
+    const status = req.query.status ?? null;
+    const offset = (page - 1) * limit;
+
+    const params = [];
+    const conditions = [];
+
+    if (status === 'sent' || status === 'failed' || status === 'queued') {
+      params.push(status);
+      conditions.push(`cwl.status = $${params.length}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const { rows: [countRow] } = await pool.query(
+      `SELECT COUNT(cwl.id)::int AS total
+       FROM contact_webhook_log cwl
+       ${whereClause}`,
+      params
+    );
+
+    const dataParams = [...params, limit, offset];
+    const { rows } = await pool.query(
+      `SELECT
+         cwl.id,
+         cwl.event_key,
+         cwl.user_id,
+         cwl.url_sent_to,
+         cwl.params_sent,
+         cwl.status,
+         cwl.response_status,
+         cwl.response_body,
+         cwl.error_message,
+         cwl.sent_at,
+         cwl.response_at,
+         u.name  AS user_name,
+         u.email AS user_email
+       FROM contact_webhook_log cwl
+       LEFT JOIN users u ON u.id = cwl.user_id
+       ${whereClause}
+       ORDER BY cwl.sent_at DESC
+       LIMIT $${dataParams.length - 1}
+       OFFSET $${dataParams.length}`,
+      dataParams
+    );
+
+    const total      = countRow?.total ?? 0;
+    const totalPages = Math.ceil(total / limit);
+
+    return res.json({
+      log: rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: totalPages,
+        has_next    : page < totalPages,
+        has_prev    : page > 1,
+      },
     });
   } catch (err) {
     next(err);

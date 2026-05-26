@@ -29,6 +29,7 @@ const env         = require('../config/env');
 const logger      = require('../config/logger');
 const { requireAuth } = require('../middleware/requireAuth');
 const { pool }    = require('../config/database');
+const { fireContactWebhook } = require('../services/contactWebhookSender');
 
 // ── Login rate limiter ────────────────────────────────────────
 // In-memory, keyed by IP.  Max 10 attempts per 15-minute window.
@@ -224,6 +225,9 @@ router.post('/login', async (req, res, next) => {
     // Also return token in the body so native/mobile clients can use it directly.
     authService.setJwtCookie(res, token);
 
+    // Fire contact webhook asynchronously — never blocks the response
+    fireContactWebhook(user.id, 'login').catch(() => {});
+
     return res.json({
       success    : true,
       token,
@@ -340,7 +344,7 @@ router.post('/logout', (req, res) => {
 
 router.post('/register', async (req, res, next) => {
   try {
-    const { email, name, password } = req.body ?? {};
+    const { email, name, password, phone } = req.body ?? {};
 
     if (!email || !name || !password) {
       return res.status(400).json({ error: 'Validation Error', message: 'email, name and password are required' });
@@ -352,6 +356,9 @@ router.post('/register', async (req, res, next) => {
     if (String(password).length < 8) {
       return res.status(400).json({ error: 'Validation Error', message: 'Password must be at least 8 characters' });
     }
+
+    // Normalise optional phone (strip to E.164-ish or keep as-is)
+    const normalizedPhone = phone ? String(phone).trim() : null;
 
     // Check duplicate
     const { rows: existing } = await pool.query(
@@ -373,10 +380,10 @@ router.post('/register', async (req, res, next) => {
       const hash = await require('bcrypt').hash(password, 12);
 
       const { rows: [user] } = await client.query(
-        `INSERT INTO users (email, name, plan_id, role, password_hash, password_set, created_via)
-         VALUES ($1, $2, $3, 'subscriber', $4, TRUE, 'self_signup')
+        `INSERT INTO users (email, name, phone, plan_id, role, password_hash, password_set, created_via)
+         VALUES ($1, $2, $3, $4, 'subscriber', $5, TRUE, 'self_signup')
          RETURNING id`,
-        [normalizedEmail, String(name).trim(), plans[0].id, hash]
+        [normalizedEmail, String(name).trim(), normalizedPhone, plans[0].id, hash]
       );
 
       await client.query(
@@ -391,6 +398,12 @@ router.post('/register', async (req, res, next) => {
 
       const token = await authService.buildJwt(user.id);
       authService.setJwtCookie(res, token);
+
+      // Fire contact webhook asynchronously — never blocks the response
+      // (user_signed_up behavioral event fires separately via emitEvent in the
+      //  calling route, but we fire 'registration' here to capture it at the
+      //  auth layer independently)
+      fireContactWebhook(user.id, 'registration').catch(() => {});
 
       logger.info(`[auth/register] New subscriber: ${normalizedEmail}`);
       return res.status(201).json({ ok: true });
@@ -572,11 +585,15 @@ router.get('/oauth/google/callback', async (req, res) => {
 
     const tokens  = await oauth.exchangeGoogleCode(code);
     const profile = await oauth.getGoogleUserInfo(tokens.access_token);
-    const { user } = await authService.findOrCreateOAuthUser('google', profile);
+    const { user, isNew } = await authService.findOrCreateOAuthUser('google', profile);
     const jwt = await authService.buildJwt(user.id);
     authService.setJwtCookie(res, jwt);
 
-    logger.info(`[auth] Google OAuth success: ${profile.email}`);
+    // Fire contact webhook asynchronously — distinguish new signup vs returning login
+    const oauthEventKey = isNew ? 'registration' : 'login';
+    fireContactWebhook(user.id, oauthEventKey).catch(() => {});
+
+    logger.info(`[auth] Google OAuth success: ${profile.email} (${oauthEventKey})`);
     // Token in URL lets the frontend store it in localStorage for non-cookie clients.
     // The httpOnly cookie is also set so the browser SPA works without any extra JS.
     return res.redirect(`${frontendUrl}/dashboard?token=${jwt}`);

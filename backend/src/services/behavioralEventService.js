@@ -27,6 +27,7 @@
 
 const { pool }   = require('../config/database');
 const logger     = require('../config/logger');
+const { fireContactWebhook } = require('./contactWebhookSender');
 
 // ── Event classification ──────────────────────────────────────────────────
 
@@ -152,6 +153,9 @@ async function emitEvent(userId, eventKey, videoId = null, payload = {}) {
 
       await client.query('COMMIT');
       logger.info(`[behavioralEvents] ✓ ${eventKey} | user=${userId} | event_id=${eventRow.id}`);
+
+      // Fire contact webhook asynchronously — never blocks and never throws
+      fireContactWebhook(userId, eventKey).catch(() => {});
 
     } catch (err) {
       await client.query('ROLLBACK');

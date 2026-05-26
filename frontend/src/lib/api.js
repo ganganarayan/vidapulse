@@ -56,7 +56,7 @@ api.interceptors.response.use(
       }
 
       // Normal session expiry — redirect to login if not already on an auth page
-      const authPages = ['/login', '/set-password', '/forgot-password', '/reset-password'];
+      const authPages = ['/login', '/register', '/set-password', '/forgot-password', '/reset-password'];
       const isAuthPage = authPages.some(p => window.location.pathname.startsWith(p));
       if (!isAuthPage) {
         window.location.href = '/login';

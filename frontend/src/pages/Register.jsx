@@ -13,6 +13,7 @@ export default function Register() {
 
   const [name,      setName]      = useState('');
   const [email,     setEmail]     = useState('');
+  const [phone,     setPhone]     = useState('');
   const [password,  setPassword]  = useState('');
   const [confirm,   setConfirm]   = useState('');
   const [showPw,    setShowPw]    = useState(false);
@@ -45,7 +46,12 @@ export default function Register() {
 
     setLoading(true);
     try {
-      await api.post('/auth/register', { name: name.trim(), email: email.trim(), password });
+      await api.post('/auth/register', {
+        name    : name.trim(),
+        email   : email.trim(),
+        password,
+        ...(phone.trim() ? { phone: phone.trim() } : {}),
+      });
       await refetch();
       navigate('/dashboard', { replace: true });
     } catch (err) {
@@ -139,6 +145,24 @@ export default function Register() {
                 required
                 disabled={loading}
                 autoComplete="email"
+                className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
+                           text-gray-100 placeholder-gray-500 text-sm rounded-lg
+                           px-3 py-2.5 focus:outline-none transition-colors"
+              />
+            </div>
+
+            {/* Phone (optional) */}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5 font-medium">
+                Phone number <span className="text-gray-600">(optional)</span>
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="+91 98765 43210"
+                disabled={loading}
+                autoComplete="tel"
                 className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
                            text-gray-100 placeholder-gray-500 text-sm rounded-lg
                            px-3 py-2.5 focus:outline-none transition-colors"

@@ -1,8 +1,10 @@
 'use strict';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ThemeToggle } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
+import { useWebhookAlerts } from '../hooks/useWebhookAlerts';
 import api from '../lib/api';
 
 /**
@@ -28,9 +30,27 @@ function AppSidebar() {
   const { user, isImpersonating } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [signingOut, setSigningOut] = useState(false);
 
   const isAdmin = user?.role === 'admin' || user?.plan === 'admin_lifetime';
+
+  // Poll webhook alert status for admins — shows OS notification + toast on new failure
+  const webhookAlerts = useWebhookAlerts({ enabled: isAdmin });
+  const prevPausedRef  = useRef(null); // null = "not yet seen first result"
+  useEffect(() => {
+    if (webhookAlerts.loading) return; // wait for first result
+    // prevPausedRef.current === null means this is the first result from the server:
+    // don't fire a toast for a pre-existing pause (user already knows about it)
+    const isNewPause = prevPausedRef.current === false && webhookAlerts.paused;
+    if (isNewPause) {
+      showToast(
+        `⚠ Contact webhook paused — ${webhookAlerts.queuedCount} event${webhookAlerts.queuedCount !== 1 ? 's' : ''} queued`,
+        'error'
+      );
+    }
+    prevPausedRef.current = webhookAlerts.paused;
+  }, [webhookAlerts.paused, webhookAlerts.queuedCount, webhookAlerts.loading, showToast]);
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -75,10 +95,17 @@ function AppSidebar() {
         {isAdmin && (
           <>
             <SidebarDivider label="Admin" />
-            <SidebarItem to="/admin/users"      icon={<UsersIcon />}   label="Users"      active={active('/admin/users')} />
-            <SidebarItem to="/admin/webhook"    icon={<WebhookIcon />} label="Webhook"    active={active('/admin/webhook')} />
-            <SidebarItem to="/admin/help"       icon={<HelpIcon />}    label="Help Editor" active={active('/admin/help')} />
-            <SidebarItem to="/admin/onboarding" icon={<HeartIcon />}   label="Onboarding" active={active('/admin/onboarding')} />
+            <SidebarItem to="/admin/users"       icon={<UsersIcon />}    label="Users"        active={active('/admin/users')} />
+            <SidebarItem to="/admin/webhook"     icon={<WebhookIcon />}  label="Webhook"      active={active('/admin/webhook', true)} />
+            <SidebarItem
+              to="/admin/webhook-log"
+              icon={<LogIcon />}
+              label="Webhook Log"
+              active={active('/admin/webhook-log')}
+              badge={webhookAlerts.paused ? (webhookAlerts.queuedCount || '!') : null}
+            />
+            <SidebarItem to="/admin/help"        icon={<HelpIcon />}     label="Help Editor"  active={active('/admin/help')} />
+            <SidebarItem to="/admin/onboarding"  icon={<HeartIcon />}    label="Onboarding"   active={active('/admin/onboarding')} />
           </>
         )}
       </nav>
@@ -226,7 +253,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
 // Shared sub-components
 // ─────────────────────────────────────────────────────────────────────────
 
-function SidebarItem({ to, icon, label, active, coming = false }) {
+function SidebarItem({ to, icon, label, active, coming = false, badge = null }) {
   const cls = `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors
     ${active
       ? 'bg-amber-500/15 text-amber-400'
@@ -234,18 +261,28 @@ function SidebarItem({ to, icon, label, active, coming = false }) {
         ? 'text-gray-500 cursor-default'
         : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
     }`;
+  const inner = (
+    <>
+      <span className="flex-shrink-0 w-4 h-4">{icon}</span>
+      <span className="flex-1 truncate">{label}</span>
+      {badge != null && (
+        <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white
+                         text-[10px] font-bold flex items-center justify-center leading-none">
+          {badge}
+        </span>
+      )}
+    </>
+  );
   if (coming || to === '#') {
     return (
       <button className={cls} disabled={coming} title={coming ? 'Coming soon' : label}>
-        <span className="flex-shrink-0 w-4 h-4">{icon}</span>
-        <span className="flex-1 truncate">{label}</span>
+        {inner}
       </button>
     );
   }
   return (
     <Link to={to} className={cls}>
-      <span className="flex-shrink-0 w-4 h-4">{icon}</span>
-      {label}
+      {inner}
     </Link>
   );
 }
@@ -300,6 +337,7 @@ function IntegrationsIcon() { return I(<><circle cx="18" cy="18" r="3"/><circle 
 function HelpIcon()         { return I(<><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></>); }
 function WebhookIcon()      { return I(<path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11A2.99 2.99 0 0 0 18 8a3 3 0 1 0 0-6 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81A3 3 0 0 0 6 9a3 3 0 1 0 0 6 3 3 0 0 0 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65a3 3 0 1 0 3-3z"/>); }
 function HeartIcon()        { return I(<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>); }
+function LogIcon()          { return I(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></>); }
 function BackIcon()         { return I(<><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>); }
 function LockIcon()         { return (<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>); }
 
