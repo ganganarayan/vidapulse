@@ -38,14 +38,33 @@ function buildCsv(headers, rows) {
 // ─────────────────────────────────────────────────────────────────────────
 
 const METRIC_EXPRS = {
-  total_views     : `COUNT(s.id)                                                         AS total_views`,
-  unique_views    : `COUNT(DISTINCT s.viewer_id)                                         AS unique_views`,
-  total_viewers   : `COUNT(s.id) FILTER (WHERE s.play_count > 0)                        AS total_viewers`,
-  unique_viewers  : `COUNT(DISTINCT s.viewer_id) FILTER (WHERE s.play_count > 0)        AS unique_viewers`,
-  avg_watch_pct   : `ROUND((AVG(s.max_watch_pct) FILTER (WHERE s.play_count > 0))::numeric, 1) AS avg_watch_pct`,
-  play_rate       : `ROUND(COUNT(s.id) FILTER (WHERE s.play_count > 0) * 100.0 / NULLIF(COUNT(s.id), 0), 1) AS play_rate`,
-  completion_rate : `ROUND(COUNT(s.id) FILTER (WHERE s.reached_end) * 100.0 / NULLIF(COUNT(s.id) FILTER (WHERE s.play_count > 0), 0), 1) AS completion_rate`,
-  total_watch_seconds: `COALESCE(SUM(s.total_watch_seconds), 0)                         AS total_watch_seconds`,
+  // ── Reach ──────────────────────────────────────────────────────────────
+  total_views          : `COUNT(s.id)                                                              AS total_views`,
+  unique_views         : `COUNT(DISTINCT s.viewer_id)                                              AS unique_views`,
+  total_viewers        : `COUNT(s.id) FILTER (WHERE s.play_count > 0)                             AS total_viewers`,
+  unique_viewers       : `COUNT(DISTINCT s.viewer_id) FILTER (WHERE s.play_count > 0)             AS unique_viewers`,
+
+  // ── Engagement ─────────────────────────────────────────────────────────
+  avg_watch_pct        : `ROUND((AVG(s.max_watch_pct)       FILTER (WHERE s.play_count > 0))::numeric, 1)                                                       AS avg_watch_pct`,
+  avg_watch_seconds    : `ROUND((AVG(s.total_watch_seconds) FILTER (WHERE s.play_count > 0))::numeric, 1)                                                       AS avg_watch_seconds`,
+  avg_watch_per_viewer : `ROUND(COALESCE(SUM(s.total_watch_seconds) FILTER (WHERE s.play_count > 0), 0)::numeric / NULLIF(COUNT(DISTINCT s.viewer_id) FILTER (WHERE s.play_count > 0), 0), 1) AS avg_watch_per_viewer`,
+  completion_rate      : `ROUND(COUNT(s.id) FILTER (WHERE s.reached_end) * 100.0 / NULLIF(COUNT(s.id) FILTER (WHERE s.play_count > 0), 0), 1)                   AS completion_rate`,
+  completed_views      : `COUNT(s.id) FILTER (WHERE s.reached_end)                                AS completed_views`,
+  drop_off_rate        : `ROUND(100.0 - COUNT(s.id) FILTER (WHERE s.reached_end) * 100.0 / NULLIF(COUNT(s.id) FILTER (WHERE s.play_count > 0), 0), 1)           AS drop_off_rate`,
+
+  // ── Watch Time ─────────────────────────────────────────────────────────
+  total_watch_seconds  : `COALESCE(SUM(s.total_watch_seconds), 0)                                 AS total_watch_seconds`,
+  total_watch_minutes  : `ROUND((COALESCE(SUM(s.total_watch_seconds), 0) / 60.0)::numeric, 1)     AS total_watch_minutes`,
+  play_rate            : `ROUND(COUNT(s.id) FILTER (WHERE s.play_count > 0) * 100.0 / NULLIF(COUNT(s.id), 0), 1)                                                 AS play_rate`,
+
+  // ── Behavior ───────────────────────────────────────────────────────────
+  total_plays          : `COALESCE(SUM(s.play_count), 0)                                          AS total_plays`,
+  replay_count         : `COALESCE(SUM(GREATEST(s.play_count - 1, 0)), 0)                         AS replay_count`,
+  replay_rate          : `ROUND(COALESCE(SUM(GREATEST(s.play_count - 1, 0)), 0) * 100.0 / NULLIF(COUNT(s.id) FILTER (WHERE s.play_count > 0), 0), 1)            AS replay_rate`,
+  pause_count          : `COALESCE(SUM(s.pause_count), 0)                                         AS pause_count`,
+  seek_count           : `COALESCE(SUM(s.seek_count), 0)                                          AS seek_count`,
+  // NOTE: {{CTA_DATE}} is substituted at query-build time with a date filter on ae.occurred_at
+  cta_clicks           : `(SELECT COUNT(*) FROM analytics_events ae WHERE ae.video_id = v.id AND ae.event_type = 'cta_click' {{CTA_DATE}}) AS cta_clicks`,
 };
 
 const VALID_DATE_RANGES = {
@@ -55,11 +74,20 @@ const VALID_DATE_RANGES = {
   'all_time': '',
 };
 
-// Maps date_range key → extra JOIN condition for analytics_sessions
+// Maps date_range key → extra JOIN condition for analytics_sessions (on started_at)
 const DATE_JOIN_CONDITIONS = {
   '7_days' : `AND s.started_at >= NOW() - INTERVAL '7 days'`,
   '30_days': `AND s.started_at >= NOW() - INTERVAL '30 days'`,
   '90_days': `AND s.started_at >= NOW() - INTERVAL '90 days'`,
+  'all_time': '',
+};
+
+// Maps date_range key → correlated subquery date condition for analytics_events (on occurred_at)
+// Used to replace the {{CTA_DATE}} placeholder in METRIC_EXPRS.cta_clicks
+const CTA_DATE_CONDITIONS = {
+  '7_days' : `AND ae.occurred_at >= NOW() - INTERVAL '7 days'`,
+  '30_days': `AND ae.occurred_at >= NOW() - INTERVAL '30 days'`,
+  '90_days': `AND ae.occurred_at >= NOW() - INTERVAL '90 days'`,
   'all_time': '',
 };
 
@@ -306,7 +334,11 @@ async function _generateEventsLog(userId) {
 
 async function _generateCustom(userId, metrics, dateRange) {
   const joinDateCond = DATE_JOIN_CONDITIONS[dateRange] ?? '';
-  const metricSql   = metrics.map(m => METRIC_EXPRS[m]).join(',\n         ');
+  const ctaDateCond  = CTA_DATE_CONDITIONS[dateRange]  ?? '';
+  // Substitute the {{CTA_DATE}} placeholder used by the cta_clicks correlated subquery
+  const metricSql   = metrics
+    .map(m => (METRIC_EXPRS[m] ?? '').replace('{{CTA_DATE}}', ctaDateCond))
+    .join(',\n         ');
 
   const { rows } = await pool.query(
     `SELECT

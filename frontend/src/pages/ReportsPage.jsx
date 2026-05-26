@@ -24,18 +24,56 @@ import api from '../lib/api';
  *   (after download) → back to idle
  */
 
-// ── Available metrics ────────────────────────────────────────────────────
+// ── Available metrics — grouped by category ──────────────────────────────
 
-const ALL_METRICS = [
-  { key: 'total_views',        label: 'Total Views',        desc: 'Every page load where the embed appeared' },
-  { key: 'unique_views',       label: 'Unique Views',       desc: 'Distinct visitors (by cookie) per video' },
-  { key: 'total_viewers',      label: 'Total Viewers',      desc: 'Sessions where play was pressed' },
-  { key: 'unique_viewers',     label: 'Unique Viewers',     desc: 'Distinct people who pressed play' },
-  { key: 'avg_watch_pct',      label: 'Avg Watch %',        desc: 'Average percentage watched per playing session' },
-  { key: 'play_rate',          label: 'Play Rate %',        desc: 'Share of page loads that resulted in a play' },
-  { key: 'completion_rate',    label: 'Completion Rate %',  desc: 'Share of plays that reached the end' },
-  { key: 'total_watch_seconds',label: 'Total Watch Time',   desc: 'Cumulative seconds watched across all sessions' },
+const METRIC_GROUPS = [
+  {
+    label: 'Reach',
+    color: 'text-violet-400',
+    metrics: [
+      { key: 'total_views',    label: 'Total Views',    desc: 'Every page load where the embed appeared' },
+      { key: 'unique_views',   label: 'Unique Views',   desc: 'Distinct visitors (by cookie) per video' },
+      { key: 'total_viewers',  label: 'Total Viewers',  desc: 'Sessions where play was pressed' },
+      { key: 'unique_viewers', label: 'Unique Viewers', desc: 'Distinct people who pressed play' },
+    ],
+  },
+  {
+    label: 'Engagement',
+    color: 'text-amber-400',
+    metrics: [
+      { key: 'avg_watch_pct',        label: 'Avg Watch %',          desc: 'Average percentage watched per playing session' },
+      { key: 'avg_watch_seconds',    label: 'Avg Watch Time (sec)', desc: 'Average seconds watched per playing session' },
+      { key: 'avg_watch_per_viewer', label: 'Avg Watch / Viewer',   desc: 'Average total watch seconds per unique viewer' },
+      { key: 'completion_rate',      label: 'Completion Rate %',    desc: 'Share of plays that reached the end' },
+      { key: 'completed_views',      label: 'Completed Views',      desc: 'Sessions that watched through to the very end' },
+      { key: 'drop_off_rate',        label: 'Drop-off Rate %',      desc: 'Share of plays that did not reach the end' },
+    ],
+  },
+  {
+    label: 'Watch Time',
+    color: 'text-emerald-400',
+    metrics: [
+      { key: 'total_watch_seconds', label: 'Total Watch Time (sec)', desc: 'Cumulative seconds watched across all sessions' },
+      { key: 'total_watch_minutes', label: 'Total Watch Time (min)', desc: 'Cumulative minutes watched across all sessions' },
+      { key: 'play_rate',           label: 'Play Rate %',            desc: 'Share of page loads that resulted in a play' },
+    ],
+  },
+  {
+    label: 'Behavior',
+    color: 'text-sky-400',
+    metrics: [
+      { key: 'total_plays',  label: 'Total Plays',   desc: 'All play events including replays' },
+      { key: 'replay_count', label: 'Replay Count',  desc: 'Times viewers hit play more than once on the same video' },
+      { key: 'replay_rate',  label: 'Replay Rate %', desc: 'Replays as a percentage of total viewers who played' },
+      { key: 'pause_count',  label: 'Pause Count',   desc: 'Total pause events across all sessions' },
+      { key: 'seek_count',   label: 'Seek Count',    desc: 'Total scrub / seek events across all sessions' },
+      { key: 'cta_clicks',   label: 'CTA Clicks',    desc: 'Total CTA link click events within the video player' },
+    ],
+  },
 ];
+
+// Flat list for metric toggle logic and count display
+const ALL_METRICS = METRIC_GROUPS.flatMap(g => g.metrics);
 
 const DATE_RANGES = [
   { key: '7_days',  label: 'Last 7 days' },
@@ -276,45 +314,72 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            {/* Metric checkboxes */}
+            {/* Metric checkboxes — grouped by category */}
             <div>
-              <label className="block text-xs font-semibold text-gray-300 mb-2">
-                Metrics to include
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {ALL_METRICS.map(m => {
-                  const checked = selectedMetrics.has(m.key);
-                  return (
-                    <button
-                      key={m.key}
-                      onClick={() => toggleMetric(m.key)}
-                      className={`flex items-start gap-3 px-3.5 py-3 rounded-xl text-left transition-colors border ${
-                        checked
-                          ? 'bg-amber-500/10 border-amber-500/30'
-                          : 'bg-gray-900/40 border-gray-700/50 hover:border-gray-600'
-                      }`}
-                    >
-                      <span className={`mt-0.5 w-4 h-4 flex-shrink-0 rounded flex items-center justify-center border ${
-                        checked
-                          ? 'bg-amber-500 border-amber-500'
-                          : 'bg-transparent border-gray-600'
-                      }`}>
-                        {checked && (
-                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                            <path d="M2 5l2.5 2.5L8 3" stroke="#1a1a1a" strokeWidth="1.6"
-                              strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        )}
-                      </span>
-                      <span>
-                        <span className={`block text-xs font-semibold ${checked ? 'text-amber-300' : 'text-gray-300'}`}>
-                          {m.label}
-                        </span>
-                        <span className="block text-[11px] text-gray-500 mt-0.5 leading-snug">{m.desc}</span>
-                      </span>
-                    </button>
-                  );
-                })}
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-xs font-semibold text-gray-300">
+                  Metrics to include
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSelectedMetrics(new Set(ALL_METRICS.map(m => m.key)))}
+                    className="text-[11px] text-amber-400 hover:text-amber-300 font-medium transition-colors"
+                  >
+                    Select all
+                  </button>
+                  <span className="text-gray-600 text-[11px]">·</span>
+                  <button
+                    onClick={() => setSelectedMetrics(new Set())}
+                    className="text-[11px] text-gray-500 hover:text-gray-300 font-medium transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {METRIC_GROUPS.map(group => (
+                  <div key={group.label}>
+                    <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${group.color}`}>
+                      {group.label}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {group.metrics.map(m => {
+                        const checked = selectedMetrics.has(m.key);
+                        return (
+                          <button
+                            key={m.key}
+                            onClick={() => toggleMetric(m.key)}
+                            className={`flex items-start gap-3 px-3.5 py-3 rounded-xl text-left transition-colors border ${
+                              checked
+                                ? 'bg-amber-500/10 border-amber-500/30'
+                                : 'bg-gray-900/40 border-gray-700/50 hover:border-gray-600'
+                            }`}
+                          >
+                            <span className={`mt-0.5 w-4 h-4 flex-shrink-0 rounded flex items-center justify-center border ${
+                              checked
+                                ? 'bg-amber-500 border-amber-500'
+                                : 'bg-transparent border-gray-600'
+                            }`}>
+                              {checked && (
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                                  <path d="M2 5l2.5 2.5L8 3" stroke="#1a1a1a" strokeWidth="1.6"
+                                    strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              )}
+                            </span>
+                            <span>
+                              <span className={`block text-xs font-semibold ${checked ? 'text-amber-300' : 'text-gray-300'}`}>
+                                {m.label}
+                              </span>
+                              <span className="block text-[11px] text-gray-500 mt-0.5 leading-snug">{m.desc}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
