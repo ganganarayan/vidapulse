@@ -45,11 +45,10 @@ module.exports = {
   JWT_SECRET     : process.env.JWT_SECRET,
   JWT_EXPIRES_IN : process.env.JWT_EXPIRES_IN || '7d',
 
-  // OAuth — Google and Microsoft login + signup (free plan self-serve entry point)
+  // OAuth — Google login + signup (free plan self-serve entry point)
   // Add these to Railway env vars when ready. Login page works without them
-  // (falls back to email/password only) but OAuth buttons will not appear.
-  GOOGLE_CLIENT_ID       : process.env.GOOGLE_CLIENT_ID     || null,
-  GOOGLE_CLIENT_SECRET   : process.env.GOOGLE_CLIENT_SECRET || null,
-  MICROSOFT_CLIENT_ID    : process.env.MICROSOFT_CLIENT_ID  || null,
-  MICROSOFT_CLIENT_SECRET: process.env.MICROSOFT_CLIENT_SECRET || null,
+  // (falls back to email/password only) but the Google button will not appear.
+  GOOGLE_CLIENT_ID    : process.env.GOOGLE_CLIENT_ID     || null,
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || null,
+  // Microsoft OAuth reserved for future use — not active.
 };

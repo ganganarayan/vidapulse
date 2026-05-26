@@ -13,8 +13,6 @@
  *   GET    /api/auth/providers          — which OAuth providers are configured
  *   GET    /api/auth/oauth/google        — start Google OAuth flow
  *   GET    /api/auth/oauth/google/callback
- *   GET    /api/auth/oauth/microsoft
- *   GET    /api/auth/oauth/microsoft/callback
  *
  * Authenticated:
  *   GET    /api/auth/me                 — current user profile
@@ -510,8 +508,7 @@ router.get('/me', requireAuth, async (req, res, next) => {
     return res.json({
       ...user,
       oauth: {
-        google   : linkedProviders.includes('google'),
-        microsoft: linkedProviders.includes('microsoft'),
+        google: linkedProviders.includes('google'),
       },
     });
   } catch (err) {
@@ -526,8 +523,7 @@ router.get('/me', requireAuth, async (req, res, next) => {
 
 router.get('/providers', (req, res) => {
   res.json({
-    google   : !!(env.GOOGLE_CLIENT_ID    && env.GOOGLE_CLIENT_SECRET),
-    microsoft: !!(env.MICROSOFT_CLIENT_ID && env.MICROSOFT_CLIENT_SECRET),
+    google: !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
   });
 });
 
@@ -538,8 +534,7 @@ router.get('/providers', (req, res) => {
 // Convenience alias — redirect /api/auth/google → /api/auth/oauth/google
 // so bookmarks, old links, or external callers that omit the /oauth/ prefix
 // still work instead of hitting the 404 handler.
-router.get('/google',    (req, res) => res.redirect(307, '/api/auth/oauth/google'));
-router.get('/microsoft', (req, res) => res.redirect(307, '/api/auth/oauth/microsoft'));
+router.get('/google', (req, res) => res.redirect(307, '/api/auth/oauth/google'));
 
 router.get('/oauth/google', (req, res) => {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
@@ -592,57 +587,7 @@ router.get('/oauth/google/callback', async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────
-// OAuth — Microsoft
-// ─────────────────────────────────────────────────────────────
-
-router.get('/oauth/microsoft', (req, res) => {
-  if (!env.MICROSOFT_CLIENT_ID || !env.MICROSOFT_CLIENT_SECRET) {
-    return res.redirect(`${_frontendUrl()}/login?error=microsoft_not_configured`);
-  }
-
-  const state = crypto.randomBytes(16).toString('hex');
-  res.cookie('vp_oauth_state', state, {
-    httpOnly: true,
-    secure  : env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge  : 10 * 60 * 1000,
-  });
-
-  return res.redirect(oauth.getMicrosoftAuthUrl(state));
-});
-
-router.get('/oauth/microsoft/callback', async (req, res) => {
-  const frontendUrl = _frontendUrl();
-  try {
-    const { code, state, error } = req.query;
-
-    if (error) {
-      logger.warn(`[auth] Microsoft OAuth cancelled: ${error}`);
-      return res.redirect(`${frontendUrl}/login?error=microsoft_cancelled`);
-    }
-
-    const storedState = req.cookies?.vp_oauth_state;
-    if (!storedState || storedState !== state) {
-      logger.warn('[auth] Microsoft OAuth state mismatch — possible CSRF');
-      return res.redirect(`${frontendUrl}/login?error=oauth_state_mismatch`);
-    }
-    res.clearCookie('vp_oauth_state');
-
-    const tokens  = await oauth.exchangeMicrosoftCode(code);
-    const profile = await oauth.getMicrosoftUserInfo(tokens.access_token);
-    const { user } = await authService.findOrCreateOAuthUser('microsoft', profile);
-    const jwt = await authService.buildJwt(user.id);
-    authService.setJwtCookie(res, jwt);
-
-    logger.info(`[auth] Microsoft OAuth success: ${profile.email}`);
-    return res.redirect(`${frontendUrl}/dashboard?token=${jwt}`);
-
-  } catch (err) {
-    logger.error(`[auth] Microsoft OAuth callback error: ${err.message}`);
-    return res.redirect(`${frontendUrl}/login?error=oauth_failed`);
-  }
-});
+// Microsoft OAuth removed — to be added back later.
 
 // ─────────────────────────────────────────────────────────────
 // Helper

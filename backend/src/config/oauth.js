@@ -79,70 +79,7 @@ async function getGoogleUserInfo(accessToken) {
   };
 }
 
-// ─────────────────────────────────────────────────────────────
-// MICROSOFT
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Build the Microsoft OAuth authorization URL.
- * Uses /common endpoint so both personal and work/school accounts work.
- * prompt=select_account forces the account picker.
- */
-function getMicrosoftAuthUrl(state) {
-  const params = new URLSearchParams({
-    client_id    : env.MICROSOFT_CLIENT_ID,
-    redirect_uri : `${env.APP_URL}/api/auth/oauth/microsoft/callback`,
-    response_type: 'code',
-    scope        : 'openid email profile User.Read',
-    state,
-    response_mode: 'query',
-    prompt       : 'select_account',
-  });
-  return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}`;
-}
-
-/**
- * Exchange an authorization code for Microsoft tokens.
- */
-async function exchangeMicrosoftCode(code) {
-  const body = new URLSearchParams({
-    code,
-    client_id    : env.MICROSOFT_CLIENT_ID,
-    client_secret: env.MICROSOFT_CLIENT_SECRET,
-    redirect_uri : `${env.APP_URL}/api/auth/oauth/microsoft/callback`,
-    grant_type   : 'authorization_code',
-    scope        : 'openid email profile User.Read',
-  }).toString();
-
-  const data = await _post(
-    'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-    body,
-    { 'Content-Type': 'application/x-www-form-urlencoded' }
-  );
-
-  if (data.error) {
-    throw new Error(`Microsoft token exchange failed: ${data.error_description || data.error}`);
-  }
-  return data;
-}
-
-/**
- * Fetch Microsoft user profile using an access token.
- * Returns { id, email, name }
- */
-async function getMicrosoftUserInfo(accessToken) {
-  const data = await _get('https://graph.microsoft.com/v1.0/me', {
-    Authorization: `Bearer ${accessToken}`,
-  });
-  // Microsoft returns mail (personal) or userPrincipalName (work/school)
-  const email = data.mail || data.userPrincipalName;
-  if (!email) throw new Error('Microsoft did not return an email address');
-  return {
-    id   : data.id,
-    email,
-    name : data.displayName || email.split('@')[0],
-  };
-}
+// Microsoft OAuth removed — reserved for future use.
 
 // ─────────────────────────────────────────────────────────────
 // HTTP helpers (no external dependencies)
@@ -200,7 +137,4 @@ module.exports = {
   getGoogleAuthUrl,
   exchangeGoogleCode,
   getGoogleUserInfo,
-  getMicrosoftAuthUrl,
-  exchangeMicrosoftCode,
-  getMicrosoftUserInfo,
 };

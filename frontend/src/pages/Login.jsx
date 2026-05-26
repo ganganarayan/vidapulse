@@ -5,12 +5,10 @@ import { useAuth } from '../contexts/AuthContext';
 
 // ── OAuth error messages ──────────────────────────────────────
 const OAUTH_ERRORS = {
-  google_not_configured   : 'Google sign-in is not yet available.',
-  microsoft_not_configured: 'Microsoft sign-in is not yet available.',
-  google_cancelled        : 'Google sign-in was cancelled.',
-  microsoft_cancelled     : 'Microsoft sign-in was cancelled.',
-  oauth_state_mismatch    : 'Sign-in failed (security check). Please try again.',
-  oauth_failed            : 'Sign-in failed. Please try again.',
+  google_not_configured: 'Google sign-in is not yet available.',
+  google_cancelled     : 'Google sign-in was cancelled.',
+  oauth_state_mismatch : 'Sign-in failed (security check). Please try again.',
+  oauth_failed         : 'Sign-in failed. Please try again.',
 };
 
 export default function Login() {
@@ -22,7 +20,7 @@ export default function Login() {
   const [password,  setPassword]  = useState('');
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState('');
-  const [providers, setProviders] = useState({ google: false, microsoft: false });
+  const [providers, setProviders] = useState({ google: false });
 
   // Pick up any OAuth error from query params
   useEffect(() => {
@@ -61,11 +59,7 @@ export default function Login() {
     window.location.href = '/api/auth/oauth/google';
   }
 
-  function handleMicrosoftLogin() {
-    window.location.href = '/api/auth/oauth/microsoft';
-  }
-
-  const showOAuth = providers.google || providers.microsoft;
+  const showOAuth = providers.google;
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center px-4 py-12">
@@ -103,17 +97,6 @@ export default function Login() {
                 >
                   <GoogleIcon />
                   Continue with Google
-                </button>
-              )}
-              {providers.microsoft && (
-                <button
-                  onClick={handleMicrosoftLogin}
-                  className="flex items-center justify-center gap-3 w-full py-2.5 px-4
-                             bg-white text-gray-800 font-medium text-sm rounded-lg
-                             hover:bg-gray-100 transition-colors"
-                >
-                  <MicrosoftIcon />
-                  Continue with Microsoft
                 </button>
               )}
             </div>
@@ -186,7 +169,7 @@ export default function Login() {
         <p className="mt-5 text-center text-xs text-gray-500">
           Don't have an account?{' '}
           {showOAuth
-            ? <span className="text-gray-400">Sign up with Google or Microsoft above.</span>
+            ? <span className="text-gray-400">Sign up with Google above.</span>
             : <span className="text-gray-400">Contact support to get access.</span>
           }
         </p>
@@ -208,13 +191,4 @@ function GoogleIcon() {
   );
 }
 
-function MicrosoftIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
-      <rect x="1"  y="1"  width="9" height="9" fill="#f25022"/>
-      <rect x="11" y="1"  width="9" height="9" fill="#00a4ef"/>
-      <rect x="1"  y="11" width="9" height="9" fill="#7fba00"/>
-      <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
-    </svg>
-  );
-}
+// MicrosoftIcon removed — Microsoft OAuth not active yet.
