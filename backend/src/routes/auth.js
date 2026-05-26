@@ -535,6 +535,12 @@ router.get('/providers', (req, res) => {
 // OAuth — Google
 // ─────────────────────────────────────────────────────────────
 
+// Convenience alias — redirect /api/auth/google → /api/auth/oauth/google
+// so bookmarks, old links, or external callers that omit the /oauth/ prefix
+// still work instead of hitting the 404 handler.
+router.get('/google',    (req, res) => res.redirect(307, '/api/auth/oauth/google'));
+router.get('/microsoft', (req, res) => res.redirect(307, '/api/auth/oauth/microsoft'));
+
 router.get('/oauth/google', (req, res) => {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
     return res.redirect(`${_frontendUrl()}/login?error=google_not_configured`);
