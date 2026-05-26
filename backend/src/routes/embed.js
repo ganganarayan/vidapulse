@@ -250,6 +250,16 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
            </button>
          </div>` : '';
 
+    /* Resume prompt — only rendered when the "Resume playback" setting is on.
+       Shown/hidden at runtime by attachVideoEvents based on whether a saved
+       position exists. Always starts hidden (display:none). */
+    const resumePromptHtml = resumePlay
+      ? `<div id="vp-resume" style="display:none;bottom:8px">
+           <button id="vp-res-start">&#x21BA; Start Over</button>
+           <button id="vp-res-cont">&#x25B6; Resume</button>
+         </div>`
+      : '';
+
     playerHtml = `
       <video id="vp-vid" preload="metadata"
         ${autoplay ? 'autoplay muted playsinline' : 'playsinline'}
@@ -258,9 +268,31 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         ${isHls ? '' : `<source src="${esc(videoUrl)}" />`}
       </video>
       ${centerHtml}
+      ${resumePromptHtml}
       ${hasBar ? `<div id="vp-bar">${leftGroup}${rightGroup}</div>` : ''}`;
 
     extraStyles = `
+      /* ── Resume prompt ──────────────────────────────── */
+      #vp-resume{
+        position:absolute;left:0;right:0;
+        display:flex;justify-content:center;align-items:center;gap:10px;
+        padding:0 12px;z-index:10;
+      }
+      #vp-resume button{
+        background:rgba(22,22,22,0.88);
+        border:1px solid rgba(255,255,255,0.18);
+        color:#fff;font-size:12px;font-family:sans-serif;
+        padding:7px 20px;border-radius:7px;cursor:pointer;
+        backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+        transition:background .15s,transform .1s;
+        white-space:nowrap;touch-action:manipulation;
+      }
+      #vp-resume button:hover{background:rgba(52,52,52,0.95);}
+      #vp-resume button:active{transform:scale(.97);}
+      /* Resume button gets a subtle amber accent */
+      #vp-res-cont{border-color:rgba(245,158,11,0.45);}
+      #vp-res-cont:hover{background:rgba(245,158,11,0.18);}
+
       /* ── Center overlay ─────────────────────────────── */
       #vp-center{
         position:absolute;inset:0;
@@ -411,9 +443,43 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         pw&&pw.addEventListener('mousemove',function(){setUI(true);});
         pw&&pw.addEventListener('touchstart',function(){setUI(true);},{passive:true});
 
-        /* ── Resume playback ────────────────────────── */
+        /* ── Resume playback prompt ─────────────────── */
+        /* Show two buttons — "Start Over" and "Resume — M:SS" — above the
+           control bar whenever the setting is on and a saved position exists.
+           Dismisses when either button is clicked, or if play fires first. */
         var resumePos=loadPos();
-        if(resumePos>5){v.currentTime=resumePos;}
+        var resumeEl=document.getElementById('vp-resume');
+        if(RESUME&&resumePos>5&&resumeEl&&v.paused){
+          /* Sit 8px above the bar (or 8px from bottom if no bar) */
+          var barEl=document.getElementById('vp-bar');
+          resumeEl.style.bottom=((barEl?barEl.offsetHeight:0)+8)+'px';
+
+          /* Update Resume button label with the saved timestamp */
+          var resCont=document.getElementById('vp-res-cont');
+          var resStart=document.getElementById('vp-res-start');
+          if(resCont)resCont.textContent='▶ Resume – '+fmt(resumePos);
+
+          /* Reveal the prompt */
+          resumeEl.style.display='flex';
+
+          function dismissResume(){if(resumeEl)resumeEl.style.display='none';}
+
+          resStart&&resStart.addEventListener('click',function(e){
+            e.stopPropagation();
+            dismissResume();
+            v.currentTime=0;
+            v.play().catch(function(){});
+          });
+          resCont&&resCont.addEventListener('click',function(e){
+            e.stopPropagation();
+            dismissResume();
+            v.currentTime=resumePos;
+            v.play().catch(function(){});
+          });
+          /* If the viewer presses the main ▶ or taps the video directly,
+             dismiss without seeking — video plays from its current position. */
+          v.addEventListener('play',function(){dismissResume();},{once:true});
+        }
 
         /* ── Click anywhere on video = play/pause ───── */
         pw&&pw.addEventListener('click',function(e){

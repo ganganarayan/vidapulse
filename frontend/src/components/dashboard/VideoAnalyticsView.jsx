@@ -863,7 +863,7 @@ const PLAYER_ROWS = [
   { key: 'show_volume_control', label: 'Volume Control',      desc: 'Show volume slider and mute toggle' },
   { key: 'show_playback_speed', label: 'Playback Speed',      desc: 'Let viewers choose 0.5×, 1×, 1.25×, 1.5×, 2×' },
   { key: 'show_fullscreen_btn', label: 'Fullscreen Button',   desc: 'Show the fullscreen toggle' },
-  { key: 'resume_playback',     label: 'Resume Playback',     desc: 'Remember where viewers left off last time' },
+  { key: 'resume_playback',     label: 'Resume Playback',     desc: 'Prompt viewers to resume or restart when they return to the video' },
   { key: 'loop',                label: 'Loop',                desc: 'Replay the video automatically when it ends' },
 ];
 
