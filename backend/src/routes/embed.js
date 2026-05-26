@@ -278,7 +278,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         display:flex;align-items:center;justify-content:center;
         box-shadow:0 4px 24px rgba(0,0,0,.5);
         transition:transform .15s,background .15s;
-        padding-left:4px;
+        padding-left:4px;touch-action:manipulation;
       }
       #vp-play-c.vp-pause-mode{padding-left:0;}
       #vp-play-c:hover{background:rgba(245,158,11,1);transform:scale(1.08);}
@@ -290,7 +290,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         background:rgba(0,0,0,.55);border:2px solid rgba(255,255,255,.35);
         color:#fff;cursor:pointer;
         display:flex;align-items:center;justify-content:center;
-        transition:background .15s,transform .15s;
+        transition:background .15s,transform .15s;touch-action:manipulation;
       }
       #vp-mute-c:hover{background:rgba(0,0,0,.75);transform:scale(1.08);}
       #vp-mute-c.vp-unmuted{border-color:rgba(245,158,11,.6);color:#f59e0b;}
@@ -311,7 +311,8 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
       #vp-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
 
       .vp-btn{background:none;border:none;color:#fff;cursor:pointer;
-        padding:4px;display:flex;align-items:center;flex-shrink:0;}
+        padding:4px;display:flex;align-items:center;flex-shrink:0;
+        touch-action:manipulation;}
       .vp-btn:hover{color:#f59e0b;}
 
       /* Volume slider */
@@ -527,6 +528,11 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
           function commitSeek(){dragging=false;if(v.duration)v.currentTime=(sk.value/1000)*v.duration;}
           sk.addEventListener('change',commitSeek);
           sk.addEventListener('mouseup',commitSeek);
+          /* iOS: touchend fires before 'change'; touchcancel (system interrupt — incoming
+             call, swipe-back, notification) skips 'change' entirely and leaves
+             dragging=true permanently, freezing the seek bar for the rest of the session. */
+          sk.addEventListener('touchend',commitSeek,{passive:true});
+          sk.addEventListener('touchcancel',function(){dragging=false;},{passive:true});
         }
 
         /* ── Playback speed ─────────────────────────── */
@@ -735,7 +741,9 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     html,body{width:100%;height:100%;overflow:hidden;background:#000}
-    #player-wrap{position:absolute;inset:0;overflow:hidden}
+    #player-wrap{position:absolute;inset:0;overflow:hidden;
+      /* Removes the 300ms click delay on iOS Safari for all tap interactions */
+      touch-action:manipulation;}
     #player-wrap>iframe,#player-wrap>video{width:100%;height:100%;display:block}
     #yt-wrap,#yt-wrap>div{position:absolute;inset:0}
     #yt-player{position:absolute;inset:0}

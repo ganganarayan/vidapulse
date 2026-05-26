@@ -410,8 +410,10 @@ router.post('/ping', async (req, res) => {
       ).catch(err => logger.warn(`[analytics/ping] failed to save duration_seconds: ${err.message}`));
     }
 
-    const isPlay = event === 'play';
-    const isEnd  = event === 'end';
+    const isPlay  = event === 'play';
+    const isEnd   = event === 'end';
+    const isPause = event === 'pause';
+    const isSeek  = event === 'seek' || event === 'seeked';
 
     const safeMax     = Math.min(Math.max(parseFloat(max_pct)    || 0, 0), 100);
     const safeWatched = Math.max(parseFloat(watch_seconds)       || 0, 0);
@@ -433,12 +435,18 @@ router.post('/ping', async (req, res) => {
          max_watch_pct       = GREATEST(max_watch_pct, $1),
          total_watch_seconds = GREATEST(total_watch_seconds, $2),
          avg_watch_pct       = GREATEST(avg_watch_pct, $3),
-         play_count          = play_count + $4::int,
-         reached_end         = reached_end OR $5,
-         ended_at            = CASE WHEN $5 THEN NOW() ELSE ended_at END
-       WHERE id = $6
+         play_count          = play_count  + $4::int,
+         pause_count         = pause_count + $5::int,
+         seek_count          = seek_count  + $6::int,
+         reached_end         = reached_end OR $7,
+         ended_at            = CASE WHEN $7 THEN NOW() ELSE ended_at END
+       WHERE id = $8
        RETURNING play_count`,
-      [safeMax, safeWatched, safeAvgPct, isPlay ? 1 : 0, isEnd, session_id]
+      [safeMax, safeWatched, safeAvgPct,
+       isPlay  ? 1 : 0,
+       isPause ? 1 : 0,
+       isSeek  ? 1 : 0,
+       isEnd, session_id]
     );
     if (!updated) return; // session row vanished between queries — drop
 
