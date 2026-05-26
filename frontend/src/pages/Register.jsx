@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -16,8 +16,15 @@ export default function Register() {
   const [password,  setPassword]  = useState('');
   const [confirm,   setConfirm]   = useState('');
   const [showPw,    setShowPw]    = useState(false);
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState('');
+  const [loading,       setLoading]       = useState(false);
+  const [error,         setError]         = useState('');
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+
+  useEffect(() => {
+    api.get('/auth/providers')
+      .then(res => setGoogleEnabled(!!res.data.google))
+      .catch(() => {});
+  }, []);
 
   function handleGoogleSignup() {
     window.location.href = '/api/auth/oauth/google';
@@ -75,28 +82,32 @@ export default function Register() {
             </div>
           )}
 
-          {/* Google OAuth */}
-          <div className="mb-5">
-            <button
-              type="button"
-              onClick={handleGoogleSignup}
-              className="flex items-center justify-center gap-3 w-full py-2.5 px-4
-                         bg-white text-gray-800 font-medium text-sm rounded-lg
-                         hover:bg-gray-100 transition-colors"
-            >
-              <GoogleIcon />
-              Continue with Google
-            </button>
-          </div>
+          {/* Google OAuth — only shown when configured on the server */}
+          {googleEnabled && (
+            <>
+              <div className="mb-5">
+                <button
+                  type="button"
+                  onClick={handleGoogleSignup}
+                  className="flex items-center justify-center gap-3 w-full py-2.5 px-4
+                             bg-white text-gray-800 font-medium text-sm rounded-lg
+                             hover:bg-gray-100 transition-colors"
+                >
+                  <GoogleIcon />
+                  Continue with Google
+                </button>
+              </div>
 
-          <div className="relative mb-5">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-700" />
-            </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="bg-gray-800 px-3 text-gray-500">or sign up with email</span>
-            </div>
-          </div>
+              <div className="relative mb-5">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-700" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-gray-800 px-3 text-gray-500">or sign up with email</span>
+                </div>
+              </div>
+            </>
+          )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 

@@ -5,7 +5,6 @@ import { useAuth } from '../contexts/AuthContext';
 
 // ── OAuth error messages ──────────────────────────────────────
 const OAUTH_ERRORS = {
-  google_not_configured: 'Google sign-in is not yet available.',
   google_cancelled     : 'Google sign-in was cancelled.',
   oauth_state_mismatch : 'Sign-in failed (security check). Please try again.',
   oauth_failed         : 'Sign-in failed. Please try again.',
@@ -16,15 +15,24 @@ export default function Login() {
   const [searchParams] = useSearchParams();
   const { refetch } = useAuth();
 
-  const [email,     setEmail]     = useState('');
-  const [password,  setPassword]  = useState('');
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState('');
+  const [email,          setEmail]          = useState('');
+  const [password,       setPassword]       = useState('');
+  const [loading,        setLoading]        = useState(false);
+  const [error,          setError]          = useState('');
+  const [googleEnabled,  setGoogleEnabled]  = useState(false);
+
   // Pick up any OAuth error from query params
   useEffect(() => {
     const errKey = searchParams.get('error');
     if (errKey && OAUTH_ERRORS[errKey]) setError(OAUTH_ERRORS[errKey]);
   }, [searchParams]);
+
+  // Check which providers are configured on the server
+  useEffect(() => {
+    api.get('/auth/providers')
+      .then(res => setGoogleEnabled(!!res.data.google))
+      .catch(() => {});
+  }, []);
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -72,37 +80,41 @@ export default function Login() {
           </div>
         )}
 
-        {/* Google OAuth */}
-        <div className="mb-5">
-          <button
-            onClick={handleGoogleLogin}
-            className="flex items-center justify-center gap-3 w-full py-2.5 px-4
-                       bg-white text-gray-800 font-medium text-sm rounded-lg
-                       hover:bg-gray-100 transition-colors"
-          >
-            <GoogleIcon />
-            Continue with Google
-          </button>
-        </div>
+        {/* Google OAuth — only shown when configured on the server */}
+        {googleEnabled && (
+          <>
+            <div className="mb-5">
+              <button
+                onClick={handleGoogleLogin}
+                className="flex items-center justify-center gap-3 w-full py-2.5 px-4
+                           bg-white text-gray-800 font-medium text-sm rounded-lg
+                           hover:bg-gray-100 transition-colors"
+              >
+                <GoogleIcon />
+                Continue with Google
+              </button>
+            </div>
 
-        <div className="relative mb-5">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-700" />
-          </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="bg-gray-800 px-3 text-gray-500">or sign in with email</span>
-          </div>
-        </div>
+            <div className="relative mb-5">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-700" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-gray-800 px-3 text-gray-500">or sign in with email</span>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Email/password form */}
-        <form onSubmit={handleLogin} className="flex flex-col gap-4">
+        <form onSubmit={handleLogin} autoComplete="off" className="flex flex-col gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
               Email address
             </label>
             <input
               type="email"
-              autoComplete="email"
+              autoComplete="off"
               required
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -125,7 +137,7 @@ export default function Login() {
             </div>
             <input
               type="password"
-              autoComplete="current-password"
+              autoComplete="off"
               required
               value={password}
               onChange={e => setPassword(e.target.value)}
@@ -154,6 +166,7 @@ export default function Login() {
             Create free account →
           </Link>
         </p>
+
       </div>
     </div>
   );
