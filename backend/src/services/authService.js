@@ -79,7 +79,7 @@ async function loginWithPassword(email, password) {
   const normalizedEmail = email.toLowerCase().trim();
 
   const result = await pool.query(
-    `SELECT id, email, name, password_hash, password_set, role, is_active
+    `SELECT id, email, name, password_hash, password_set, role, is_active, last_login_at
      FROM users WHERE email = $1`,
     [normalizedEmail]
   );
@@ -134,13 +134,17 @@ async function loginWithPassword(email, password) {
     );
   }
 
+  // Capture first-login status BEFORE updating last_login_at.
+  // NULL means the user has never completed a login before.
+  const isFirstLogin = !user.last_login_at;
+
   await pool.query(
     `UPDATE users SET last_login_at = NOW() WHERE id = $1`,
     [user.id]
   );
 
   logger.info(`[authService] Password login: ${normalizedEmail}`);
-  return { ...user, first_login: false };
+  return { ...user, first_login: isFirstLogin };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -323,7 +327,7 @@ async function findOrCreateOAuthUser(provider, providerProfile) {
 
     // ── 1. Match by provider_id ───────────────────────────────
     const oauthResult = await client.query(
-      `SELECT u.id, u.email, u.role, u.is_active
+      `SELECT u.id, u.email, u.role, u.is_active, u.last_login_at
        FROM user_oauth_accounts oa
        JOIN users u ON u.id = oa.user_id
        WHERE oa.provider = $1 AND oa.provider_id = $2`,
@@ -335,6 +339,8 @@ async function findOrCreateOAuthUser(provider, providerProfile) {
       if (!user.is_active) {
         throw Object.assign(new Error('Account is inactive'), { code: 'INACTIVE' });
       }
+      // Capture first-login status BEFORE updating last_login_at
+      const isFirstLogin = !user.last_login_at;
       await client.query(
         `UPDATE user_oauth_accounts
          SET provider_email = $1, updated_at = NOW()
@@ -346,23 +352,26 @@ async function findOrCreateOAuthUser(provider, providerProfile) {
         [user.id]
       );
       await client.query('COMMIT');
-      return { user, isNew: false };
+      return { user, isNew: false, isFirstLogin };
     }
 
     // ── 2. Match by email (link OAuth to existing account) ────
     const emailResult = await client.query(
-      `SELECT id, email, role, is_active FROM users WHERE email = $1`,
+      `SELECT id, email, role, is_active, last_login_at FROM users WHERE email = $1`,
       [normalizedEmail]
     );
 
     let user;
-    let isNew = false;
+    let isNew        = false;
+    let isFirstLogin = false;
 
     if (emailResult.rows.length > 0) {
       user = emailResult.rows[0];
       if (!user.is_active) {
         throw Object.assign(new Error('Account is inactive'), { code: 'INACTIVE' });
       }
+      // Capture first-login status BEFORE the shared last_login_at update below
+      isFirstLogin = !user.last_login_at;
       await client.query(
         `INSERT INTO user_oauth_accounts (user_id, provider, provider_id, provider_email)
          VALUES ($1, $2, $3, $4)
@@ -424,7 +433,7 @@ async function findOrCreateOAuthUser(provider, providerProfile) {
       });
     }
 
-    return { user, isNew };
+    return { user, isNew, isFirstLogin };
 
   } catch (err) {
     await client.query('ROLLBACK');

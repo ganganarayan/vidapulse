@@ -311,7 +311,7 @@ function LogRow({ row }) {
 
         {/* Status */}
         <td className="px-4 py-3 align-top">
-          <StatusBadge status={row.status} code={row.response_status} />
+          <StatusBadge status={row.status} code={row.response_status} errorMsg={row.error_message} />
         </td>
 
         {/* Response */}
@@ -402,13 +402,20 @@ function LogRow({ row }) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function StatusBadge({ status, code }) {
+function StatusBadge({ status, code, errorMsg }) {
   const color = status === 'sent'
     ? 'text-emerald-400'
     : status === 'queued'
       ? 'text-amber-400'
       : 'text-red-400';
   const icon  = status === 'sent' ? '✓' : status === 'queued' ? '⏸' : '✕';
+
+  // For failed entries with no HTTP code (status=0), show Timeout or Network error
+  const isNetworkFail = status === 'failed' && (!code || code === 0);
+  const networkLabel  = isNetworkFail
+    ? (errorMsg?.toLowerCase().includes('timeout') ? 'Timeout' : 'Network error')
+    : null;
+
   return (
     <div className="flex flex-col gap-0.5">
       <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${color}`}>
@@ -416,6 +423,9 @@ function StatusBadge({ status, code }) {
       </span>
       {code != null && code > 0 && (
         <span className="text-[10px] text-gray-600 tabular-nums">HTTP {code}</span>
+      )}
+      {networkLabel && (
+        <span className="text-[10px] text-orange-400 font-medium">{networkLabel}</span>
       )}
     </div>
   );

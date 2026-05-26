@@ -226,8 +226,11 @@ router.post('/login', async (req, res, next) => {
     // Also return token in the body so native/mobile clients can use it directly.
     authService.setJwtCookie(res, token);
 
-    // Fire contact webhook asynchronously — never blocks the response
-    fireContactWebhook(user.id, 'login').catch(() => {});
+    // Fire contact webhook only on the user's FIRST-EVER login (never on repeat logins).
+    // authService.loginWithPassword sets first_login=true when last_login_at was NULL.
+    if (user.first_login) {
+      fireContactWebhook(user.id, 'login').catch(() => {});
+    }
 
     return res.json({
       success    : true,
@@ -589,15 +592,15 @@ router.get('/oauth/google/callback', async (req, res) => {
 
     const tokens  = await oauth.exchangeGoogleCode(code);
     const profile = await oauth.getGoogleUserInfo(tokens.access_token);
-    const { user, isNew } = await authService.findOrCreateOAuthUser('google', profile);
+    const { user, isNew, isFirstLogin } = await authService.findOrCreateOAuthUser('google', profile);
     const jwt = await authService.buildJwt(user.id);
     authService.setJwtCookie(res, jwt);
 
-    // New OAuth users: authService.findOrCreateOAuthUser already called
-    // emitEvent('user_signed_up'), which triggers the contact webhook via
-    // behavioralEventService — no second fire needed here.
-    // Returning OAuth users: fire login contact webhook directly.
-    if (!isNew) {
+    // New OAuth users: authService.findOrCreateOAuthUser already emits
+    // user_signed_up → behavioralEventService → contact webhook. No extra fire.
+    // Returning OAuth users: fire login webhook only on their FIRST-EVER login
+    // (isFirstLogin = last_login_at was NULL before this session).
+    if (!isNew && isFirstLogin) {
       fireContactWebhook(user.id, 'login').catch(() => {});
     }
 

@@ -275,9 +275,11 @@ async function _doGet(finalUrl) {
     const errorMessage = ok ? null : `HTTP ${response.status}: ${_truncate(responseBody, 300)}`;
     return { ok, statusCode: response.status, responseBody, errorMessage };
   } catch (fetchErr) {
-    const errorMessage = controller.signal.aborted
-      ? `Request timed out after ${HTTP_TIMEOUT_MS}ms`
-      : fetchErr.message;
+    const isTimeout = controller.signal.aborted;
+    // Build a descriptive error message distinguishing timeout from connection errors
+    const errorMessage = isTimeout
+      ? `Timeout — no response within ${HTTP_TIMEOUT_MS / 1000}s`
+      : `Network error — ${fetchErr.cause?.message || fetchErr.message}`;
     return { ok: false, statusCode: 0, responseBody: null, errorMessage };
   } finally {
     clearTimeout(tid);
