@@ -30,6 +30,7 @@ const logger      = require('../config/logger');
 const { requireAuth } = require('../middleware/requireAuth');
 const { pool }    = require('../config/database');
 const { fireContactWebhook } = require('../services/contactWebhookSender');
+const { emitEvent }          = require('../services/behavioralEventService');
 
 // ── Login rate limiter ────────────────────────────────────────
 // In-memory, keyed by IP.  Max 10 attempts per 15-minute window.
@@ -399,11 +400,14 @@ router.post('/register', async (req, res, next) => {
       const token = await authService.buildJwt(user.id);
       authService.setJwtCookie(res, token);
 
-      // Fire contact webhook asynchronously — never blocks the response
-      // (user_signed_up behavioral event fires separately via emitEvent in the
-      //  calling route, but we fire 'registration' here to capture it at the
-      //  auth layer independently)
-      fireContactWebhook(user.id, 'registration').catch(() => {});
+      // Emit user_signed_up — this is the single source of truth for new signups.
+      // behavioralEventService will fire the contact webhook (event_type=user_signed_up)
+      // and also queue it for Worker A (behavioral webhook). Non-blocking, never throws.
+      emitEvent(user.id, 'user_signed_up', null, {
+        signup_source: 'self_signup',
+        email        : normalizedEmail,
+        plan         : 'free',
+      });
 
       logger.info(`[auth/register] New subscriber: ${normalizedEmail}`);
       return res.status(201).json({ ok: true });
@@ -589,11 +593,15 @@ router.get('/oauth/google/callback', async (req, res) => {
     const jwt = await authService.buildJwt(user.id);
     authService.setJwtCookie(res, jwt);
 
-    // Fire contact webhook asynchronously — distinguish new signup vs returning login
-    const oauthEventKey = isNew ? 'registration' : 'login';
-    fireContactWebhook(user.id, oauthEventKey).catch(() => {});
+    // New OAuth users: authService.findOrCreateOAuthUser already called
+    // emitEvent('user_signed_up'), which triggers the contact webhook via
+    // behavioralEventService — no second fire needed here.
+    // Returning OAuth users: fire login contact webhook directly.
+    if (!isNew) {
+      fireContactWebhook(user.id, 'login').catch(() => {});
+    }
 
-    logger.info(`[auth] Google OAuth success: ${profile.email} (${oauthEventKey})`);
+    logger.info(`[auth] Google OAuth success: ${profile.email} (${isNew ? 'new user' : 'login'})`);
     // Token in URL lets the frontend store it in localStorage for non-cookie clients.
     // The httpOnly cookie is also set so the browser SPA works without any extra JS.
     return res.redirect(`${frontendUrl}/dashboard?token=${jwt}`);
