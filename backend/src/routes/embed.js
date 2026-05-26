@@ -538,11 +538,25 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         if(fs){
           fs.addEventListener('click',function(e){
             e.stopPropagation();
-            document.fullscreenElement?document.exitFullscreen():(pw||v).requestFullscreen().catch(function(){});
+            /* Standard API first; webkit prefix for older Safari / iOS.
+               iOS Safari does not support requestFullscreen() on arbitrary elements,
+               but DOES support webkitEnterFullscreen() on the <video> element itself. */
+            var isFs=!!(document.fullscreenElement||document.webkitFullscreenElement);
+            if(isFs){
+              if(document.exitFullscreen){document.exitFullscreen();}
+              else if(document.webkitExitFullscreen){document.webkitExitFullscreen();}
+            } else {
+              var el=pw||v;
+              if(el.requestFullscreen){el.requestFullscreen().catch(function(){});}
+              else if(v.webkitEnterFullscreen){v.webkitEnterFullscreen();}
+            }
           });
-          document.addEventListener('fullscreenchange',function(){
-            if(fs)fs.innerHTML=document.fullscreenElement?FS_OUT:FS_IN;
-          });
+          /* Listen on both standard and webkit events so the icon syncs on iOS too */
+          function _syncFsIcon(){
+            if(fs)fs.innerHTML=(document.fullscreenElement||document.webkitFullscreenElement)?FS_OUT:FS_IN;
+          }
+          document.addEventListener('fullscreenchange',_syncFsIcon);
+          document.addEventListener('webkitfullscreenchange',_syncFsIcon);
         }
 
         /* ── Analytics ──────────────────────────────── */
@@ -599,15 +613,19 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
 
     console.log('[VidaPulse] tracker loaded — API:', API, '| video:', VID);
 
-    /* Persistent viewer cookie */
-    var k='_vp_'+VID.slice(0,8),ck=localStorage.getItem(k);
+    /* Persistent viewer cookie
+       All localStorage calls are wrapped in try/catch:
+       iOS Safari Private Browsing allows getItem() but throws QuotaExceededError
+       on setItem() — without the guard the script crashes before sess() runs. */
+    var k='_vp_'+VID.slice(0,8),ck=null;
+    try{ck=localStorage.getItem(k);}catch(_){}
     if(!ck){
       try{
         ck=([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,function(c){
           return(c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16);
         });
       }catch(e){ck=Math.random().toString(36).slice(2)+Date.now().toString(36);}
-      localStorage.setItem(k,ck);
+      try{localStorage.setItem(k,ck);}catch(_){}
     }
     console.log('[VidaPulse] viewer cookie:', ck);
 
@@ -680,12 +698,19 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
       });
     }
 
-    /* Resume playback helper */
+    /* Resume playback helper — localStorage wrapped for iOS Private mode */
     var rpKey='_vp_pos_'+VID.slice(0,8);
-    function savePos(t){if(RESUME&&t>5)localStorage.setItem(rpKey,t);}
-    function loadPos(){return RESUME?parseFloat(localStorage.getItem(rpKey)||'0'):0;}
+    function savePos(t){if(RESUME&&t>5){try{localStorage.setItem(rpKey,t);}catch(_){}}}
+    function loadPos(){try{return RESUME?parseFloat(localStorage.getItem(rpKey)||'0'):0;}catch(_){return 0;}}
 
-    window.addEventListener('beforeunload',function(){
+    /* Fire final end ping on page unload.
+       iOS Safari does NOT reliably fire 'beforeunload' — it fires 'pagehide' instead.
+       Desktop browsers fire both. The _ended guard prevents double-counting on
+       browsers that fire both events (Chrome, Firefox, Edge on desktop). */
+    var _ended=false;
+    function _onUnload(){
+      if(_ended)return;
+      _ended=true;
       if(on&&typeof t0!=='undefined'){
         var now=(typeof player!=='undefined'&&player.getCurrentTime)
           ?player.getCurrentTime()
@@ -694,7 +719,11 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         secs+=now-t0;ivs.push([t0,now]);
       }
       ping('end');
-    });
+    }
+    window.addEventListener('beforeunload',_onUnload);
+    /* pagehide: fires reliably on iOS Safari (and all modern browsers).
+       Use {capture:true} so it runs before any other handler can cancel it. */
+    window.addEventListener('pagehide',_onUnload,{capture:true});
   `;
 
   return `<!DOCTYPE html>

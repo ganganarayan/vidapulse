@@ -44,6 +44,22 @@ function parseBrowser(ua) {
   return 'Other';
 }
 
+/** Parse OS name from a User-Agent string */
+function parseOS(ua) {
+  if (!ua) return null;
+  // iOS must come before macOS — iPad UA contains "Mac OS X" too on iPadOS 13+
+  if (/iPhone|iPod/.test(ua))                    return 'iOS';
+  if (/iPad/.test(ua))                           return 'iPadOS';
+  // iPadOS 13+ reports as desktop Safari (no "iPad" in UA) — detect via macOS + touch
+  // We can't detect touch server-side, so fall through to macOS for those cases
+  if (/Android/.test(ua))                        return 'Android';
+  if (/Windows NT/.test(ua))                     return 'Windows';
+  if (/CrOS/.test(ua))                           return 'ChromeOS';
+  if (/Mac OS X|Macintosh/.test(ua))             return 'macOS';
+  if (/Linux/.test(ua))                          return 'Linux';
+  return null;
+}
+
 /** Look up geo data from an IP address (handles IPv4-mapped IPv6) */
 function lookupCountry(ip) {
   if (!ip) return { code: null, name: null, city: null, region: null, timezone: null, lat: null, lng: null };
@@ -242,8 +258,9 @@ router.post('/session', async (req, res) => {
     const VALID_DEVICE = new Set(['desktop', 'tablet', 'mobile', 'tv', 'unknown']);
     const safeDevice   = VALID_DEVICE.has(device_type) ? device_type : 'unknown';
 
-    // Auto-detect browser from User-Agent if not provided by the client
+    // Auto-detect browser and OS from User-Agent if not provided by the client
     const detectedBrowser = (browser && browser.trim()) || parseBrowser(user_agent);
+    const detectedOS      = (os      && os.trim())      || parseOS(user_agent);
 
     // Geo-IP lookup from the real client IP (handles Cloudflare proxying)
     const realIp = getClientIp(req);
@@ -278,7 +295,7 @@ router.post('/session', async (req, res) => {
         utm_content  ? utm_content.slice(0, 255)  : null,
         safeDevice,
         detectedBrowser ? detectedBrowser.slice(0, 100) : null,
-        os           ? os.slice(0, 100)        : null,
+        detectedOS      ? detectedOS.slice(0, 100)      : null,
         screen_width  !== null ? (parseInt(screen_width,  10) || null) : null,
         screen_height !== null ? (parseInt(screen_height, 10) || null) : null,
         user_agent   ? user_agent.slice(0, 500)   : null,
