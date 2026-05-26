@@ -118,7 +118,7 @@ export default function Register() {
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                placeholder="Ganga Narayan Das"
+                placeholder="Your full name"
                 required
                 disabled={loading}
                 autoComplete="name"
