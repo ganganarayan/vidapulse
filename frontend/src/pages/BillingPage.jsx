@@ -25,6 +25,9 @@ export default function BillingPage() {
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
 
+  // Detect if any payment used PayPal so we can show the recurring reminder
+  const hasPaypalPayment = payments.some(p => p.payment_method === 'paypal');
+
   const load = useCallback(async () => {
     try {
       setLoading(true);
@@ -102,6 +105,33 @@ export default function BillingPage() {
             </div>
           </div>
 
+          {/* ── PayPal recurring reminder ─────────────────────────── */}
+          {!loading && hasPaypalPayment && (
+            <div className="mb-6 px-4 py-3.5 bg-amber-500/8 border border-amber-500/25
+                            rounded-xl flex items-start gap-3">
+              <span className="text-amber-400 text-lg flex-shrink-0 leading-none mt-0.5">⚠</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-300 mb-0.5">
+                  PayPal does not support automatic monthly renewal
+                </p>
+                <p className="text-xs text-amber-300/70 leading-relaxed">
+                  Your plan was paid via PayPal. PayPal payments through Razorpay are one-time only —
+                  your subscription will not renew automatically. To avoid service interruption,
+                  please use a debit or credit card the next time you renew.
+                </p>
+                {(user?.plan === 'free' || user?.plan === 'starter') && (
+                  <button
+                    onClick={() => showUpgrade(user?.plan === 'free' ? 'starter' : 'pro')}
+                    className="mt-2.5 text-xs font-semibold text-amber-300 hover:text-amber-200
+                               underline underline-offset-2 transition-colors"
+                  >
+                    Renew with card →
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── Payment History ───────────────────────────────────── */}
           <div>
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
@@ -130,13 +160,16 @@ export default function BillingPage() {
               <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
 
                 {/* Table header */}
-                <div className="grid grid-cols-[1fr_100px_140px_32px] gap-4 px-5 py-3
+                <div className="grid grid-cols-[1fr_90px_110px_110px_32px] gap-3 px-5 py-3
                                 border-b border-gray-700/60">
                   <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Date
                   </span>
                   <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Amount
+                  </span>
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:block">
+                    Method
                   </span>
                   <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Valid until
@@ -176,7 +209,7 @@ function PaymentRow({ payment }) {
   const planColor = PLAN_COLORS[payment.plan] ?? 'bg-gray-700/60 text-gray-300 border-gray-600';
 
   return (
-    <div className="grid grid-cols-[1fr_100px_140px_32px] gap-4 px-5 py-3.5
+    <div className="grid grid-cols-[1fr_90px_110px_110px_32px] gap-3 px-5 py-3.5
                     items-center hover:bg-gray-700/20 transition-colors">
 
       {/* Date + plan badge */}
@@ -192,11 +225,20 @@ function PaymentRow({ payment }) {
 
       {/* Amount */}
       <span className="text-sm text-gray-200 font-medium tabular-nums">
-        {payment.amount_inr != null
-          ? `₹${payment.amount_inr.toLocaleString('en-IN')}`
-          : '—'
+        {payment.currency === 'USD'
+          ? payment.amount_inr != null
+            ? `$${(payment.amount_inr).toLocaleString('en-US')}`
+            : '—'
+          : payment.amount_inr != null
+            ? `₹${payment.amount_inr.toLocaleString('en-IN')}`
+            : '—'
         }
       </span>
+
+      {/* Payment method */}
+      <div className="hidden sm:flex items-center gap-1.5">
+        <PaymentMethodBadge method={payment.payment_method} />
+      </div>
 
       {/* Period end */}
       <span className="text-sm text-gray-400 tabular-nums">
@@ -224,6 +266,33 @@ function PaymentRow({ payment }) {
       </div>
 
     </div>
+  );
+}
+
+// ─── Payment Method Badge ─────────────────────────────────────────────────────
+
+function PaymentMethodBadge({ method }) {
+  if (!method || method === 'unknown') {
+    return <span className="text-xs text-gray-600">—</span>;
+  }
+
+  const configs = {
+    card      : { label: 'Card',       cls: 'bg-blue-500/10  text-blue-300  border-blue-500/25'  },
+    upi       : { label: 'UPI',        cls: 'bg-violet-500/10 text-violet-300 border-violet-500/25' },
+    netbanking: { label: 'Net Banking', cls: 'bg-teal-500/10  text-teal-300  border-teal-500/25' },
+    paypal    : { label: 'PayPal ⚠',   cls: 'bg-amber-500/10 text-amber-300 border-amber-500/25' },
+    emi       : { label: 'EMI',         cls: 'bg-purple-500/10 text-purple-300 border-purple-500/25' },
+  };
+
+  const cfg = configs[method] ?? {
+    label: method.replace('wallet_', '').charAt(0).toUpperCase() + method.replace('wallet_', '').slice(1),
+    cls  : 'bg-gray-700/60 text-gray-400 border-gray-600',
+  };
+
+  return (
+    <span className={`px-2 py-0.5 text-[10px] font-semibold border rounded-full ${cfg.cls}`}>
+      {cfg.label}
+    </span>
   );
 }
 
@@ -255,14 +324,15 @@ function PlanBadge({ plan, displayName }) {
 function LoadingSkeleton() {
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden animate-pulse">
-      <div className="px-5 py-3 border-b border-gray-700/60 flex gap-4">
-        {[1,2,3,4].map(i => <div key={i} className="h-3 bg-gray-700/60 rounded flex-1" />)}
+      <div className="px-5 py-3 border-b border-gray-700/60 flex gap-3">
+        {[1,2,3,4,5].map(i => <div key={i} className="h-3 bg-gray-700/60 rounded flex-1" />)}
       </div>
       {[1,2,3].map(i => (
-        <div key={i} className="px-5 py-4 border-b border-gray-700/40 flex gap-4 items-center">
+        <div key={i} className="px-5 py-4 border-b border-gray-700/40 flex gap-3 items-center">
           <div className="h-4 bg-gray-700/50 rounded flex-1" />
-          <div className="h-4 w-16 bg-gray-700/40 rounded" />
-          <div className="h-4 w-28 bg-gray-700/40 rounded" />
+          <div className="h-4 w-14 bg-gray-700/40 rounded" />
+          <div className="h-4 w-20 bg-gray-700/40 rounded" />
+          <div className="h-4 w-24 bg-gray-700/40 rounded" />
           <div className="h-6 w-6 bg-gray-700/30 rounded" />
         </div>
       ))}

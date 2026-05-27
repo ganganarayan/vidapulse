@@ -105,6 +105,7 @@ router.get('/billing', requireAuth, async (req, res, next) => {
          currency,
          status,
          razorpay_event,
+         payment_method,
          created_at,
          (created_at + INTERVAL '30 days') AS period_end_at
        FROM   payments
@@ -124,6 +125,7 @@ router.get('/billing', requireAuth, async (req, res, next) => {
         currency            : r.currency,
         status              : r.status,
         event               : r.razorpay_event,
+        payment_method      : r.payment_method ?? null,
         paid_at             : r.created_at,
         period_end_at       : r.period_end_at,
         // invoice_url: constructed on the frontend from razorpay_invoice_id
@@ -290,6 +292,23 @@ router.post('/razorpay', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Helper: extract a clean payment_method string from a Razorpay payment entity.
+// PayPal comes through as method='wallet' + wallet='paypal'.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _extractPaymentMethod(paymentEntity) {
+  const method = (paymentEntity.method || '').toLowerCase();
+  if (!method) return 'unknown';
+  if (method === 'wallet') {
+    const wallet = (paymentEntity.wallet || '').toLowerCase();
+    if (wallet === 'paypal') return 'paypal';
+    if (wallet) return `wallet_${wallet}`;
+    return 'wallet';
+  }
+  return method; // 'card' | 'upi' | 'netbanking' | 'emi' | 'paylater' etc.
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Handler: one-time payment (payment_link.paid | payment.captured)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -306,6 +325,7 @@ async function _handleOneTimePayment(body, eventType, res) {
   const status            = paymentEntity.status           || 'captured';
   const userId            = notes.user_id ? String(notes.user_id).trim() : null;
   const planKey           = (notes.plan || '').toLowerCase().trim();
+  const paymentMethod     = _extractPaymentMethod(paymentEntity);
 
   logger.info(
     `[payments] ${eventType} — user_id=${userId} plan=${planKey} ` +
@@ -329,7 +349,7 @@ async function _handleOneTimePayment(body, eventType, res) {
   }
 
   await _logPayment({ userId, razorpayPaymentId, razorpayOrderId, razorpayLinkId,
-    plan: planKey, amountPaise, currency, status, notes, eventType });
+    plan: planKey, amountPaise, currency, status, notes, eventType, paymentMethod });
 
   if (!userId) {
     return res.json({ ok: true, warning: 'notes.user_id missing' });
@@ -352,6 +372,7 @@ async function _handleSubscriptionCharged(body, res) {
   const amountPaise       = parseInt(paymentEntity.amount || 0, 10);
   const razorpayPaymentId = paymentEntity.id    || null;
   const razorpayInvoiceId = paymentEntity.invoice_id || null;
+  const paymentMethod     = _extractPaymentMethod(paymentEntity);
 
   // User identification: prefer notes.user_id, fall back to email match
   let userId  = notes.user_id ? String(notes.user_id).trim() : null;
@@ -392,7 +413,7 @@ async function _handleSubscriptionCharged(body, res) {
       razorpayLinkId: subscriptionId, razorpayInvoiceId,
       plan: planKey, amountPaise,
       currency: paymentEntity.currency || 'INR',
-      status: 'captured', notes, eventType: 'subscription.charged',
+      status: 'captured', notes, eventType: 'subscription.charged', paymentMethod,
     });
   }
 
@@ -600,14 +621,15 @@ async function _upgradePlanRecord(userId, planKey) {
 
 async function _logPayment({
   userId, razorpayPaymentId, razorpayOrderId, razorpayLinkId, razorpayInvoiceId,
-  plan, amountPaise, currency, status, notes, eventType,
+  plan, amountPaise, currency, status, notes, eventType, paymentMethod,
 }) {
   try {
     await pool.query(
       `INSERT INTO payments
          (user_id, razorpay_payment_id, razorpay_order_id, razorpay_link_id,
-          razorpay_invoice_id, plan, amount_paise, currency, status, notes, razorpay_event)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          razorpay_invoice_id, plan, amount_paise, currency, status, notes,
+          razorpay_event, payment_method)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        ON CONFLICT (razorpay_payment_id) DO NOTHING`,
       [
         userId              || null,
@@ -621,6 +643,7 @@ async function _logPayment({
         status,
         JSON.stringify(notes ?? {}),
         eventType           || null,
+        paymentMethod       || null,
       ]
     );
   } catch (err) {

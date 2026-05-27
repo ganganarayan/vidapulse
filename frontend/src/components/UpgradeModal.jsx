@@ -159,8 +159,20 @@ export default function UpgradeModal() {
 
         </div>
 
+        {/* PayPal notice */}
+        <div className="mx-6 mb-4 px-4 py-3 bg-amber-500/5 border border-amber-500/20 rounded-lg flex items-start gap-2.5">
+          <span className="text-amber-400 flex-shrink-0 mt-0.5 text-base leading-none">⚠</span>
+          <p className="text-xs text-amber-300/80 leading-relaxed">
+            <span className="font-semibold text-amber-300">PayPal does not support recurring auto-payments.</span>{' '}
+            Please pay with a debit or credit card so your plan renews automatically each month without manual action.
+          </p>
+        </div>
+
         {/* Fine print */}
-        <div className="px-6 pb-5 text-center">
+        <div className="px-6 pb-5 text-center space-y-1">
+          <p className="text-xs text-gray-500 font-medium">
+            Your card will be charged every month until you cancel.
+          </p>
           <p className="text-xs text-gray-600">
             Payments processed securely by Razorpay · Plan activates within minutes of payment
           </p>
