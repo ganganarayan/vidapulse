@@ -1,7 +1,7 @@
 /**
  * useWebhookAlerts — polls GET /api/admin/contact-webhook-status every 30 s.
  *
- * Returns { paused, pausedAt, pausedReason, queuedCount, loading, refresh }
+ * Returns { paused, pausedAt, pausedReason, queuedCount, failedCount, loading, refresh }
  *
  * When `paused` transitions from false → true (i.e. a new failure is detected),
  * this hook fires a browser OS notification if the user has granted permission.
@@ -21,6 +21,7 @@ export function useWebhookAlerts({ enabled = true } = {}) {
     pausedAt    : null,
     pausedReason: null,
     queuedCount : 0,
+    failedCount : 0,
     loading     : true,
   });
 
@@ -48,6 +49,7 @@ export function useWebhookAlerts({ enabled = true } = {}) {
         pausedAt    : data.paused_at    ?? null,
         pausedReason: data.paused_reason ?? null,
         queuedCount : data.queued_count  ?? 0,
+        failedCount : data.failed_count  ?? 0,
         loading     : false,
       });
     } catch {

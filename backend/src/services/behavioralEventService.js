@@ -31,6 +31,17 @@ const { fireContactWebhook } = require('./contactWebhookSender');
 
 // ── Event classification ──────────────────────────────────────────────────
 
+// Events that fire the CRM contact webhook.
+// Keep this list short — only genuine lead/conversion events belong here.
+// Upgrade-intent signals (pro_feature_attempted, free_limit_hit, etc.) are
+// internal-only: they feed the admin funnel dashboard but must NEVER trigger
+// CRM automations before a payment is actually completed.
+// Payment success events (plan_upgraded_to_starter, plan_upgraded_to_pro, etc.)
+// will be added here once the payment flow is wired.
+const CRM_WEBHOOK_EVENTS = new Set([
+  'user_signed_up',
+]);
+
 // One-time per user: skip if a row already exists in behavioral_events
 const ONE_TIME_USER_EVENTS = new Set([
   'user_signed_up',
@@ -154,8 +165,12 @@ async function emitEvent(userId, eventKey, videoId = null, payload = {}) {
       await client.query('COMMIT');
       logger.info(`[behavioralEvents] ✓ ${eventKey} | user=${userId} | event_id=${eventRow.id}`);
 
-      // Fire contact webhook asynchronously — never blocks and never throws
-      fireContactWebhook(userId, eventKey).catch(() => {});
+      // Fire contact webhook only for genuine CRM lead/conversion events.
+      // Upgrade-intent clicks (pro_feature_attempted, free_limit_hit, etc.)
+      // are intentionally excluded — only successful payments will be added later.
+      if (CRM_WEBHOOK_EVENTS.has(eventKey)) {
+        fireContactWebhook(userId, eventKey).catch(() => {});
+      }
 
     } catch (err) {
       await client.query('ROLLBACK');

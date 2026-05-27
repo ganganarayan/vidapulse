@@ -3,11 +3,18 @@
 /**
  * Contact Webhook Sender — V2
  *
- * Fires a GET request with query params to the admin-configured webhook URL.
+ * Fires a POST request with JSON body to the admin-configured webhook URL.
  *
  * Request format:
- *   GET <webhook_url>?[api_token=…&]contact_name=…&contact_email=…
- *                    &[contact_phone=…&]contact_plan=…&event_type=…
+ *   POST <webhook_url>[?api_token=…]
+ *   Content-Type: application/json
+ *   Body: {
+ *     contact_name,               ← top-level (required by Divine Leads)
+ *     contact_email,              ← top-level (required)
+ *     contact_phone,              ← top-level (optional)
+ *     "contact.contact_plan",     ← custom field (dot-key notation)
+ *     "contact.event_type",       ← custom field (dot-key notation)
+ *   }
  *
  * ── Failure behaviour ─────────────────────────────────────────────────────
  *   1. On any HTTP error or timeout:
@@ -123,8 +130,9 @@ async function resendQueuedWebhooks() {
         ? _buildLogParams(user, entry.event_key, settings)
         : (typeof entry.params_sent === 'object' ? entry.params_sent : {});
 
-      const finalUrl = _buildUrl(settings.webhook_url, logParams, settings.api_token);
-      const { ok, statusCode, responseBody, errorMessage } = await _doGet(finalUrl);
+      const bodyParams = _buildBody(logParams);
+      const finalUrl   = _buildUrl(settings.webhook_url, settings.api_token);
+      const { ok, statusCode, responseBody, errorMessage } = await _doPost(finalUrl, bodyParams);
 
       await pool.query(
         `UPDATE contact_webhook_log
@@ -174,21 +182,82 @@ async function unpauseWebhook() {
 }
 
 /**
- * Returns current pause state and queued count.
- * @returns {{ paused: boolean, paused_at: string|null, paused_reason: string|null, queued_count: number }}
+ * Returns current pause state, queued count, and failed count.
+ * @returns {{ paused: boolean, paused_at: string|null, paused_reason: string|null, queued_count: number, failed_count: number }}
  */
 async function getContactWebhookStatus() {
-  const [settingsRes, countRes] = await Promise.all([
+  const [settingsRes, queuedRes, failedRes] = await Promise.all([
     pool.query(`SELECT contact_webhook_paused, contact_webhook_paused_at, contact_webhook_paused_reason FROM webhook_settings LIMIT 1`),
     pool.query(`SELECT COUNT(*)::int AS cnt FROM contact_webhook_log WHERE status = 'queued'`),
+    pool.query(`SELECT COUNT(*)::int AS cnt FROM contact_webhook_log WHERE status = 'failed'`),
   ]);
   const s = settingsRes.rows[0] ?? {};
   return {
     paused       : s.contact_webhook_paused        ?? false,
     paused_at    : s.contact_webhook_paused_at     ?? null,
     paused_reason: s.contact_webhook_paused_reason ?? null,
-    queued_count : countRes.rows[0]?.cnt           ?? 0,
+    queued_count : queuedRes.rows[0]?.cnt          ?? 0,
+    failed_count : failedRes.rows[0]?.cnt          ?? 0,
   };
+}
+
+/**
+ * Re-fires every entry currently marked 'failed', in chronological order.
+ * Unlike resendQueuedWebhooks, this does NOT auto-pause on failure —
+ * it's a manual recovery action and tries all entries regardless.
+ * Returns { sent, failed, total }.
+ * Never rejects.
+ */
+async function resendFailedWebhooks() {
+  try {
+    const settings = await _loadSettings();
+    if (!settings?.webhook_url) {
+      return { sent: 0, failed: 0, total: 0 };
+    }
+
+    const { rows: entries } = await pool.query(
+      `SELECT * FROM contact_webhook_log WHERE status = 'failed' ORDER BY sent_at ASC`
+    );
+
+    let sent = 0, failed = 0;
+
+    for (const entry of entries) {
+      const user = entry.user_id ? await _loadUser(entry.user_id) : null;
+      const logParams = user
+        ? _buildLogParams(user, entry.event_key, settings)
+        : (typeof entry.params_sent === 'object' ? entry.params_sent : {});
+
+      const bodyParams = _buildBody(logParams);
+      const finalUrl   = _buildUrl(settings.webhook_url, settings.api_token);
+      const { ok, statusCode, responseBody, errorMessage } = await _doPost(finalUrl, bodyParams);
+
+      await pool.query(
+        `UPDATE contact_webhook_log
+         SET status          = $1,
+             response_status = $2,
+             response_body   = $3,
+             error_message   = $4,
+             response_at     = NOW()
+         WHERE id = $5`,
+        [ok ? 'sent' : 'failed', statusCode, _truncate(responseBody, 1000), errorMessage, entry.id]
+      );
+
+      if (ok) {
+        sent++;
+        logger.info(`[contactWebhook] Resent failed log_id=${entry.id} event=${entry.event_key}`);
+      } else {
+        failed++;
+        logger.warn(`[contactWebhook] Resend-failed FAILED log_id=${entry.id}: ${errorMessage}`);
+        // No auto-pause — manual action, continue through remaining entries
+      }
+    }
+
+    return { sent, failed, total: entries.length };
+
+  } catch (err) {
+    logger.error(`[contactWebhook] resendFailedWebhooks error: ${err.message}`);
+    return { sent: 0, failed: 0, total: 0, error: err.message };
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -196,11 +265,12 @@ async function getContactWebhookStatus() {
 // ─────────────────────────────────────────────────────────────────────────
 
 async function _fireAndLog(userId, eventKey, user, settings) {
-  const logParams = _buildLogParams(user, eventKey, settings);
-  const finalUrl  = _buildUrl(settings.webhook_url, logParams, settings.api_token);
+  const logParams  = _buildLogParams(user, eventKey, settings);
+  const bodyParams = _buildBody(logParams);
+  const finalUrl   = _buildUrl(settings.webhook_url, settings.api_token);
   const t0 = Date.now();
 
-  const { ok, statusCode, responseBody, errorMessage } = await _doGet(finalUrl);
+  const { ok, statusCode, responseBody, errorMessage } = await _doPost(finalUrl, bodyParams);
   const ms = Date.now() - t0;
 
   await _insertLog({
@@ -235,17 +305,15 @@ async function _fireNotificationWebhook(settings, failedEventKey, errorMessage) 
     );
     const queuedCount = countRow?.cnt ?? 0;
 
-    const params = new URLSearchParams();
-    if (settings.api_token)    params.set('api_token',          settings.api_token);
-    params.set('event_type',          'webhook_failure_alert');
-    params.set('failed_event_type',   failedEventKey || '');
-    params.set('error_message',       _truncate(errorMessage, 200) || 'Unknown error');
-    params.set('queued_count',        String(queuedCount));
+    const body = {
+      event_type        : 'webhook_failure_alert',
+      failed_event_type : failedEventKey || '',
+      error_message     : _truncate(errorMessage, 200) || 'Unknown error',
+      queued_count      : queuedCount,
+    };
 
-    const sep      = settings.notification_webhook_url.includes('?') ? '&' : '?';
-    const finalUrl = `${settings.notification_webhook_url}${sep}${params.toString()}`;
-
-    const { ok, statusCode } = await _doGet(finalUrl);
+    const finalUrl = _buildUrl(settings.notification_webhook_url, settings.api_token);
+    const { ok, statusCode } = await _doPost(finalUrl, body);
     if (ok) {
       logger.info(`[contactWebhook] Notification webhook fired → ${statusCode}`);
     } else {
@@ -260,15 +328,24 @@ async function _fireNotificationWebhook(settings, failedEventKey, errorMessage) 
 // HTTP
 // ─────────────────────────────────────────────────────────────────────────
 
-async function _doGet(finalUrl) {
+/**
+ * POST bodyParams as JSON to finalUrl.
+ * finalUrl should already include ?api_token=… if required.
+ */
+async function _doPost(finalUrl, bodyParams) {
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
 
   try {
     const response = await fetch(finalUrl, {
-      method : 'GET',
-      headers: { 'User-Agent': 'VidaPulse-ContactWebhook/1.0', 'Accept': 'application/json' },
-      signal : controller.signal,
+      method : 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent'  : 'VidaPulse-ContactWebhook/1.0',
+        'Accept'      : 'application/json',
+      },
+      body  : JSON.stringify(bodyParams),
+      signal: controller.signal,
     });
     const responseBody = await response.text().catch(() => '');
     const ok           = response.ok;
@@ -359,19 +436,46 @@ function _buildLogParams(user, eventKey, settings) {
 }
 
 /**
- * Build the final GET URL, injecting api_token (not from logParams which has it redacted).
+ * Build the endpoint URL, appending api_token as a query param only if set.
+ * All other payload fields go in the POST JSON body — not the URL.
  */
-function _buildUrl(baseUrl, logParams, apiToken) {
-  const params = new URLSearchParams();
-  if (apiToken) params.set('api_token', apiToken);
+function _buildUrl(baseUrl, apiToken) {
+  if (!apiToken) return baseUrl;
+  const sep = baseUrl.includes('?') ? '&' : '?';
+  return `${baseUrl}${sep}api_token=${encodeURIComponent(apiToken)}`;
+}
 
-  // Copy all non-redacted fields
-  for (const [k, v] of Object.entries(logParams)) {
-    if (k !== 'api_token') params.set(k, v);
+/**
+ * Build the POST JSON body for Divine Leads (and compatible CRMs).
+ *
+ * Standard contact fields go at the top level (contact_name, contact_email,
+ * contact_phone). Custom fields use dot-key notation so the CRM maps them
+ * correctly: the JSON key is literally "contact.event_type" (a string with
+ * a dot), not a nested object.
+ *
+ * Result shape:
+ *   {
+ *     "contact_name":         "...",
+ *     "contact_email":        "...",
+ *     "contact_phone":        "...",   (omitted when absent)
+ *     "contact.contact_plan": "free",
+ *     "contact.event_type":   "user_signed_up"
+ *   }
+ */
+function _buildBody(logParams) {
+  const { contact_name, contact_email, contact_phone, api_token: _drop, ...customFields } = logParams;
+
+  const body = {};
+  if (contact_name)  body.contact_name  = contact_name;
+  if (contact_email) body.contact_email = contact_email;
+  if (contact_phone) body.contact_phone = contact_phone;
+
+  // Custom fields sent as dot-key strings: "contact.field_name"
+  for (const [k, v] of Object.entries(customFields)) {
+    body[`contact.${k}`] = v;
   }
 
-  const sep = baseUrl.includes('?') ? '&' : '?';
-  return `${baseUrl}${sep}${params.toString()}`;
+  return body;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -384,9 +488,86 @@ function _truncate(str, len) {
   return s.length > len ? s.slice(0, len) + '…' : s;
 }
 
+/**
+ * Re-fires a single log entry by ID using the current webhook settings.
+ * Does NOT auto-pause on failure — this is a manual per-entry action.
+ * Returns { ok, statusCode, errorMessage }.
+ * Never rejects.
+ */
+async function retryWebhookEntry(logId) {
+  try {
+    const { rows: [entry] } = await pool.query(
+      `SELECT * FROM contact_webhook_log WHERE id = $1`, [logId]
+    );
+    if (!entry) return { ok: false, statusCode: 0, errorMessage: 'Entry not found' };
+
+    const settings = await _loadSettings();
+    if (!settings?.webhook_url) {
+      return { ok: false, statusCode: 0, errorMessage: 'No webhook URL configured' };
+    }
+
+    // Reload fresh user data when possible; fall back to stored params_sent
+    const user = entry.user_id ? await _loadUser(entry.user_id) : null;
+    const logParams = user
+      ? _buildLogParams(user, entry.event_key, settings)
+      : (typeof entry.params_sent === 'object' ? entry.params_sent : {});
+
+    const bodyParams = _buildBody(logParams);
+    const finalUrl   = _buildUrl(settings.webhook_url, settings.api_token);
+    const { ok, statusCode, responseBody, errorMessage } = await _doPost(finalUrl, bodyParams);
+
+    await pool.query(
+      `UPDATE contact_webhook_log
+       SET status          = $1,
+           response_status = $2,
+           response_body   = $3,
+           error_message   = $4,
+           response_at     = NOW()
+       WHERE id = $5`,
+      [ok ? 'sent' : 'failed', statusCode, _truncate(responseBody, 1000), errorMessage, logId]
+    );
+
+    if (ok) {
+      logger.info(`[contactWebhook] Manual retry log_id=${logId} → ${statusCode}`);
+    } else {
+      logger.warn(`[contactWebhook] Manual retry failed log_id=${logId}: ${errorMessage}`);
+    }
+
+    return { ok, statusCode, errorMessage };
+  } catch (err) {
+    logger.error(`[contactWebhook] retryWebhookEntry error: ${err.message}`);
+    return { ok: false, statusCode: 0, errorMessage: err.message };
+  }
+}
+
+/**
+ * Marks a queued entry as 'discarded' so it is never resent.
+ * Only operates on status='queued' — other statuses are a no-op.
+ * Returns { ok: boolean }.
+ * Never rejects.
+ */
+async function discardWebhookEntry(logId) {
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE contact_webhook_log
+       SET status = 'discarded', response_at = NOW()
+       WHERE id = $1 AND status = 'queued'`,
+      [logId]
+    );
+    if (rowCount > 0) logger.info(`[contactWebhook] Discarded queued log_id=${logId}`);
+    return { ok: rowCount > 0 };
+  } catch (err) {
+    logger.error(`[contactWebhook] discardWebhookEntry error: ${err.message}`);
+    return { ok: false };
+  }
+}
+
 module.exports = {
   fireContactWebhook,
   resendQueuedWebhooks,
+  resendFailedWebhooks,
+  retryWebhookEntry,
+  discardWebhookEntry,
   unpauseWebhook,
   getContactWebhookStatus,
 };
