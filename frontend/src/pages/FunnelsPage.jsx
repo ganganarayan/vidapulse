@@ -1,6 +1,7 @@
 'use strict';
 import React, { useEffect, useState, useCallback } from 'react';
-import AppLayout from '../components/AppLayout';
+import AppLayout   from '../components/AppLayout';
+import FeatureGate from '../components/FeatureGate';
 import api from '../lib/api';
 
 /**
@@ -39,6 +40,7 @@ export default function FunnelsPage() {
 
   return (
     <AppLayout>
+      <FeatureGate required="pro" feature="Funnels">
       <div className="max-w-3xl mx-auto px-6 py-8">
 
         {/* Header */}
@@ -115,6 +117,7 @@ export default function FunnelsPage() {
           </p>
         )}
       </div>
+      </FeatureGate>
     </AppLayout>
   );
 }

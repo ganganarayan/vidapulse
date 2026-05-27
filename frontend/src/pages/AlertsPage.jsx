@@ -1,8 +1,9 @@
 'use strict';
 import React, { useEffect, useState, useCallback } from 'react';
-import AppLayout from '../components/AppLayout';
+import AppLayout   from '../components/AppLayout';
+import FeatureGate from '../components/FeatureGate';
 import { useToast } from '../contexts/ToastContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth }  from '../contexts/AuthContext';
 import api from '../lib/api';
 
 /**
@@ -118,6 +119,7 @@ export default function AlertsPage() {
 
   return (
     <AppLayout>
+      <FeatureGate required="pro" feature="Alerts">
       <div className="max-w-2xl mx-auto px-6 py-8">
 
         {/* Header */}
@@ -251,6 +253,7 @@ export default function AlertsPage() {
           </>
         )}
       </div>
+      </FeatureGate>
     </AppLayout>
   );
 }

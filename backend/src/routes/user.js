@@ -17,7 +17,8 @@ const { z }        = require('zod');
 const router       = express.Router();
 const { pool }     = require('../config/database');
 const logger       = require('../config/logger');
-const { requireAuth } = require('../middleware/requireAuth');
+const { requireAuth }        = require('../middleware/requireAuth');
+const { planGate }           = require('../middleware/planGate');
 
 // ─────────────────────────────────────────────────────────────────────────
 // GET /api/user/me
@@ -397,7 +398,7 @@ router.get('/overview', requireAuth, async (req, res, next) => {
 // authenticated user's videos.
 // ─────────────────────────────────────────────────────────────────────────
 
-router.get('/events', requireAuth, async (req, res, next) => {
+router.get('/events', requireAuth, planGate('events'), async (req, res, next) => {
   const limit  = Math.min(parseInt(req.query.limit  || '200', 10), 500);
   const offset = parseInt(req.query.offset || '0', 10);
   try {
@@ -431,7 +432,7 @@ router.get('/events', requireAuth, async (req, res, next) => {
 // Also returns the user's video list for the selector dropdown.
 // ─────────────────────────────────────────────────────────────────────────
 
-router.get('/funnel', requireAuth, async (req, res, next) => {
+router.get('/funnel', requireAuth, planGate('events'), async (req, res, next) => {
   const { video_id } = req.query;
   try {
     const params      = [req.user.id];
@@ -494,7 +495,7 @@ const ALERT_DEFAULTS = {
   cta_click       : false,
 };
 
-router.get('/alert-prefs', requireAuth, async (req, res, next) => {
+router.get('/alert-prefs', requireAuth, planGate('alerts'), async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT COALESCE(alert_prefs, '{}') AS alert_prefs
@@ -509,7 +510,7 @@ router.get('/alert-prefs', requireAuth, async (req, res, next) => {
   }
 });
 
-router.put('/alert-prefs', requireAuth, async (req, res, next) => {
+router.put('/alert-prefs', requireAuth, planGate('alerts'), async (req, res, next) => {
   try {
     const { prefs } = req.body ?? {};
     if (!prefs || typeof prefs !== 'object' || Array.isArray(prefs)) {

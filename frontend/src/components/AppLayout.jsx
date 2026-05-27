@@ -156,11 +156,12 @@ function AppSidebar() {
 // ─────────────────────────────────────────────────────────────────────────
 
 export function VideoSidebar({ video, activeView, onViewChange, user }) {
-  const navigate  = useNavigate();
-  const isAdmin   = user?.role === 'admin' || user?.plan === 'admin_lifetime';
-  const isPro     = ['pro','admin_lifetime'].includes(user?.plan);
-  const isStarter = ['starter','pro','admin_lifetime'].includes(user?.plan);
+  const navigate       = useNavigate();
+  const isAdmin        = user?.role === 'admin' || user?.plan === 'admin_lifetime';
+  const isPro          = ['pro','admin_lifetime'].includes(user?.plan);
+  const isStarter      = ['starter','pro','admin_lifetime'].includes(user?.plan);
   const { isImpersonating } = useAuth();
+  const { showUpgrade }     = useUpgrade();
   const [signingOut, setSigningOut] = useState(false);
 
   async function handleSignOut() {
@@ -169,12 +170,15 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
     navigate('/login', { replace: true });
   }
 
-  function navItem(view, icon, label, locked = false) {
+  function navItem(view, icon, label, locked = false, requiredPlan = 'starter') {
     const isActive = activeView === view;
     return (
       <button
         key={view}
-        onClick={() => !locked && onViewChange(view)}
+        onClick={() => {
+          if (locked) { showUpgrade(requiredPlan); return; }
+          onViewChange(view);
+        }}
         title={locked ? 'Upgrade to access' : label}
         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left
           ${isActive
@@ -236,15 +240,15 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
         {navItem('rewatches',   <RepeatIcon />,  'Re-watches')}
 
         <SidebarDivider label="Engagement" />
-        {navItem('heatmap',     <HeatmapIcon />, 'Engagement Heatmap', !isPro)}
-        {navItem('stories',     <StoriesIcon />, 'Viewer Stories',     !isStarter)}
+        {navItem('heatmap',     <HeatmapIcon />, 'Engagement Heatmap', !isPro,     'pro')}
+        {navItem('stories',     <StoriesIcon />, 'Viewer Stories',     !isStarter, 'starter')}
         {navItem('insights',    <SparklesIcon />,'Insights')}
 
         <SidebarDivider label="Audience" />
-        {navItem('geography',   <GlobeIcon />,   'Geography')}
-        {navItem('devices',     <DeviceIcon />,  'Devices')}
-        {navItem('browsers',    <BrowserIcon />, 'Browsers')}
-        {navItem('traffic',     <UTMIcon />,     'Traffic Sources')}
+        {navItem('geography',   <GlobeIcon />,   'Geography',     !isStarter, 'starter')}
+        {navItem('devices',     <DeviceIcon />,  'Devices',       !isStarter, 'starter')}
+        {navItem('browsers',    <BrowserIcon />, 'Browsers',      !isStarter, 'starter')}
+        {navItem('traffic',     <UTMIcon />,     'Traffic Sources', !isStarter, 'starter')}
 
         <SidebarDivider label="Settings" />
         {navItem('embed',       <EmbedIcon />,   'Share & Embed')}

@@ -4,6 +4,7 @@ import AppLayout from '../components/AppLayout';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import FeatureGate  from '../components/FeatureGate';
 
 /**
  * CTATrackingPage — /cta-tracking
@@ -89,6 +90,7 @@ export default function CTATrackingPage() {
 
   return (
     <AppLayout>
+      <FeatureGate required="pro" feature="CTA Tracking">
       <div className="flex flex-col h-full">
 
         {/* Header */}
@@ -127,27 +129,6 @@ export default function CTATrackingPage() {
         {/* Body */}
         <div className="flex-1 overflow-y-auto">
 
-          {!isPro ? (
-            /* ── Non-Pro upgrade prompt ── */
-            <div className="flex flex-col items-center justify-center py-24 px-6">
-              <div className="w-12 h-12 rounded-2xl bg-pink-500/10 border border-pink-500/20
-                              flex items-center justify-center mb-4">
-                <CursorClickIcon large />
-              </div>
-              <h2 className="text-base font-bold text-gray-200 mb-1">Pro plan required</h2>
-              <p className="text-sm text-gray-400 text-center max-w-sm leading-relaxed mb-5">
-                CTA tracking links let you track every button click across all your pages — with button
-                name, page name, and destination logged instantly in your Events log. No JavaScript needed.
-              </p>
-              <a
-                href="/upgrade"
-                className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-amber-500 hover:bg-amber-400
-                           text-gray-900 text-sm font-semibold rounded-lg transition-colors"
-              >
-                View Pro plan →
-              </a>
-            </div>
-          ) : (
             <div className="max-w-2xl mx-auto px-6 py-6 space-y-4">
 
               {/* How it works banner */}
@@ -329,9 +310,9 @@ export default function CTATrackingPage() {
               )}
 
             </div>
-          )}
         </div>
       </div>
+      </FeatureGate>
     </AppLayout>
   );
 }

@@ -1,6 +1,7 @@
 'use strict';
 import React, { useEffect, useState, useCallback } from 'react';
-import AppLayout from '../components/AppLayout';
+import AppLayout     from '../components/AppLayout';
+import FeatureGate   from '../components/FeatureGate';
 import api from '../lib/api';
 
 /**
@@ -144,6 +145,7 @@ export default function EventsPage() {
 
   return (
     <AppLayout>
+      <FeatureGate required="pro" feature="Events">
       <div className="flex flex-col h-full">
 
         {/* Header */}
@@ -248,6 +250,7 @@ export default function EventsPage() {
           </div>
         )}
       </div>
+      </FeatureGate>
     </AppLayout>
   );
 }

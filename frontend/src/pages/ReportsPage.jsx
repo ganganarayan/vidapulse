@@ -1,6 +1,7 @@
 'use strict';
 import React, { useEffect, useState, useCallback } from 'react';
-import AppLayout from '../components/AppLayout';
+import AppLayout    from '../components/AppLayout';
+import FeatureGate  from '../components/FeatureGate';
 import { useToast } from '../contexts/ToastContext';
 import api from '../lib/api';
 
@@ -252,6 +253,7 @@ export default function ReportsPage() {
 
   return (
     <AppLayout>
+      <FeatureGate required="pro" feature="Reports">
       <div className="max-w-2xl mx-auto px-6 py-8 space-y-8">
 
         {/* ── Page header ─────────────────────────────────────────────── */}
@@ -511,6 +513,7 @@ export default function ReportsPage() {
         </div>
 
       </div>
+      </FeatureGate>
     </AppLayout>
   );
 }
