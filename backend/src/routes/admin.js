@@ -33,6 +33,7 @@ const { requireAuth, requireAdmin } = require('../middleware/requireAuth');
 const { testWebhook } = require('../services/webhookSender');
 const {
   resendQueuedWebhooks,
+  resendFailedWebhooks,
   unpauseWebhook,
   getContactWebhookStatus,
 } = require('../services/contactWebhookSender');
@@ -858,6 +859,27 @@ router.post('/contact-webhook/resend-queued', async (req, res, next) => {
     const result = await resendQueuedWebhooks();
     logger.info(
       `[admin] Contact webhook resend by user ${req.user.id}` +
+      ` — sent=${result.sent} failed=${result.failed} total=${result.total}`
+    );
+    return res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/admin/contact-webhook/resend-failed
+//
+// Re-fires every entry currently marked 'failed', in order.
+// Does NOT auto-pause on failure — manual recovery, tries all entries.
+// Returns { sent, failed, total }.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/contact-webhook/resend-failed', async (req, res, next) => {
+  try {
+    const result = await resendFailedWebhooks();
+    logger.info(
+      `[admin] Contact webhook resend-failed by user ${req.user.id}` +
       ` — sent=${result.sent} failed=${result.failed} total=${result.total}`
     );
     return res.json(result);

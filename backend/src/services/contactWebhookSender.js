@@ -176,21 +176,82 @@ async function unpauseWebhook() {
 }
 
 /**
- * Returns current pause state and queued count.
- * @returns {{ paused: boolean, paused_at: string|null, paused_reason: string|null, queued_count: number }}
+ * Returns current pause state, queued count, and failed count.
+ * @returns {{ paused: boolean, paused_at: string|null, paused_reason: string|null, queued_count: number, failed_count: number }}
  */
 async function getContactWebhookStatus() {
-  const [settingsRes, countRes] = await Promise.all([
+  const [settingsRes, queuedRes, failedRes] = await Promise.all([
     pool.query(`SELECT contact_webhook_paused, contact_webhook_paused_at, contact_webhook_paused_reason FROM webhook_settings LIMIT 1`),
     pool.query(`SELECT COUNT(*)::int AS cnt FROM contact_webhook_log WHERE status = 'queued'`),
+    pool.query(`SELECT COUNT(*)::int AS cnt FROM contact_webhook_log WHERE status = 'failed'`),
   ]);
   const s = settingsRes.rows[0] ?? {};
   return {
     paused       : s.contact_webhook_paused        ?? false,
     paused_at    : s.contact_webhook_paused_at     ?? null,
     paused_reason: s.contact_webhook_paused_reason ?? null,
-    queued_count : countRes.rows[0]?.cnt           ?? 0,
+    queued_count : queuedRes.rows[0]?.cnt          ?? 0,
+    failed_count : failedRes.rows[0]?.cnt          ?? 0,
   };
+}
+
+/**
+ * Re-fires every entry currently marked 'failed', in chronological order.
+ * Unlike resendQueuedWebhooks, this does NOT auto-pause on failure —
+ * it's a manual recovery action and tries all entries regardless.
+ * Returns { sent, failed, total }.
+ * Never rejects.
+ */
+async function resendFailedWebhooks() {
+  try {
+    const settings = await _loadSettings();
+    if (!settings?.webhook_url) {
+      return { sent: 0, failed: 0, total: 0 };
+    }
+
+    const { rows: entries } = await pool.query(
+      `SELECT * FROM contact_webhook_log WHERE status = 'failed' ORDER BY sent_at ASC`
+    );
+
+    let sent = 0, failed = 0;
+
+    for (const entry of entries) {
+      const user = entry.user_id ? await _loadUser(entry.user_id) : null;
+      const logParams = user
+        ? _buildLogParams(user, entry.event_key, settings)
+        : (typeof entry.params_sent === 'object' ? entry.params_sent : {});
+
+      const bodyParams = _buildBody(logParams);
+      const finalUrl   = _buildUrl(settings.webhook_url, settings.api_token);
+      const { ok, statusCode, responseBody, errorMessage } = await _doPost(finalUrl, bodyParams);
+
+      await pool.query(
+        `UPDATE contact_webhook_log
+         SET status          = $1,
+             response_status = $2,
+             response_body   = $3,
+             error_message   = $4,
+             response_at     = NOW()
+         WHERE id = $5`,
+        [ok ? 'sent' : 'failed', statusCode, _truncate(responseBody, 1000), errorMessage, entry.id]
+      );
+
+      if (ok) {
+        sent++;
+        logger.info(`[contactWebhook] Resent failed log_id=${entry.id} event=${entry.event_key}`);
+      } else {
+        failed++;
+        logger.warn(`[contactWebhook] Resend-failed FAILED log_id=${entry.id}: ${errorMessage}`);
+        // No auto-pause — manual action, continue through remaining entries
+      }
+    }
+
+    return { sent, failed, total: entries.length };
+
+  } catch (err) {
+    logger.error(`[contactWebhook] resendFailedWebhooks error: ${err.message}`);
+    return { sent: 0, failed: 0, total: 0, error: err.message };
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -401,6 +462,7 @@ function _truncate(str, len) {
 module.exports = {
   fireContactWebhook,
   resendQueuedWebhooks,
+  resendFailedWebhooks,
   unpauseWebhook,
   getContactWebhookStatus,
 };

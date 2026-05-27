@@ -24,8 +24,9 @@ export default function AdminWebhookLog() {
 
   // Live pause/queue status
   const webhookAlerts = useWebhookAlerts({ enabled: true });
-  const [resolving,   setResolving]   = useState('');
-  const [resolveMsg,  setResolveMsg]  = useState('');
+  const [resolving,       setResolving]       = useState('');
+  const [resolveMsg,      setResolveMsg]      = useState('');
+  const [resendFailedMsg, setResendFailedMsg] = useState('');
 
   const load = useCallback(async (pg = 1, status = '') => {
     setLoading(true);
@@ -87,6 +88,27 @@ export default function AdminWebhookLog() {
       await webhookAlerts.refresh();
     } catch {
       setResolveMsg('Failed to unpause.');
+    } finally {
+      setResolving('');
+    }
+  }
+
+  async function handleResendFailed() {
+    setResolving('resend-failed');
+    setResendFailedMsg('');
+    try {
+      const { data } = await api.post('/admin/contact-webhook/resend-failed');
+      if (data.total === 0) {
+        setResendFailedMsg('No failed entries to resend.');
+      } else if (data.failed > 0) {
+        setResendFailedMsg(`Resent ${data.sent} of ${data.total} — ${data.failed} still failing.`);
+      } else {
+        setResendFailedMsg(`✓ All ${data.sent} resent successfully.`);
+      }
+      await webhookAlerts.refresh();
+      load(1, filter);
+    } catch {
+      setResendFailedMsg('Request failed. Check your connection.');
     } finally {
       setResolving('');
     }
@@ -155,8 +177,8 @@ export default function AdminWebhookLog() {
             {[
               { val: '',       label: 'All'         },
               { val: 'sent',   label: '✓ Sent'      },
-              { val: 'failed', label: '✕ Failed'    },
-              { val: 'queued', label: '⏸ Queued', badge: webhookAlerts.queuedCount || null },
+              { val: 'failed', label: '✕ Failed',  badge: webhookAlerts.failedCount || null },
+              { val: 'queued', label: '⏸ Queued',  badge: webhookAlerts.queuedCount || null },
             ].map(({ val, label, badge }) => (
               <button
                 key={val}
@@ -169,21 +191,48 @@ export default function AdminWebhookLog() {
               >
                 {label}
                 {badge != null && (
-                  <span className="min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                  <span className={`min-w-[16px] h-4 px-1 rounded-full text-white text-[9px] font-bold flex items-center justify-center
+                    ${val === 'failed' ? 'bg-red-500' : 'bg-amber-500'}`}>
                     {badge}
                   </span>
                 )}
               </button>
             ))}
           </div>
-          <button
-            onClick={() => load(page, filter)}
-            className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400
-                       hover:text-gray-200 hover:border-gray-600 transition-colors"
-            title="Refresh"
-          >
-            <RefreshIcon spinning={loading} />
-          </button>
+          <div className="flex items-center gap-2">
+            {webhookAlerts.failedCount > 0 && (
+              <button
+                onClick={handleResendFailed}
+                disabled={!!resolving}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border
+                           bg-red-500/10 text-red-300 border-red-500/30
+                           hover:bg-red-500/20 hover:text-red-200 disabled:opacity-50 transition-colors"
+                title="Re-fire all failed webhook entries"
+              >
+                {resolving === 'resend-failed' ? (
+                  <>
+                    <span className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                    Resending…
+                  </>
+                ) : (
+                  <>↺ Resend failed ({webhookAlerts.failedCount})</>
+                )}
+              </button>
+            )}
+            {resendFailedMsg && resolving === '' && (
+              <span className={`text-xs ${resendFailedMsg.startsWith('✓') ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {resendFailedMsg}
+              </span>
+            )}
+            <button
+              onClick={() => load(page, filter)}
+              className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400
+                         hover:text-gray-200 hover:border-gray-600 transition-colors"
+              title="Refresh"
+            >
+              <RefreshIcon spinning={loading} />
+            </button>
+          </div>
         </div>
 
         {fetchError && (
