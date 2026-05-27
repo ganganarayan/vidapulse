@@ -3,11 +3,12 @@
 /**
  * Contact Webhook Sender — V2
  *
- * Fires a GET request with query params to the admin-configured webhook URL.
+ * Fires a POST request with JSON body to the admin-configured webhook URL.
  *
  * Request format:
- *   GET <webhook_url>?[api_token=…&]contact_name=…&contact_email=…
- *                    &[contact_phone=…&]contact_plan=…&event_type=…
+ *   POST <webhook_url>[?api_token=…]
+ *   Content-Type: application/json
+ *   Body: { contact_name, contact_email, contact_phone, contact_plan, event_type }
  *
  * ── Failure behaviour ─────────────────────────────────────────────────────
  *   1. On any HTTP error or timeout:
@@ -123,8 +124,9 @@ async function resendQueuedWebhooks() {
         ? _buildLogParams(user, entry.event_key, settings)
         : (typeof entry.params_sent === 'object' ? entry.params_sent : {});
 
-      const finalUrl = _buildUrl(settings.webhook_url, logParams, settings.api_token);
-      const { ok, statusCode, responseBody, errorMessage } = await _doGet(finalUrl);
+      const bodyParams = _buildBody(logParams);
+      const finalUrl   = _buildUrl(settings.webhook_url, settings.api_token);
+      const { ok, statusCode, responseBody, errorMessage } = await _doPost(finalUrl, bodyParams);
 
       await pool.query(
         `UPDATE contact_webhook_log
@@ -196,11 +198,12 @@ async function getContactWebhookStatus() {
 // ─────────────────────────────────────────────────────────────────────────
 
 async function _fireAndLog(userId, eventKey, user, settings) {
-  const logParams = _buildLogParams(user, eventKey, settings);
-  const finalUrl  = _buildUrl(settings.webhook_url, logParams, settings.api_token);
+  const logParams  = _buildLogParams(user, eventKey, settings);
+  const bodyParams = _buildBody(logParams);
+  const finalUrl   = _buildUrl(settings.webhook_url, settings.api_token);
   const t0 = Date.now();
 
-  const { ok, statusCode, responseBody, errorMessage } = await _doGet(finalUrl);
+  const { ok, statusCode, responseBody, errorMessage } = await _doPost(finalUrl, bodyParams);
   const ms = Date.now() - t0;
 
   await _insertLog({
@@ -235,17 +238,15 @@ async function _fireNotificationWebhook(settings, failedEventKey, errorMessage) 
     );
     const queuedCount = countRow?.cnt ?? 0;
 
-    const params = new URLSearchParams();
-    if (settings.api_token)    params.set('api_token',          settings.api_token);
-    params.set('event_type',          'webhook_failure_alert');
-    params.set('failed_event_type',   failedEventKey || '');
-    params.set('error_message',       _truncate(errorMessage, 200) || 'Unknown error');
-    params.set('queued_count',        String(queuedCount));
+    const body = {
+      event_type        : 'webhook_failure_alert',
+      failed_event_type : failedEventKey || '',
+      error_message     : _truncate(errorMessage, 200) || 'Unknown error',
+      queued_count      : queuedCount,
+    };
 
-    const sep      = settings.notification_webhook_url.includes('?') ? '&' : '?';
-    const finalUrl = `${settings.notification_webhook_url}${sep}${params.toString()}`;
-
-    const { ok, statusCode } = await _doGet(finalUrl);
+    const finalUrl = _buildUrl(settings.notification_webhook_url, settings.api_token);
+    const { ok, statusCode } = await _doPost(finalUrl, body);
     if (ok) {
       logger.info(`[contactWebhook] Notification webhook fired → ${statusCode}`);
     } else {
@@ -260,15 +261,24 @@ async function _fireNotificationWebhook(settings, failedEventKey, errorMessage) 
 // HTTP
 // ─────────────────────────────────────────────────────────────────────────
 
-async function _doGet(finalUrl) {
+/**
+ * POST bodyParams as JSON to finalUrl.
+ * finalUrl should already include ?api_token=… if required.
+ */
+async function _doPost(finalUrl, bodyParams) {
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
 
   try {
     const response = await fetch(finalUrl, {
-      method : 'GET',
-      headers: { 'User-Agent': 'VidaPulse-ContactWebhook/1.0', 'Accept': 'application/json' },
-      signal : controller.signal,
+      method : 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent'  : 'VidaPulse-ContactWebhook/1.0',
+        'Accept'      : 'application/json',
+      },
+      body  : JSON.stringify(bodyParams),
+      signal: controller.signal,
     });
     const responseBody = await response.text().catch(() => '');
     const ok           = response.ok;
@@ -359,19 +369,23 @@ function _buildLogParams(user, eventKey, settings) {
 }
 
 /**
- * Build the final GET URL, injecting api_token (not from logParams which has it redacted).
+ * Build the endpoint URL, appending api_token as a query param only if set.
+ * All other payload fields go in the POST JSON body — not the URL.
  */
-function _buildUrl(baseUrl, logParams, apiToken) {
-  const params = new URLSearchParams();
-  if (apiToken) params.set('api_token', apiToken);
-
-  // Copy all non-redacted fields
-  for (const [k, v] of Object.entries(logParams)) {
-    if (k !== 'api_token') params.set(k, v);
-  }
-
+function _buildUrl(baseUrl, apiToken) {
+  if (!apiToken) return baseUrl;
   const sep = baseUrl.includes('?') ? '&' : '?';
-  return `${baseUrl}${sep}${params.toString()}`;
+  return `${baseUrl}${sep}api_token=${encodeURIComponent(apiToken)}`;
+}
+
+/**
+ * Strip the api_token placeholder from logParams to get the clean POST body.
+ * (api_token is stored as '[redacted]' in logParams for DB logging purposes.)
+ */
+function _buildBody(logParams) {
+  return Object.fromEntries(
+    Object.entries(logParams).filter(([k]) => k !== 'api_token')
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
