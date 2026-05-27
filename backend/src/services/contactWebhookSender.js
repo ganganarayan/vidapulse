@@ -9,13 +9,11 @@
  *   POST <webhook_url>[?api_token=…]
  *   Content-Type: application/json
  *   Body: {
- *     contact_name,          ← top-level (required by Divine Leads)
- *     contact_email,         ← top-level (required)
- *     contact_phone,         ← top-level (optional)
- *     contact: {             ← custom fields namespace
- *       contact_plan,
- *       event_type,
- *     }
+ *     contact_name,               ← top-level (required by Divine Leads)
+ *     contact_email,              ← top-level (required)
+ *     contact_phone,              ← top-level (optional)
+ *     "contact.contact_plan",     ← custom field (dot-key notation)
+ *     "contact.event_type",       ← custom field (dot-key notation)
  *   }
  *
  * ── Failure behaviour ─────────────────────────────────────────────────────
@@ -450,18 +448,18 @@ function _buildUrl(baseUrl, apiToken) {
 /**
  * Build the POST JSON body for Divine Leads (and compatible CRMs).
  *
- * Standard contact fields go at the top level — the CRM requires them there.
- * Custom fields (event_type, contact_plan, …) go inside a `contact` object.
+ * Standard contact fields go at the top level (contact_name, contact_email,
+ * contact_phone). Custom fields use dot-key notation so the CRM maps them
+ * correctly: the JSON key is literally "contact.event_type" (a string with
+ * a dot), not a nested object.
  *
  * Result shape:
  *   {
- *     contact_name,
- *     contact_email,
- *     contact_phone,          (omitted when absent)
- *     contact: {
- *       contact_plan,
- *       event_type,
- *     }
+ *     "contact_name":         "...",
+ *     "contact_email":        "...",
+ *     "contact_phone":        "...",   (omitted when absent)
+ *     "contact.contact_plan": "free",
+ *     "contact.event_type":   "user_signed_up"
  *   }
  */
 function _buildBody(logParams) {
@@ -472,9 +470,9 @@ function _buildBody(logParams) {
   if (contact_email) body.contact_email = contact_email;
   if (contact_phone) body.contact_phone = contact_phone;
 
-  // Everything else (contact_plan, event_type, …) is a custom field
-  if (Object.keys(customFields).length > 0) {
-    body.contact = customFields;
+  // Custom fields sent as dot-key strings: "contact.field_name"
+  for (const [k, v] of Object.entries(customFields)) {
+    body[`contact.${k}`] = v;
   }
 
   return body;
