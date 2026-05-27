@@ -96,8 +96,9 @@ router.post('/razorpay', async (req, res, next) => {
     const currency          = paymentEntity.currency         || 'INR';
     const status            = paymentEntity.status           || 'captured';
 
-    // notes[user_id] and notes[plan] are set by the frontend when building the URL
-    const userId  = notes.user_id ? parseInt(notes.user_id, 10) : null;
+    // notes[user_id] and notes[plan] are set by the frontend when building the URL.
+    // users.id is UUID (not integer) — extract as string, not parseInt.
+    const userId  = notes.user_id ? String(notes.user_id).trim() : null;
     const planKey = (notes.plan   || '').toLowerCase().trim();
 
     logger.info(

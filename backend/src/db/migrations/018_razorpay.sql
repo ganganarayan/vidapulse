@@ -16,7 +16,7 @@ ALTER TABLE webhook_settings
 -- ── 2. Payments audit table ───────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS payments (
   id                   BIGSERIAL     PRIMARY KEY,
-  user_id              BIGINT        REFERENCES users(id) ON DELETE SET NULL,
+  user_id              UUID          REFERENCES users(id) ON DELETE SET NULL,
   razorpay_payment_id  TEXT          UNIQUE,
   razorpay_order_id    TEXT,
   razorpay_link_id     TEXT,
