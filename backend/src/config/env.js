@@ -51,4 +51,9 @@ module.exports = {
   GOOGLE_CLIENT_ID    : process.env.GOOGLE_CLIENT_ID     || null,
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || null,
   // Microsoft OAuth reserved for future use — not active.
+
+  // Razorpay — payment webhook signature verification.
+  // Set in Railway env vars. If unset, webhook signature is not verified
+  // (safe to leave blank until production payment flows are active).
+  RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET || null,
 };

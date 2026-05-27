@@ -77,7 +77,12 @@ app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(cookieParser());
 
 // ── Body parsing ──────────────────────────────────────────────
-app.use(express.json({ limit: '1mb' }));
+// verify captures the raw Buffer so Razorpay webhook signature
+// validation can use req.rawBody (HMAC-SHA256 over the literal body bytes).
+app.use(express.json({
+  limit : '1mb',
+  verify: (req, _res, buf) => { req.rawBody = buf; },
+}));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // ─────────────────────────────────────────────────────────────

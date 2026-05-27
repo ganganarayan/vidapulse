@@ -38,6 +38,11 @@ export default function WebhookSettings() {
   const [isActive,        setIsActive]        = useState(false);
   const [notes,           setNotes]           = useState('');
 
+  // Razorpay payment page URLs
+  const [rzpStarterUrl,   setRzpStarterUrl]   = useState('');
+  const [rzpProUrl,       setRzpProUrl]       = useState('');
+  const [savingPayment,   setSavingPayment]   = useState(false);
+
   // Governor form state
   const [hourlyCap, setHourlyCap] = useState(25);
   const [isPaused,  setIsPaused]  = useState(false);
@@ -76,6 +81,8 @@ export default function WebhookSettings() {
       setApiToken(s.api_token           ?? '');
       setIsActive(s.is_active           ?? false);
       setNotes(s.notes                  ?? '');
+      setRzpStarterUrl(s.razorpay_starter_url ?? '');
+      setRzpProUrl(s.razorpay_pro_url         ?? '');
       setHourlyCap(g.hourly_cap  ?? 25);
       setIsPaused(g.is_paused    ?? false);
     } catch (err) {
@@ -130,6 +137,25 @@ export default function WebhookSettings() {
       setSaveMsg('gov-err');
     } finally {
       setSavingGov(false);
+    }
+  }
+
+  // ── Save payment URLs ──────────────────────────────────────────────────
+  async function handleSavePayment(e) {
+    e.preventDefault();
+    setSavingPayment(true);
+    setSaveMsg('');
+    try {
+      await api.patch('/admin/webhook-settings', {
+        razorpay_starter_url: rzpStarterUrl || null,
+        razorpay_pro_url    : rzpProUrl     || null,
+      });
+      setSaveMsg('payment-ok');
+      setTimeout(() => setSaveMsg(''), 3000);
+    } catch {
+      setSaveMsg('payment-err');
+    } finally {
+      setSavingPayment(false);
     }
   }
 
@@ -473,6 +499,89 @@ export default function WebhookSettings() {
           >
             View webhook log →
           </Link>
+        </section>
+
+        {/* ── Section 5: Razorpay Payment Links ─────────────────── */}
+        <section className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6">
+          <h2 className="text-sm font-semibold text-gray-300 mb-1">Razorpay Payment Links</h2>
+          <p className="text-xs text-gray-500 mb-5">
+            Paste your Razorpay payment page URLs here (one per plan). When a subscriber
+            clicks "Upgrade", VidaPulse appends their name, email and ID as query params
+            so Razorpay pre-fills the form and the webhook can auto-upgrade their plan.
+          </p>
+          <p className="text-xs text-gray-600 mb-5">
+            Razorpay webhook URL to configure:{' '}
+            <code className="text-amber-500/80 text-[11px] select-all">
+              https://app.vidapulse.in/api/payments/razorpay
+            </code>
+            {' '}— subscribe to <code className="text-gray-400 text-[11px]">payment_link.paid</code> and{' '}
+            <code className="text-gray-400 text-[11px]">payment.captured</code>.
+          </p>
+
+          <form onSubmit={handleSavePayment} className="flex flex-col gap-4">
+
+            {/* Starter URL */}
+            <div>
+              <label className="block text-xs font-medium mb-1.5">
+                <span className="text-amber-300">Starter plan</span>
+                <span className="text-gray-600 ml-1.5 font-normal">— payment page URL</span>
+              </label>
+              <input
+                type="text"
+                inputMode="url"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                value={rzpStarterUrl}
+                onChange={e => setRzpStarterUrl(e.target.value)}
+                placeholder="https://rzp.io/rzp/… or https://pages.razorpay.com/…"
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5
+                           text-sm text-gray-100 placeholder-gray-600
+                           focus:outline-none focus:border-amber-500/60 transition-colors"
+              />
+            </div>
+
+            {/* Pro URL */}
+            <div>
+              <label className="block text-xs font-medium mb-1.5">
+                <span className="text-indigo-300">Pro plan</span>
+                <span className="text-gray-600 ml-1.5 font-normal">— payment page URL</span>
+              </label>
+              <input
+                type="text"
+                inputMode="url"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                value={rzpProUrl}
+                onChange={e => setRzpProUrl(e.target.value)}
+                placeholder="https://rzp.io/rzp/… or https://pages.razorpay.com/…"
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5
+                           text-sm text-gray-100 placeholder-gray-600
+                           focus:outline-none focus:border-indigo-500/60 transition-colors"
+              />
+            </div>
+
+            <p className="text-xs text-gray-600">
+              VidaPulse appends <code className="text-[10px] text-gray-400">?name=…&amp;email=…&amp;notes[user_id]=…&amp;notes[plan]=…</code> when redirecting.
+              Make sure your Razorpay page has a <strong className="text-gray-400">notes</strong> field or the webhook will upgrade based on notes alone.
+            </p>
+
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="submit"
+                disabled={savingPayment}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50
+                           text-sm font-semibold text-gray-900 rounded-lg transition-colors"
+              >
+                {savingPayment ? 'Saving…' : 'Save payment links'}
+              </button>
+              {saveMsg === 'payment-ok'  && <span className="text-xs text-emerald-400">✓ Saved</span>}
+              {saveMsg === 'payment-err' && <span className="text-xs text-red-400">Save failed</span>}
+            </div>
+          </form>
         </section>
 
       </div>

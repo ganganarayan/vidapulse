@@ -35,6 +35,7 @@ const adminRoutes     = require('./admin');
 const helpRoutes      = require('./help');
 const reportsRoutes   = require('./reports');
 const ctaLinksRoutes  = require('./ctaLinks');
+const paymentsRoutes  = require('./payments');
 
 router.use('/health',    healthRoutes);
 router.use('/webhook',   webhookRoutes);
@@ -46,42 +47,63 @@ router.use('/admin',     adminRoutes);
 router.use('/help',      helpRoutes);
 router.use('/reports',   reportsRoutes);
 router.use('/cta-links', ctaLinksRoutes);
+router.use('/payments',  paymentsRoutes);
 
-// ── GET /api/upgrade ──────────────────────────────────────
-// Called when the user visits the upgrade modal.
+// ── GET /api/upgrade ──────────────────────────────────────────────────────
+// Called when the user visits the Upgrade page.
 // Emits upgrade_page_visited behavioral event (non-blocking).
-// Returns current plan + video count for the modal to display.
+// Returns current plan, video stats, upgrade options, and Razorpay base URLs
+// (stored in webhook_settings so the admin can update them without redeploy).
 router.get('/upgrade', requireAuth, async (req, res, next) => {
   try {
-    const { rows } = await require('../config/database').pool.query(
-      `SELECT COUNT(*) AS video_count,
-              COALESCE(SUM(total_plays), 0) AS total_plays_to_date
-       FROM videos
-       WHERE user_id = $1 AND is_active = TRUE`,
-      [req.user.id]
-    );
-    const stats = rows[0];
+    const db = require('../config/database').pool;
+    const [statsRes, settingsRes] = await Promise.all([
+      db.query(
+        `SELECT COUNT(*) AS video_count,
+                COALESCE(SUM(total_plays), 0) AS total_plays_to_date
+         FROM videos
+         WHERE user_id = $1 AND is_active = TRUE`,
+        [req.user.id]
+      ),
+      db.query(
+        `SELECT razorpay_starter_url, razorpay_pro_url FROM webhook_settings LIMIT 1`
+      ),
+    ]);
+
+    const stats    = statsRes.rows[0];
+    const settings = settingsRes.rows[0] ?? {};
+
+    // Determine which plans the user can still upgrade to
+    const plan = req.user.plan;
+    let upgrade_options;
+    if (plan === 'free') {
+      upgrade_options = ['starter', 'pro'];
+    } else if (plan === 'starter') {
+      upgrade_options = ['pro'];
+    } else {
+      upgrade_options = []; // pro / admin_lifetime — already at top
+    }
 
     emitEvent(req.user.id, 'upgrade_page_visited', null, {
-      current_plan       : req.user.plan,
+      current_plan       : plan,
       videos_count       : parseInt(stats.video_count, 10),
       total_plays_to_date: parseInt(stats.total_plays_to_date, 10),
     });
 
     return res.json({
-      current_plan       : req.user.plan,
+      current_plan       : plan,
       videos_count       : parseInt(stats.video_count, 10),
       total_plays_to_date: parseInt(stats.total_plays_to_date, 10),
-      upgrade_options    : req.user.plan === 'free'
-        ? ['starter', 'pro']
-        : ['pro'],
+      upgrade_options,
       pricing: {
-        starter: { usd: 10, video_limit: 10 },
-        pro    : { usd: 19, video_limit: null },
+        starter: { inr: 999,  label: '₹999/mo',  video_limit: 10  },
+        pro    : { inr: 1999, label: '₹1,999/mo', video_limit: null },
       },
+      // Base Razorpay payment page URLs (admin-configured).
+      // Frontend appends user params before redirecting.
       razorpay_links: {
-        starter: 'https://rzp.io/rzp/VidaPulseStarter',
-        pro    : 'https://rzp.io/rzp/VidaPulsePro',
+        starter: settings.razorpay_starter_url || null,
+        pro    : settings.razorpay_pro_url     || null,
       },
     });
   } catch (err) {

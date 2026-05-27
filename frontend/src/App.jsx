@@ -27,6 +27,7 @@ import AlertsPage        from './pages/AlertsPage';
 import ReportsPage       from './pages/ReportsPage';
 import CTATrackingPage   from './pages/CTATrackingPage';
 import AdminWebhookLog   from './pages/AdminWebhookLog';
+import UpgradePage       from './pages/UpgradePage';
 
 /**
  * ProtectedRoute
@@ -147,6 +148,16 @@ export default function App() {
           <Route path="/cta-tracking" element={<ProtectedRoute><CTATrackingPage /></ProtectedRoute>} />
           <Route path="/alerts"       element={<ProtectedRoute><AlertsPage /></ProtectedRoute>} />
           <Route path="/reports"      element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
+
+          {/* ── Upgrade / pricing (all authenticated users) ──────── */}
+          <Route
+            path="/upgrade"
+            element={
+              <ProtectedRoute>
+                <UpgradePage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* ── Integrations (all authenticated users) ───────────── */}
           <Route

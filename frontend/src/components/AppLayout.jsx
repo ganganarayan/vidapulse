@@ -92,6 +92,25 @@ function AppSidebar() {
         <SidebarItem to="/integrations"  icon={<IntegrationsIcon />} label="Integrations"  active={active('/integrations')} />
         <SidebarItem to="/help"          icon={<HelpIcon />}        label="Help & Support" active={active('/help')} />
 
+        {/* Upgrade CTA — only shown to free and starter users */}
+        {user && (user.plan === 'free' || user.plan === 'starter') && (
+          <Link
+            to="/upgrade"
+            className={`mt-2 flex items-center justify-between gap-2 px-3 py-2 rounded-lg
+                        text-xs font-semibold transition-colors
+                        ${active('/upgrade')
+                          ? 'bg-amber-500/20 text-amber-300'
+                          : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20'
+                        }`}
+          >
+            <span className="flex items-center gap-1.5">
+              <UpgradeIcon />
+              {user.plan === 'free' ? 'Upgrade plan' : 'Upgrade to Pro'}
+            </span>
+            <span className="text-amber-500/70">→</span>
+          </Link>
+        )}
+
         {isAdmin && (
           <>
             <SidebarDivider label="Admin" />
@@ -338,6 +357,7 @@ function HelpIcon()         { return I(<><circle cx="12" cy="12" r="10"/><path d
 function WebhookIcon()      { return I(<path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11A2.99 2.99 0 0 0 18 8a3 3 0 1 0 0-6 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81A3 3 0 0 0 6 9a3 3 0 1 0 0 6 3 3 0 0 0 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65a3 3 0 1 0 3-3z"/>); }
 function HeartIcon()        { return I(<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>); }
 function LogIcon()          { return I(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></>); }
+function UpgradeIcon()      { return I(<><polyline points="17 11 12 6 7 11"/><line x1="12" y1="6" x2="12" y2="18"/></>); }
 function BackIcon()         { return I(<><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>); }
 function LockIcon()         { return (<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>); }
 
