@@ -124,10 +124,21 @@ if (env.NODE_ENV === 'production') {
     next();
   });
 
-  // Serve React dashboard static assets for app subdomain
+  // Serve React dashboard static assets for app subdomain.
+  // index.html gets no-cache so the browser always checks for the latest
+  // version after a deploy. Hashed JS/CSS bundles can be cached long-term
+  // (Vite embeds a content hash in every bundle filename).
   app.use((req, res, next) => {
     if (!landingDomains.has(req.hostname)) {
-      return express.static(frontendDist)(req, res, next);
+      return express.static(frontendDist, {
+        setHeaders(res, filePath) {
+          if (filePath.endsWith('index.html')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma',  'no-cache');
+            res.setHeader('Expires', '0');
+          }
+        },
+      })(req, res, next);
     }
     next();
   });
@@ -139,6 +150,10 @@ if (env.NODE_ENV === 'production') {
     if (landingDomains.has(req.hostname)) {
       res.sendFile(path.join(landingDir, 'index.html'));
     } else {
+      // No-cache so users always get the freshest entry point after a deploy
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma',  'no-cache');
+      res.setHeader('Expires', '0');
       res.sendFile(path.join(frontendDist, 'index.html'));
     }
   });

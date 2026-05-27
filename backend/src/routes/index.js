@@ -23,6 +23,7 @@ const logger  = require('../config/logger');
 
 const { requireAuth }  = require('../middleware/requireAuth');
 const { emitEvent }    = require('../services/behavioralEventService');
+const { startedAt }    = require('../config/serverInfo');
 
 // ── Route modules ─────────────────────────────────────────
 const healthRoutes    = require('./health');
@@ -109,6 +110,14 @@ router.get('/upgrade', requireAuth, async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ── GET /api/version ─────────────────────────────────────────────────────
+// Public. Returns the server's startup timestamp.
+// Frontend polls this every 60 s; when startedAt changes (new deploy →
+// process restart), it calls window.location.reload(true) automatically.
+router.get('/version', (_req, res) => {
+  res.json({ started_at: startedAt });
 });
 
 // ── 404 handler for unknown /api/* routes ─────────────────

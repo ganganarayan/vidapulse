@@ -4,7 +4,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider }         from './contexts/ToastContext';
 import { ThemeProvider }         from './contexts/ThemeContext';
-import ImpersonationBanner from './components/ImpersonationBanner';
+import ImpersonationBanner       from './components/ImpersonationBanner';
+import { useVersionWatcher }     from './hooks/useVersionWatcher';
 import Login             from './pages/Login';
 import Register          from './pages/Register';
 import SetPassword       from './pages/SetPassword';
@@ -81,6 +82,13 @@ function AdminRoute({ children }) {
   return children;
 }
 
+// Mounted inside the provider tree so the api helper works normally.
+// Polls /api/version every 60 s and reloads when a new deploy is detected.
+function VersionWatcher() {
+  useVersionWatcher();
+  return null;
+}
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -92,6 +100,7 @@ export default function App() {
           all route transitions during an active impersonation session.
           It renders nothing when isImpersonating is false.
         */}
+        <VersionWatcher />
         <ImpersonationBanner />
         <Routes>
 
