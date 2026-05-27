@@ -8,7 +8,15 @@
  * Request format:
  *   POST <webhook_url>[?api_token=…]
  *   Content-Type: application/json
- *   Body: { contact: { contact_name, contact_email, contact_phone, contact_plan, event_type } }
+ *   Body: {
+ *     contact_name,          ← top-level (required by Divine Leads)
+ *     contact_email,         ← top-level (required)
+ *     contact_phone,         ← top-level (optional)
+ *     contact: {             ← custom fields namespace
+ *       contact_plan,
+ *       event_type,
+ *     }
+ *   }
  *
  * ── Failure behaviour ─────────────────────────────────────────────────────
  *   1. On any HTTP error or timeout:
@@ -440,16 +448,36 @@ function _buildUrl(baseUrl, apiToken) {
 }
 
 /**
- * Build the POST JSON body.
- * Strips the api_token placeholder (stored as '[redacted]' in logParams for DB
- * logging purposes) and wraps everything under a `contact` key so Divine Leads
- * and compatible CRMs can read contact.event_type, contact.contact_plan, etc.
+ * Build the POST JSON body for Divine Leads (and compatible CRMs).
+ *
+ * Standard contact fields go at the top level — the CRM requires them there.
+ * Custom fields (event_type, contact_plan, …) go inside a `contact` object.
+ *
+ * Result shape:
+ *   {
+ *     contact_name,
+ *     contact_email,
+ *     contact_phone,          (omitted when absent)
+ *     contact: {
+ *       contact_plan,
+ *       event_type,
+ *     }
+ *   }
  */
 function _buildBody(logParams) {
-  const contact = Object.fromEntries(
-    Object.entries(logParams).filter(([k]) => k !== 'api_token')
-  );
-  return { contact };
+  const { contact_name, contact_email, contact_phone, api_token: _drop, ...customFields } = logParams;
+
+  const body = {};
+  if (contact_name)  body.contact_name  = contact_name;
+  if (contact_email) body.contact_email = contact_email;
+  if (contact_phone) body.contact_phone = contact_phone;
+
+  // Everything else (contact_plan, event_type, …) is a custom field
+  if (Object.keys(customFields).length > 0) {
+    body.contact = customFields;
+  }
+
+  return body;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
