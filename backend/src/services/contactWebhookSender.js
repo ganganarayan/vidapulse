@@ -459,10 +459,86 @@ function _truncate(str, len) {
   return s.length > len ? s.slice(0, len) + '…' : s;
 }
 
+/**
+ * Re-fires a single log entry by ID using the current webhook settings.
+ * Does NOT auto-pause on failure — this is a manual per-entry action.
+ * Returns { ok, statusCode, errorMessage }.
+ * Never rejects.
+ */
+async function retryWebhookEntry(logId) {
+  try {
+    const { rows: [entry] } = await pool.query(
+      `SELECT * FROM contact_webhook_log WHERE id = $1`, [logId]
+    );
+    if (!entry) return { ok: false, statusCode: 0, errorMessage: 'Entry not found' };
+
+    const settings = await _loadSettings();
+    if (!settings?.webhook_url) {
+      return { ok: false, statusCode: 0, errorMessage: 'No webhook URL configured' };
+    }
+
+    // Reload fresh user data when possible; fall back to stored params_sent
+    const user = entry.user_id ? await _loadUser(entry.user_id) : null;
+    const logParams = user
+      ? _buildLogParams(user, entry.event_key, settings)
+      : (typeof entry.params_sent === 'object' ? entry.params_sent : {});
+
+    const bodyParams = _buildBody(logParams);
+    const finalUrl   = _buildUrl(settings.webhook_url, settings.api_token);
+    const { ok, statusCode, responseBody, errorMessage } = await _doPost(finalUrl, bodyParams);
+
+    await pool.query(
+      `UPDATE contact_webhook_log
+       SET status          = $1,
+           response_status = $2,
+           response_body   = $3,
+           error_message   = $4,
+           response_at     = NOW()
+       WHERE id = $5`,
+      [ok ? 'sent' : 'failed', statusCode, _truncate(responseBody, 1000), errorMessage, logId]
+    );
+
+    if (ok) {
+      logger.info(`[contactWebhook] Manual retry log_id=${logId} → ${statusCode}`);
+    } else {
+      logger.warn(`[contactWebhook] Manual retry failed log_id=${logId}: ${errorMessage}`);
+    }
+
+    return { ok, statusCode, errorMessage };
+  } catch (err) {
+    logger.error(`[contactWebhook] retryWebhookEntry error: ${err.message}`);
+    return { ok: false, statusCode: 0, errorMessage: err.message };
+  }
+}
+
+/**
+ * Marks a queued entry as 'discarded' so it is never resent.
+ * Only operates on status='queued' — other statuses are a no-op.
+ * Returns { ok: boolean }.
+ * Never rejects.
+ */
+async function discardWebhookEntry(logId) {
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE contact_webhook_log
+       SET status = 'discarded', response_at = NOW()
+       WHERE id = $1 AND status = 'queued'`,
+      [logId]
+    );
+    if (rowCount > 0) logger.info(`[contactWebhook] Discarded queued log_id=${logId}`);
+    return { ok: rowCount > 0 };
+  } catch (err) {
+    logger.error(`[contactWebhook] discardWebhookEntry error: ${err.message}`);
+    return { ok: false };
+  }
+}
+
 module.exports = {
   fireContactWebhook,
   resendQueuedWebhooks,
   resendFailedWebhooks,
+  retryWebhookEntry,
+  discardWebhookEntry,
   unpauseWebhook,
   getContactWebhookStatus,
 };

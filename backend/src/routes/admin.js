@@ -34,6 +34,8 @@ const { testWebhook } = require('../services/webhookSender');
 const {
   resendQueuedWebhooks,
   resendFailedWebhooks,
+  retryWebhookEntry,
+  discardWebhookEntry,
   unpauseWebhook,
   getContactWebhookStatus,
 } = require('../services/contactWebhookSender');
@@ -889,6 +891,43 @@ router.post('/contact-webhook/resend-failed', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /api/admin/contact-webhook/retry-entry/:id
+//
+// Re-fires a single log entry by ID using current webhook settings.
+// Does NOT auto-pause on failure. Returns { ok, statusCode, errorMessage }.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/contact-webhook/retry-entry/:id', async (req, res, next) => {
+  try {
+    const result = await retryWebhookEntry(req.params.id);
+    logger.info(`[admin] Retry entry id=${req.params.id} by user ${req.user.id} → ok=${result.ok}`);
+    return res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/admin/contact-webhook/discard-entry/:id
+//
+// Marks a queued entry as 'discarded'. No-op for other statuses.
+// Returns { ok: boolean }.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/contact-webhook/discard-entry/:id', async (req, res, next) => {
+  try {
+    const result = await discardWebhookEntry(req.params.id);
+    if (!result.ok) {
+      return res.status(400).json({ ok: false, message: 'Entry not found or not queued' });
+    }
+    logger.info(`[admin] Discarded entry id=${req.params.id} by user ${req.user.id}`);
+    return res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/contact-webhook-log
 //
 // Paginated log of every outbound contact webhook fire.
@@ -896,7 +935,7 @@ router.post('/contact-webhook/resend-failed', async (req, res, next) => {
 // Query params:
 //   page    — 1-based (default 1)
 //   limit   — rows per page (default 50, max 200)
-//   status  — optional: 'sent' | 'failed'
+//   status  — optional: 'sent' | 'failed' | 'queued' | 'discarded'
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get('/contact-webhook-log', async (req, res, next) => {
@@ -909,7 +948,7 @@ router.get('/contact-webhook-log', async (req, res, next) => {
     const params = [];
     const conditions = [];
 
-    if (status === 'sent' || status === 'failed' || status === 'queued') {
+    if (status === 'sent' || status === 'failed' || status === 'queued' || status === 'discarded') {
       params.push(status);
       conditions.push(`cwl.status = $${params.length}`);
     }

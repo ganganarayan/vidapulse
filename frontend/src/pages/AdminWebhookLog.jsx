@@ -173,12 +173,13 @@ export default function AdminWebhookLog() {
 
         {/* Controls */}
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {[
-              { val: '',       label: 'All'         },
-              { val: 'sent',   label: '✓ Sent'      },
-              { val: 'failed', label: '✕ Failed',  badge: webhookAlerts.failedCount || null },
-              { val: 'queued', label: '⏸ Queued',  badge: webhookAlerts.queuedCount || null },
+              { val: '',           label: 'All'          },
+              { val: 'sent',       label: '✓ Sent'       },
+              { val: 'failed',     label: '✕ Failed',    badge: webhookAlerts.failedCount || null },
+              { val: 'queued',     label: '⏸ Queued',    badge: webhookAlerts.queuedCount || null },
+              { val: 'discarded',  label: '— Discarded'  },
             ].map(({ val, label, badge }) => (
               <button
                 key={val}
@@ -260,11 +261,16 @@ export default function AdminWebhookLog() {
                     <th className="text-left px-4 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider hidden lg:table-cell">URL Sent To</th>
                     <th className="text-left px-4 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-[90px]">Status</th>
                     <th className="text-left px-4 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Response</th>
+                    <th className="text-left px-4 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-[110px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800/60 bg-gray-900">
                   {log.map(row => (
-                    <LogRow key={row.id} row={row} />
+                    <LogRow
+                      key={row.id}
+                      row={row}
+                      onRefresh={() => { webhookAlerts.refresh(); load(page, filter); }}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -308,12 +314,43 @@ export default function AdminWebhookLog() {
 
 // ─── Log Row ──────────────────────────────────────────────────────────────────
 
-function LogRow({ row }) {
-  const [expanded, setExpanded] = useState(false);
-  const params = typeof row.params_sent === 'object' ? row.params_sent : {};
+function LogRow({ row, onRefresh }) {
+  const [expanded,   setExpanded]   = useState(false);
+  const [retrying,   setRetrying]   = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [rowMsg,     setRowMsg]     = useState('');   // brief inline feedback
 
-  const sentDate  = row.sent_at     ? new Date(row.sent_at)     : null;
-  const respDate  = row.response_at ? new Date(row.response_at) : null;
+  const params   = typeof row.params_sent === 'object' ? row.params_sent : {};
+  const sentDate = row.sent_at     ? new Date(row.sent_at)     : null;
+  const respDate = row.response_at ? new Date(row.response_at) : null;
+
+  async function handleRetry(e) {
+    e.stopPropagation();
+    setRetrying(true);
+    setRowMsg('');
+    try {
+      const { data } = await api.post(`/admin/contact-webhook/retry-entry/${row.id}`);
+      setRowMsg(data.ok ? '✓' : '✗');
+      onRefresh();
+    } catch {
+      setRowMsg('err');
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  async function handleDiscard(e) {
+    e.stopPropagation();
+    setDiscarding(true);
+    setRowMsg('');
+    try {
+      await api.post(`/admin/contact-webhook/discard-entry/${row.id}`);
+      onRefresh();
+    } catch {
+      setRowMsg('err');
+      setDiscarding(false);
+    }
+  }
 
   return (
     <>
@@ -384,12 +421,56 @@ function LogRow({ row }) {
             )}
           </div>
         </td>
+
+        {/* Actions */}
+        <td className="px-3 py-3 align-top" onClick={e => e.stopPropagation()}>
+          <div className="flex flex-col gap-1.5">
+            {/* Retry — always visible */}
+            <button
+              onClick={handleRetry}
+              disabled={retrying || discarding}
+              className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium
+                         bg-gray-700/60 text-gray-300 border border-gray-600/60
+                         hover:bg-gray-700 hover:text-gray-100 disabled:opacity-40 transition-colors"
+              title="Re-fire this entry"
+            >
+              {retrying
+                ? <><span className="w-2.5 h-2.5 border border-gray-400 border-t-transparent rounded-full animate-spin" /> …</>
+                : <>↺ Retry</>
+              }
+            </button>
+
+            {/* Discard — queued entries only */}
+            {row.status === 'queued' && (
+              <button
+                onClick={handleDiscard}
+                disabled={retrying || discarding}
+                className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium
+                           bg-red-500/8 text-red-400 border border-red-500/20
+                           hover:bg-red-500/15 hover:text-red-300 disabled:opacity-40 transition-colors"
+                title="Discard — remove from queue permanently"
+              >
+                {discarding
+                  ? <><span className="w-2.5 h-2.5 border border-red-400 border-t-transparent rounded-full animate-spin" /> …</>
+                  : <>✕ Discard</>
+                }
+              </button>
+            )}
+
+            {/* Brief feedback */}
+            {rowMsg && (
+              <span className={`text-[10px] font-mono ${rowMsg === '✓' ? 'text-emerald-400' : 'text-red-400'}`}>
+                {rowMsg}
+              </span>
+            )}
+          </div>
+        </td>
       </tr>
 
       {/* Expanded detail row */}
       {expanded && (
         <tr className="bg-gray-800/30">
-          <td colSpan={5} className="px-4 py-4">
+          <td colSpan={6} className="px-4 py-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
               {/* Left: Request details */}
@@ -456,8 +537,10 @@ function StatusBadge({ status, code, errorMsg }) {
     ? 'text-emerald-400'
     : status === 'queued'
       ? 'text-amber-400'
-      : 'text-red-400';
-  const icon  = status === 'sent' ? '✓' : status === 'queued' ? '⏸' : '✕';
+      : status === 'discarded'
+        ? 'text-gray-600'
+        : 'text-red-400';
+  const icon  = status === 'sent' ? '✓' : status === 'queued' ? '⏸' : status === 'discarded' ? '—' : '✕';
 
   // For failed entries with no HTTP code (status=0), show Timeout or Network error
   const isNetworkFail = status === 'failed' && (!code || code === 0);
