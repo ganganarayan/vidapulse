@@ -8,7 +8,7 @@
  * Request format:
  *   POST <webhook_url>[?api_token=…]
  *   Content-Type: application/json
- *   Body: { contact_name, contact_email, contact_phone, contact_plan, event_type }
+ *   Body: { contact: { contact_name, contact_email, contact_phone, contact_plan, event_type } }
  *
  * ── Failure behaviour ─────────────────────────────────────────────────────
  *   1. On any HTTP error or timeout:
@@ -440,13 +440,16 @@ function _buildUrl(baseUrl, apiToken) {
 }
 
 /**
- * Strip the api_token placeholder from logParams to get the clean POST body.
- * (api_token is stored as '[redacted]' in logParams for DB logging purposes.)
+ * Build the POST JSON body.
+ * Strips the api_token placeholder (stored as '[redacted]' in logParams for DB
+ * logging purposes) and wraps everything under a `contact` key so Divine Leads
+ * and compatible CRMs can read contact.event_type, contact.contact_plan, etc.
  */
 function _buildBody(logParams) {
-  return Object.fromEntries(
+  const contact = Object.fromEntries(
     Object.entries(logParams).filter(([k]) => k !== 'api_token')
   );
+  return { contact };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
