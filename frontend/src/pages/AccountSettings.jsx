@@ -1,8 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { useToast } from '../contexts/ToastContext';
-import api from '../lib/api';
-import AppLayout from '../components/AppLayout';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useNavigate }  from 'react-router-dom';
+import { useAuth }      from '../contexts/AuthContext';
+import { useToast }     from '../contexts/ToastContext';
+import { useUpgrade }   from '../contexts/UpgradeContext';
+import api              from '../lib/api';
+import AppLayout        from '../components/AppLayout';
 
 /**
  * AccountSettings
@@ -16,11 +18,8 @@ import AppLayout from '../components/AppLayout';
 export default function AccountSettings() {
   const { user, updateUser } = useAuth();
   const { showToast }        = useToast();
-  const [upgradeData, setUpgradeData] = useState(null);
-
-  useEffect(() => {
-    api.get('/upgrade').then(res => setUpgradeData(res.data)).catch(() => {});
-  }, []);
+  const { showUpgrade }      = useUpgrade();
+  const navigate             = useNavigate();
 
   const plan    = user?.plan ?? 'free';
   const isAdmin = user?.role === 'admin' || plan === 'admin_lifetime';
@@ -43,92 +42,45 @@ export default function AccountSettings() {
             <Row label="Role"  value={isAdmin ? 'Admin' : 'Subscriber'} />
           </Section>
 
-          {/* ── Plan & Billing ─────────────────────────────────── */}
-          <Section title="Plan & Billing">
-            <div className="px-4 py-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wider font-medium mb-1">Current plan</p>
-                  <div className="flex items-center gap-2">
-                    <PlanBadge plan={plan} displayName={user?.plan_display_name} large />
-                    {plan === 'free' && (
-                      <span className="text-xs text-emerald-400 font-medium">Free forever</span>
-                    )}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-400 mb-1">Videos tracked</p>
-                  <p className="text-sm font-semibold text-gray-200">
-                    {user?.video_limit != null
-                      ? `${upgradeData?.videos_count ?? user?.video_count ?? 0} / ${user.video_limit}`
-                      : `${upgradeData?.videos_count ?? user?.video_count ?? 0}`}
-                    {user?.video_limit == null && (
-                      <span className="text-xs text-gray-400 ml-1">unlimited</span>
-                    )}
-                  </p>
-                </div>
+          {/* ── Plan ──────────────────────────────────────────────── */}
+          <Section title="Plan">
+            <div className="px-4 py-4 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <PlanBadge plan={plan} displayName={user?.plan_display_name} large />
+                {plan === 'free' && (
+                  <span className="text-xs text-emerald-400 font-medium">Free forever</span>
+                )}
+                {plan === 'admin_lifetime' && (
+                  <span className="text-xs text-emerald-400 font-medium">Lifetime access</span>
+                )}
+                {(plan === 'pro' || plan === 'starter') && user?.plan_expires_at && (
+                  <span className="text-xs text-gray-400">
+                    {new Date(user.plan_expires_at) > new Date()
+                      ? <>Active until <span className="text-gray-200">{new Date(user.plan_expires_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</span></>
+                      : <span className="text-red-400">Expired</span>
+                    }
+                  </span>
+                )}
               </div>
-
-              {/* Usage bar for capped plans */}
-              {user?.video_limit != null && (() => {
-                const used = upgradeData?.videos_count ?? user?.video_count ?? 0;
-                const pct  = Math.min(100, Math.round((used / user.video_limit) * 100));
-                return (
-                  <div>
-                    <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${pct >= 90 ? 'bg-rose-500' : pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">{pct}% of your video limit used</p>
-                  </div>
-                );
-              })()}
-
-              <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-700/50">
-                <span className="text-xs text-gray-400">Total plays recorded</span>
-                <span className="text-sm font-medium text-gray-200">
-                  {(upgradeData?.total_plays_to_date ?? 0).toLocaleString()}
-                </span>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {(plan === 'free' || plan === 'starter') && !isAdmin && (
+                  <button
+                    onClick={() => showUpgrade(plan === 'free' ? 'starter' : 'pro')}
+                    className="px-3 py-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400
+                               text-gray-900 rounded-lg transition-colors"
+                  >
+                    {plan === 'free' ? 'Upgrade' : 'Upgrade to Pro'}
+                  </button>
+                )}
+                <button
+                  onClick={() => navigate('/billing')}
+                  className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200
+                             border border-gray-700 hover:border-gray-500 rounded-lg transition-colors"
+                >
+                  Billing history →
+                </button>
               </div>
             </div>
-
-            {(plan === 'free' || plan === 'starter') && (
-              <div className="px-4 pb-4 border-t border-gray-700/50">
-                <p className="text-xs text-gray-400 font-medium mt-4 mb-3 uppercase tracking-wider">
-                  {plan === 'free' ? 'Upgrade to unlock more' : 'Upgrade to Pro'}
-                </p>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {plan === 'free' && (
-                    <UpgradeCard
-                      name="Starter"
-                      price="$10/mo"
-                      features={['Up to 10 videos', 'Full analytics', 'Embed tracking']}
-                      href={upgradeData?.razorpay_links?.starter ?? null}
-                    />
-                  )}
-                  <UpgradeCard
-                    name="Pro"
-                    price="$19/mo"
-                    features={['Unlimited videos', 'Advanced insights', 'Priority support']}
-                    href={upgradeData?.razorpay_links?.pro ?? null}
-                    highlight
-                  />
-                </div>
-              </div>
-            )}
-
-            {(plan === 'pro' || plan === 'admin_lifetime') && (
-              <div className="px-4 py-3 border-t border-gray-700/50 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
-                <p className="text-sm text-gray-300">
-                  {plan === 'admin_lifetime'
-                    ? 'Lifetime admin access — all features unlocked.'
-                    : 'Pro plan active — all features unlocked.'}
-                </p>
-              </div>
-            )}
           </Section>
 
           {/* ── Change Password ────────────────────────────────── */}
@@ -416,46 +368,6 @@ function Row({ label, value }) {
       <span className="text-sm text-gray-400">{label}</span>
       <span className="text-sm text-gray-200 font-medium text-right">{value}</span>
     </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// UpgradeCard
-// ─────────────────────────────────────────────────────────────────────────
-
-function UpgradeCard({ name, price, features = [], href, highlight = false }) {
-  const Tag   = href ? 'a' : 'div';
-  const props = href ? { href, target: '_blank', rel: 'noopener noreferrer' } : {};
-
-  return (
-    <Tag
-      {...props}
-      className={`flex-1 rounded-xl p-4 border transition-colors
-                  ${highlight
-                    ? 'bg-amber-500/10 border-amber-500/40 hover:border-amber-500/60'
-                    : 'bg-gray-700/30 border-gray-600/80 hover:border-gray-500'
-                  }
-                  ${href ? 'cursor-pointer' : ''}`}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <span className={`text-sm font-semibold ${highlight ? 'text-amber-300' : 'text-gray-200'}`}>
-          {name}
-        </span>
-        <span className={`text-sm font-bold ${highlight ? 'text-amber-400' : 'text-gray-300'}`}>{price}</span>
-      </div>
-      <ul className="space-y-1 mb-3">
-        {features.map(f => (
-          <li key={f} className="flex items-center gap-1.5 text-xs text-gray-400">
-            <span className={`w-1 h-1 rounded-full flex-shrink-0 ${highlight ? 'bg-amber-500' : 'bg-gray-500'}`} />
-            {f}
-          </li>
-        ))}
-      </ul>
-      {href
-        ? <p className={`text-xs font-semibold ${highlight ? 'text-amber-400' : 'text-gray-300'}`}>Upgrade to {name} →</p>
-        : <p className="text-xs text-gray-500 italic">Payment link coming soon</p>
-      }
-    </Tag>
   );
 }
 

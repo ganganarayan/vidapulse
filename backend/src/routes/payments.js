@@ -87,6 +87,127 @@ router.post('/subscribe', requireAuth, async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/payments/billing   (authenticated)
+// Returns the calling user's payment history for the Billing page.
+// Rows are ordered newest-first; each includes a computed period_end_at
+// (+30 days from created_at) and razorpay_invoice_id for the download link.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/billing', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+         id,
+         razorpay_payment_id,
+         razorpay_invoice_id,
+         plan,
+         amount_paise,
+         currency,
+         status,
+         razorpay_event,
+         created_at,
+         (created_at + INTERVAL '30 days') AS period_end_at
+       FROM   payments
+       WHERE  user_id = $1
+       ORDER  BY created_at DESC
+       LIMIT  100`,
+      [req.user.id]
+    );
+
+    return res.json({
+      payments: rows.map(r => ({
+        id                  : r.id,
+        razorpay_payment_id : r.razorpay_payment_id,
+        razorpay_invoice_id : r.razorpay_invoice_id,
+        plan                : r.plan,
+        amount_inr          : r.amount_paise ? (r.amount_paise / 100) : null,
+        currency            : r.currency,
+        status              : r.status,
+        event               : r.razorpay_event,
+        paid_at             : r.created_at,
+        period_end_at       : r.period_end_at,
+        // invoice_url: constructed on the frontend from razorpay_invoice_id
+        // backend redirect available at GET /api/payments/billing/invoice/:paymentId
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/payments/billing/invoice/:paymentId   (authenticated)
+// Fetches the Razorpay invoice URL for a specific payment and redirects to it.
+// Security: verifies the payment belongs to the calling user before redirecting.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/billing/invoice/:paymentId', requireAuth, async (req, res, next) => {
+  try {
+    const { paymentId } = req.params;
+
+    // Verify ownership
+    const { rows } = await pool.query(
+      `SELECT razorpay_payment_id, razorpay_invoice_id
+       FROM   payments
+       WHERE  id = $1 AND user_id = $2
+       LIMIT  1`,
+      [paymentId, req.user.id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    const { razorpay_payment_id, razorpay_invoice_id } = rows[0];
+
+    // If we have an invoice ID, fetch the invoice URL via Razorpay API
+    if (razorpay_invoice_id && env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) {
+      try {
+        const rz      = require('../services/razorpayService');
+        // We need to call the Razorpay API directly here
+        const https   = require('https');
+        const auth    = Buffer.from(`${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`).toString('base64');
+
+        const invoice = await new Promise((resolve, reject) => {
+          const options = {
+            hostname: 'api.razorpay.com', port: 443,
+            path: `/v1/invoices/${razorpay_invoice_id}`,
+            method: 'GET',
+            headers: { 'Authorization': `Basic ${auth}` },
+          };
+          const req2 = https.request(options, (r) => {
+            let data = '';
+            r.on('data', c => { data += c; });
+            r.on('end', () => {
+              try   { resolve(JSON.parse(data)); }
+              catch { reject(new Error('Bad JSON from Razorpay')); }
+            });
+          });
+          req2.on('error', reject);
+          req2.setTimeout(10_000, () => { req2.destroy(); reject(new Error('Timeout')); });
+          req2.end();
+        });
+
+        if (invoice?.short_url) {
+          return res.redirect(302, invoice.short_url);
+        }
+      } catch (err) {
+        logger.warn(`[payments] invoice redirect failed for ${razorpay_invoice_id}: ${err.message}`);
+      }
+    }
+
+    // Fallback: redirect to Razorpay payment receipt page (public URL)
+    if (razorpay_payment_id) {
+      return res.redirect(302, `https://rzp.io/i/${razorpay_payment_id}`);
+    }
+
+    return res.status(404).json({ error: 'Invoice not available for this payment' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/payments/razorpay   (public — called by Razorpay servers)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -226,10 +347,11 @@ async function _handleSubscriptionCharged(body, res) {
   const paymentEntity      = body?.payload?.payment?.entity      ?? {};
   const subscriptionEntity = body?.payload?.subscription?.entity ?? {};
 
-  const subscriptionId = subscriptionEntity.id || paymentEntity.subscription_id || null;
-  const notes          = subscriptionEntity.notes ?? {};
-  const amountPaise    = parseInt(paymentEntity.amount || 0, 10);
-  const razorpayPaymentId = paymentEntity.id || null;
+  const subscriptionId    = subscriptionEntity.id || paymentEntity.subscription_id || null;
+  const notes             = subscriptionEntity.notes ?? {};
+  const amountPaise       = parseInt(paymentEntity.amount || 0, 10);
+  const razorpayPaymentId = paymentEntity.id    || null;
+  const razorpayInvoiceId = paymentEntity.invoice_id || null;
 
   // User identification: prefer notes.user_id, fall back to email match
   let userId  = notes.user_id ? String(notes.user_id).trim() : null;
@@ -267,7 +389,7 @@ async function _handleSubscriptionCharged(body, res) {
   if (planKey && ['starter', 'pro'].includes(planKey)) {
     await _logPayment({
       userId, razorpayPaymentId, razorpayOrderId: null,
-      razorpayLinkId: subscriptionId,
+      razorpayLinkId: subscriptionId, razorpayInvoiceId,
       plan: planKey, amountPaise,
       currency: paymentEntity.currency || 'INR',
       status: 'captured', notes, eventType: 'subscription.charged',
@@ -477,27 +599,28 @@ async function _upgradePlanRecord(userId, planKey) {
 }
 
 async function _logPayment({
-  userId, razorpayPaymentId, razorpayOrderId, razorpayLinkId,
+  userId, razorpayPaymentId, razorpayOrderId, razorpayLinkId, razorpayInvoiceId,
   plan, amountPaise, currency, status, notes, eventType,
 }) {
   try {
     await pool.query(
       `INSERT INTO payments
          (user_id, razorpay_payment_id, razorpay_order_id, razorpay_link_id,
-          plan, amount_paise, currency, status, notes, razorpay_event)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          razorpay_invoice_id, plan, amount_paise, currency, status, notes, razorpay_event)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (razorpay_payment_id) DO NOTHING`,
       [
-        userId            || null,
-        razorpayPaymentId || null,
-        razorpayOrderId   || null,
-        razorpayLinkId    || null,
+        userId              || null,
+        razorpayPaymentId   || null,
+        razorpayOrderId     || null,
+        razorpayLinkId      || null,
+        razorpayInvoiceId   || null,
         plan,
-        amountPaise       || null,
+        amountPaise         || null,
         currency,
         status,
         JSON.stringify(notes ?? {}),
-        eventType         || null,
+        eventType           || null,
       ]
     );
   } catch (err) {

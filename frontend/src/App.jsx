@@ -32,6 +32,7 @@ import CTATrackingPage   from './pages/CTATrackingPage';
 import AdminWebhookLog   from './pages/AdminWebhookLog';
 import UpgradePage       from './pages/UpgradePage';
 import PaymentSuccess    from './pages/PaymentSuccess';
+import BillingPage       from './pages/BillingPage';
 
 /**
  * ProtectedRoute
@@ -179,6 +180,16 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <PaymentSuccess />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ── Billing history ───────────────────────────────────── */}
+          <Route
+            path="/billing"
+            element={
+              <ProtectedRoute>
+                <BillingPage />
               </ProtectedRoute>
             }
           />
