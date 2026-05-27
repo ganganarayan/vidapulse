@@ -33,6 +33,13 @@ export default function HelpPage() {
           <p className="text-sm text-gray-400">
             Everything you need to get the most out of VidaPulse.
           </p>
+          <p className="text-sm text-gray-500 mt-1">
+            Questions? Email us at{' '}
+            <a href="mailto:support@vidapulse.in"
+               className="text-amber-400 hover:text-amber-300 transition-colors">
+              support@vidapulse.in
+            </a>
+          </p>
         </div>
 
         {loading ? (
@@ -73,7 +80,12 @@ export default function HelpPage() {
             <div className="mt-10 bg-amber-500/5 border border-amber-500/20 rounded-xl px-5 py-4">
               <p className="text-sm font-semibold text-amber-400 mb-1">Still need help?</p>
               <p className="text-xs text-gray-400 leading-relaxed">
-                Reach out via the feedback button or contact your account manager. We're happy to walk you through anything.
+                Email us at{' '}
+                <a href="mailto:support@vidapulse.in"
+                   className="text-amber-400 hover:text-amber-300 transition-colors font-medium">
+                  support@vidapulse.in
+                </a>
+                {' '}— we're happy to walk you through anything.
               </p>
             </div>
           </>

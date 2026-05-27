@@ -1,8 +1,9 @@
 'use strict';
 import React, { useEffect, useState, useCallback } from 'react';
-import AppLayout from '../components/AppLayout';
-import { useAuth } from '../contexts/AuthContext';
-import { useToast } from '../contexts/ToastContext';
+import AppLayout      from '../components/AppLayout';
+import FeatureGate    from '../components/FeatureGate';
+import { useAuth }   from '../contexts/AuthContext';
+import { useToast }  from '../contexts/ToastContext';
 import api from '../lib/api';
 
 /**
@@ -28,8 +29,10 @@ export default function IntegrationsPage() {
           </p>
         </div>
 
-        {/* ── Webhook (admin only) ───────────────────────────────────────── */}
-        <WebhookCard isAdmin={isAdmin} />
+        {/* ── Webhook (Pro + Admin only) ────────────────────────────────── */}
+        <FeatureGate required="pro" feature="Webhook Integration">
+          <WebhookCard isAdmin={isAdmin} />
+        </FeatureGate>
 
         {/* ── Upcoming integrations ─────────────────────────────────────── */}
         <div className="mt-8">
