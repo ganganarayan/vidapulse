@@ -3,34 +3,91 @@
 /**
  * Payments routes — /api/payments/*
  *
- * POST /api/payments/razorpay  — webhook endpoint for Razorpay to call
+ * POST /api/payments/subscribe      — create a Razorpay Subscription for the user
+ *   • Requires JWT auth
+ *   • Creates Razorpay Customer (once per user) + Subscription
+ *   • Returns { paymentUrl } — frontend redirects there
+ *
+ * POST /api/payments/razorpay       — webhook endpoint for Razorpay to call
  *   • No JWT auth — Razorpay calls this from their servers
  *   • Verified via HMAC-SHA256 signature if RAZORPAY_WEBHOOK_SECRET is set
- *   • Handles: payment_link.paid, payment.captured
- *   • On success: upgrades user plan, logs payment, emits plan_upgraded event
+ *   • Handles: payment_link.paid, payment.captured (one-time payments)
+ *             subscription.charged (monthly renewal → extend plan_expires_at)
+ *             subscription.halted  (payment failed → notify user)
+ *             subscription.cancelled, subscription.completed (→ downgrade to free)
  *
- * How it identifies the user:
- *   The frontend appends notes[user_id]=<id>&notes[plan]=<plan> to the
- *   Razorpay payment URL before redirecting. Razorpay stores these notes
- *   with the payment and includes them in the webhook payload.
+ * Return URLs (Razorpay redirects here after payment):
+ *   https://app.vidapulse.in/payment/starter
+ *   https://app.vidapulse.in/payment/pro
  *
  * Razorpay webhook URL to configure in Razorpay dashboard:
  *   https://app.vidapulse.in/api/payments/razorpay
  * Events to subscribe:
- *   payment_link.paid, payment.captured
+ *   payment_link.paid, payment.captured,
+ *   subscription.charged, subscription.halted,
+ *   subscription.cancelled, subscription.completed
  */
 
 const express = require('express');
 const crypto  = require('crypto');
 
-const router        = express.Router();
-const { pool }      = require('../config/database');
-const env           = require('../config/env');
-const logger        = require('../config/logger');
-const { emitEvent } = require('../services/behavioralEventService');
+const router             = express.Router();
+const { pool }           = require('../config/database');
+const env                = require('../config/env');
+const logger             = require('../config/logger');
+const { emitEvent }      = require('../services/behavioralEventService');
+const { requireAuth }    = require('../middleware/requireAuth');
+const razorpay           = require('../services/razorpayService');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/payments/razorpay
+// POST /api/payments/subscribe   (authenticated)
+// Creates a Razorpay Subscription for the calling user and returns the
+// hosted payment URL. Frontend redirects to that URL.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/subscribe', requireAuth, async (req, res, next) => {
+  try {
+    const { plan } = req.body;
+
+    if (!['starter', 'pro'].includes(plan)) {
+      return res.status(400).json({ error: 'plan must be "starter" or "pro"' });
+    }
+
+    if (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET) {
+      logger.error('[payments] Razorpay API keys not configured');
+      return res.status(503).json({ error: 'Payment service not configured. Please contact support.' });
+    }
+
+    const user = req.user;
+
+    // Block downgrade attempts (free→starter is upgrade, starter→starter is noop)
+    const PLAN_ORDER = { free: 0, starter: 1, pro: 2, admin_lifetime: 3 };
+    if ((PLAN_ORDER[plan] ?? 0) <= (PLAN_ORDER[user.plan] ?? 0)) {
+      return res.status(400).json({ error: `You are already on the ${user.plan} plan or higher` });
+    }
+
+    const returnUrl = `${env.APP_URL}/payment/${plan}`;
+
+    const { subscriptionId, paymentUrl } = await razorpay.createSubscription(
+      { id: user.id, name: user.name, email: user.email, phone: user.phone },
+      plan,
+      returnUrl,
+    );
+
+    logger.info(`[payments] Subscription ${subscriptionId} created for user ${user.id} (${plan})`);
+
+    return res.json({ paymentUrl, subscriptionId });
+
+  } catch (err) {
+    logger.error(`[payments] /subscribe error: ${err.message}`);
+    // Surface Razorpay errors as 502 (upstream failed), others as 500
+    const status = err.message.includes('Razorpay API') ? 502 : 500;
+    return res.status(status).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/payments/razorpay   (public — called by Razorpay servers)
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.post('/razorpay', async (req, res, next) => {
@@ -43,7 +100,6 @@ router.post('/razorpay', async (req, res, next) => {
         return res.status(400).json({ error: 'Missing x-razorpay-signature' });
       }
 
-      // req.rawBody is set by the verify function in express.json() in index.js
       const rawBody = req.rawBody;
       if (!rawBody) {
         logger.error('[payments] req.rawBody not available — check express.json verify function');
@@ -74,126 +130,37 @@ router.post('/razorpay', async (req, res, next) => {
     const body      = req.body;
     const eventType = body?.event;
 
-    // ── 2. Only process relevant events ───────────────────────────────────
-    const HANDLED_EVENTS = ['payment_link.paid', 'payment.captured'];
+    // ── 2. Route to the right handler ─────────────────────────────────────
+    const HANDLED_EVENTS = [
+      'payment_link.paid',
+      'payment.captured',
+      'subscription.charged',
+      'subscription.halted',
+      'subscription.cancelled',
+      'subscription.completed',
+    ];
+
     if (!HANDLED_EVENTS.includes(eventType)) {
-      // Acknowledge unknown events so Razorpay doesn't retry
       logger.debug(`[payments] Ignoring Razorpay event: ${eventType}`);
       return res.json({ ok: true, ignored: true });
     }
 
-    // ── 3. Extract payment data + notes ───────────────────────────────────
-    const paymentEntity  = body?.payload?.payment?.entity      ?? {};
-    const linkEntity     = body?.payload?.payment_link?.entity ?? {};
-
-    // Notes can be on either the payment or the link — merge, payment wins
-    const notes = { ...(linkEntity.notes ?? {}), ...(paymentEntity.notes ?? {}) };
-
-    const razorpayPaymentId = paymentEntity.id              || null;
-    const razorpayOrderId   = paymentEntity.order_id        || null;
-    const razorpayLinkId    = linkEntity.id                  || paymentEntity.payment_link_id || null;
-    const amountPaise       = parseInt(paymentEntity.amount  || 0, 10);
-    const currency          = paymentEntity.currency         || 'INR';
-    const status            = paymentEntity.status           || 'captured';
-
-    // notes[user_id] and notes[plan] are set by the frontend when building the URL.
-    // users.id is UUID (not integer) — extract as string, not parseInt.
-    const userId  = notes.user_id ? String(notes.user_id).trim() : null;
-    const planKey = (notes.plan   || '').toLowerCase().trim();
-
-    logger.info(
-      `[payments] Razorpay ${eventType} — user_id=${userId} plan=${planKey} ` +
-      `payment_id=${razorpayPaymentId} amount=${amountPaise}`
-    );
-
-    // ── 4. Validate plan ───────────────────────────────────────────────────
-    if (!['starter', 'pro'].includes(planKey)) {
-      logger.warn(`[payments] Invalid plan in notes: "${planKey}" — logging but not upgrading`);
-      await _logPayment({
-        userId, razorpayPaymentId, razorpayOrderId, razorpayLinkId,
-        plan: planKey || 'unknown', amountPaise, currency, status,
-        notes, eventType,
-      });
-      return res.json({ ok: true, warning: 'Unknown plan in notes — payment logged, plan not changed' });
+    // Dispatch to the right handler
+    if (eventType === 'payment_link.paid' || eventType === 'payment.captured') {
+      return await _handleOneTimePayment(body, eventType, res);
     }
 
-    // ── 5. Deduplication — ignore if this payment_id was already processed ─
-    if (razorpayPaymentId) {
-      const { rows: existing } = await pool.query(
-        `SELECT id FROM payments WHERE razorpay_payment_id = $1`,
-        [razorpayPaymentId]
-      );
-      if (existing.length > 0) {
-        logger.info(`[payments] Duplicate webhook for payment ${razorpayPaymentId} — skipping`);
-        return res.json({ ok: true, duplicate: true });
-      }
+    if (eventType === 'subscription.charged') {
+      return await _handleSubscriptionCharged(body, res);
     }
 
-    // ── 6. Log the payment (BEFORE upgrading so we have a record even on error) ─
-    await _logPayment({
-      userId, razorpayPaymentId, razorpayOrderId, razorpayLinkId,
-      plan: planKey, amountPaise, currency, status, notes, eventType,
-    });
-
-    // ── 7. Upgrade user plan ───────────────────────────────────────────────
-    if (!userId) {
-      logger.warn('[payments] notes.user_id is missing — payment logged but plan NOT upgraded');
-      return res.json({ ok: true, warning: 'notes.user_id missing — plan not upgraded' });
+    if (eventType === 'subscription.halted') {
+      return await _handleSubscriptionHalted(body, res);
     }
 
-    // Fetch the target plan's ID
-    const { rows: planRows } = await pool.query(
-      `SELECT id, name, display_name FROM plans WHERE name = $1 AND is_active = TRUE LIMIT 1`,
-      [planKey]
-    );
-    if (!planRows.length) {
-      logger.error(`[payments] Plan "${planKey}" not found in DB`);
-      return res.status(200).json({ ok: true, error: `Plan "${planKey}" not found` });
+    if (eventType === 'subscription.cancelled' || eventType === 'subscription.completed') {
+      return await _handleSubscriptionEnded(body, eventType, res);
     }
-    const newPlan = planRows[0];
-
-    // Fetch user to check they exist and to log current plan
-    const { rows: userRows } = await pool.query(
-      `SELECT u.id, u.email, p.name AS current_plan
-       FROM users u JOIN plans p ON p.id = u.plan_id
-       WHERE u.id = $1 AND u.is_active = TRUE`,
-      [userId]
-    );
-    if (!userRows.length) {
-      logger.warn(`[payments] User ${userId} not found or inactive — plan not upgraded`);
-      return res.json({ ok: true, warning: `User ${userId} not found` });
-    }
-    const user = userRows[0];
-
-    // Update plan
-    await pool.query(
-      `UPDATE users SET plan_id = $1, updated_at = NOW() WHERE id = $2`,
-      [newPlan.id, userId]
-    );
-
-    // Mark as converted in onboarding_state
-    await pool.query(
-      `UPDATE onboarding_state
-       SET converted_to_paid_at = COALESCE(converted_to_paid_at, NOW()),
-           current_step         = 'converted'
-       WHERE user_id = $1`,
-      [userId]
-    );
-
-    logger.info(
-      `[payments] ✓ User ${userId} (${user.email}) upgraded ` +
-      `${user.current_plan} → ${planKey} via Razorpay payment ${razorpayPaymentId}`
-    );
-
-    // ── 8. Emit plan_upgraded behavioral event (fires contact webhook to CRM) ─
-    emitEvent(userId, 'plan_upgraded', null, {
-      old_plan          : user.current_plan,
-      new_plan          : planKey,
-      razorpay_payment_id: razorpayPaymentId || '',
-      amount_inr        : amountPaise ? (amountPaise / 100).toFixed(2) : '',
-    });
-
-    return res.json({ ok: true, upgraded: true, plan: planKey });
 
   } catch (err) {
     logger.error(`[payments] Razorpay webhook error: ${err.message}`);
@@ -202,8 +169,312 @@ router.post('/razorpay', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper
+// Handler: one-time payment (payment_link.paid | payment.captured)
 // ─────────────────────────────────────────────────────────────────────────────
+
+async function _handleOneTimePayment(body, eventType, res) {
+  const paymentEntity = body?.payload?.payment?.entity      ?? {};
+  const linkEntity    = body?.payload?.payment_link?.entity ?? {};
+  const notes         = { ...(linkEntity.notes ?? {}), ...(paymentEntity.notes ?? {}) };
+
+  const razorpayPaymentId = paymentEntity.id              || null;
+  const razorpayOrderId   = paymentEntity.order_id        || null;
+  const razorpayLinkId    = linkEntity.id || paymentEntity.payment_link_id || null;
+  const amountPaise       = parseInt(paymentEntity.amount  || 0, 10);
+  const currency          = paymentEntity.currency         || 'INR';
+  const status            = paymentEntity.status           || 'captured';
+  const userId            = notes.user_id ? String(notes.user_id).trim() : null;
+  const planKey           = (notes.plan || '').toLowerCase().trim();
+
+  logger.info(
+    `[payments] ${eventType} — user_id=${userId} plan=${planKey} ` +
+    `payment_id=${razorpayPaymentId} amount=${amountPaise}`
+  );
+
+  if (!['starter', 'pro'].includes(planKey)) {
+    // Don't log to payments table — CHECK constraint requires plan IN ('starter','pro')
+    logger.warn(`[payments] ${eventType}: unknown plan "${planKey}" — not logging to payments table`);
+    return res.json({ ok: true, warning: 'Unknown plan in notes' });
+  }
+
+  // Deduplication
+  if (razorpayPaymentId) {
+    const { rows } = await pool.query(
+      `SELECT id FROM payments WHERE razorpay_payment_id = $1`, [razorpayPaymentId]
+    );
+    if (rows.length > 0) {
+      return res.json({ ok: true, duplicate: true });
+    }
+  }
+
+  await _logPayment({ userId, razorpayPaymentId, razorpayOrderId, razorpayLinkId,
+    plan: planKey, amountPaise, currency, status, notes, eventType });
+
+  if (!userId) {
+    return res.json({ ok: true, warning: 'notes.user_id missing' });
+  }
+
+  await _upgradePlan(userId, planKey, amountPaise, razorpayPaymentId, eventType);
+  return res.json({ ok: true, upgraded: true, plan: planKey });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Handler: subscription.charged — monthly renewal
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function _handleSubscriptionCharged(body, res) {
+  const paymentEntity      = body?.payload?.payment?.entity      ?? {};
+  const subscriptionEntity = body?.payload?.subscription?.entity ?? {};
+
+  const subscriptionId = subscriptionEntity.id || paymentEntity.subscription_id || null;
+  const notes          = subscriptionEntity.notes ?? {};
+  const amountPaise    = parseInt(paymentEntity.amount || 0, 10);
+  const razorpayPaymentId = paymentEntity.id || null;
+
+  // User identification: prefer notes.user_id, fall back to email match
+  let userId  = notes.user_id ? String(notes.user_id).trim() : null;
+  const planKey = (notes.plan || '').toLowerCase().trim() || null;
+
+  if (!userId && paymentEntity.email) {
+    const { rows } = await pool.query(
+      `SELECT id FROM users WHERE email = $1 AND is_active = TRUE LIMIT 1`,
+      [paymentEntity.email.toLowerCase()]
+    );
+    userId = rows[0]?.id ?? null;
+  }
+
+  logger.info(
+    `[payments] subscription.charged — subscription=${subscriptionId} ` +
+    `user_id=${userId} plan=${planKey} amount=${amountPaise}`
+  );
+
+  if (!userId) {
+    logger.warn('[payments] subscription.charged: cannot identify user — no notes.user_id or email match');
+    return res.json({ ok: true, warning: 'user not identified' });
+  }
+
+  // Deduplication by payment ID
+  if (razorpayPaymentId) {
+    const { rows } = await pool.query(
+      `SELECT id FROM payments WHERE razorpay_payment_id = $1`, [razorpayPaymentId]
+    );
+    if (rows.length > 0) {
+      return res.json({ ok: true, duplicate: true });
+    }
+  }
+
+  // Log the payment (only if plan is resolvable — payments table CHECK requires starter|pro)
+  if (planKey && ['starter', 'pro'].includes(planKey)) {
+    await _logPayment({
+      userId, razorpayPaymentId, razorpayOrderId: null,
+      razorpayLinkId: subscriptionId,
+      plan: planKey, amountPaise,
+      currency: paymentEntity.currency || 'INR',
+      status: 'captured', notes, eventType: 'subscription.charged',
+    });
+  }
+
+  // Determine the plan from the subscription if not in notes
+  let resolvedPlan = planKey;
+  if (!resolvedPlan || !['starter','pro'].includes(resolvedPlan)) {
+    // Try to resolve from the users table current plan
+    const { rows } = await pool.query(
+      `SELECT p.name FROM users u JOIN plans p ON p.id = u.plan_id WHERE u.id = $1`,
+      [userId]
+    );
+    resolvedPlan = rows[0]?.name;
+  }
+
+  if (!['starter', 'pro'].includes(resolvedPlan)) {
+    logger.warn(`[payments] subscription.charged: unresolvable plan for user ${userId}`);
+    return res.json({ ok: true, warning: 'plan could not be resolved' });
+  }
+
+  // Extend plan by 30 days from now (or from current expires_at if still in future)
+  await pool.query(
+    `UPDATE users
+     SET plan_expires_at          = GREATEST(COALESCE(plan_expires_at, NOW()), NOW()) + INTERVAL '30 days',
+         plan_enrolled_at         = COALESCE(plan_enrolled_at, NOW()),
+         razorpay_subscription_id = COALESCE(razorpay_subscription_id, $2),
+         updated_at               = NOW()
+     WHERE id = $1`,
+    [userId, subscriptionId]
+  );
+
+  // Also ensure the plan itself is set (in case of re-activation after expiry)
+  await _upgradePlanRecord(userId, resolvedPlan);
+
+  // Mark converted in onboarding
+  await pool.query(
+    `UPDATE onboarding_state
+     SET converted_to_paid_at = COALESCE(converted_to_paid_at, NOW()),
+         current_step         = 'converted'
+     WHERE user_id = $1`,
+    [userId]
+  );
+
+  emitEvent(userId, 'plan_upgraded', null, {
+    old_plan           : null,
+    new_plan           : resolvedPlan,
+    razorpay_payment_id: razorpayPaymentId || '',
+    amount_inr         : amountPaise ? (amountPaise / 100).toFixed(2) : '',
+    via                : 'subscription',
+  });
+
+  logger.info(`[payments] ✓ User ${userId} plan renewed → ${resolvedPlan} (+30 days)`);
+  return res.json({ ok: true, renewed: true, plan: resolvedPlan });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Handler: subscription.halted — payment failure, subscription suspended
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function _handleSubscriptionHalted(body, res) {
+  const subscriptionEntity = body?.payload?.subscription?.entity ?? {};
+  const subscriptionId     = subscriptionEntity.id || null;
+  const notes              = subscriptionEntity.notes ?? {};
+
+  let userId = notes.user_id ? String(notes.user_id).trim() : null;
+
+  if (!userId && subscriptionId) {
+    const { rows } = await pool.query(
+      `SELECT id FROM users WHERE razorpay_subscription_id = $1 AND is_active = TRUE LIMIT 1`,
+      [subscriptionId]
+    );
+    userId = rows[0]?.id ?? null;
+  }
+
+  logger.warn(`[payments] subscription.halted — subscription=${subscriptionId} user_id=${userId}`);
+
+  if (userId) {
+    // Emit event so DivineLead CRM can send a payment-failed message
+    emitEvent(userId, 'subscription_payment_failed', null, {
+      razorpay_subscription_id: subscriptionId || '',
+    });
+  }
+
+  return res.json({ ok: true, halted: true });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Handler: subscription.cancelled | subscription.completed
+// Plan expires at the current plan_expires_at (we don't force-downgrade here —
+// the daily cron job handles downgrade when plan_expires_at passes).
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function _handleSubscriptionEnded(body, eventType, res) {
+  const subscriptionEntity = body?.payload?.subscription?.entity ?? {};
+  const subscriptionId     = subscriptionEntity.id || null;
+  const notes              = subscriptionEntity.notes ?? {};
+
+  let userId = notes.user_id ? String(notes.user_id).trim() : null;
+
+  if (!userId && subscriptionId) {
+    const { rows } = await pool.query(
+      `SELECT id FROM users WHERE razorpay_subscription_id = $1 AND is_active = TRUE LIMIT 1`,
+      [subscriptionId]
+    );
+    userId = rows[0]?.id ?? null;
+  }
+
+  logger.info(`[payments] ${eventType} — subscription=${subscriptionId} user_id=${userId}`);
+
+  if (userId) {
+    // Clear the subscription ID so it won't be charged again;
+    // plan_expires_at stays as-is — user keeps access until it expires.
+    // The daily cron job will downgrade them to free when it passes.
+    await pool.query(
+      `UPDATE users
+       SET razorpay_subscription_id = NULL,
+           updated_at               = NOW()
+       WHERE id = $1`,
+      [userId]
+    );
+
+    emitEvent(userId, 'subscription_cancelled', null, {
+      razorpay_subscription_id: subscriptionId || '',
+      event_type               : eventType,
+    });
+  }
+
+  return res.json({ ok: true, ended: true });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Upgrade a user's plan: set plan_id, plan_enrolled_at, plan_expires_at (+30 days).
+ * Also marks onboarding as converted.
+ */
+async function _upgradePlan(userId, planKey, amountPaise, razorpayPaymentId, eventType) {
+  const { rows: planRows } = await pool.query(
+    `SELECT id, name FROM plans WHERE name = $1 AND is_active = TRUE LIMIT 1`,
+    [planKey]
+  );
+  if (!planRows.length) {
+    logger.error(`[payments] Plan "${planKey}" not found in DB`);
+    return;
+  }
+
+  const { rows: userRows } = await pool.query(
+    `SELECT u.id, u.email, p.name AS current_plan
+     FROM users u JOIN plans p ON p.id = u.plan_id
+     WHERE u.id = $1 AND u.is_active = TRUE`,
+    [userId]
+  );
+  if (!userRows.length) {
+    logger.warn(`[payments] User ${userId} not found or inactive`);
+    return;
+  }
+  const user = userRows[0];
+
+  await pool.query(
+    `UPDATE users
+     SET plan_id          = $1,
+         plan_enrolled_at = COALESCE(plan_enrolled_at, NOW()),
+         plan_expires_at  = NOW() + INTERVAL '30 days',
+         updated_at       = NOW()
+     WHERE id = $2`,
+    [planRows[0].id, userId]
+  );
+
+  await pool.query(
+    `UPDATE onboarding_state
+     SET converted_to_paid_at = COALESCE(converted_to_paid_at, NOW()),
+         current_step         = 'converted'
+     WHERE user_id = $1`,
+    [userId]
+  );
+
+  logger.info(
+    `[payments] ✓ User ${userId} (${user.email}) upgraded ` +
+    `${user.current_plan} → ${planKey} (payment ${razorpayPaymentId})`
+  );
+
+  emitEvent(userId, 'plan_upgraded', null, {
+    old_plan           : user.current_plan,
+    new_plan           : planKey,
+    razorpay_payment_id: razorpayPaymentId || '',
+    amount_inr         : amountPaise ? (amountPaise / 100).toFixed(2) : '',
+  });
+}
+
+/**
+ * Update plan_id only (no enrolled/expires touch).
+ * Used when subscription renewal re-activates after expiry.
+ */
+async function _upgradePlanRecord(userId, planKey) {
+  const { rows } = await pool.query(
+    `SELECT id FROM plans WHERE name = $1 AND is_active = TRUE LIMIT 1`, [planKey]
+  );
+  if (!rows.length) return;
+  await pool.query(
+    `UPDATE users SET plan_id = $1, updated_at = NOW() WHERE id = $2`,
+    [rows[0].id, userId]
+  );
+}
 
 async function _logPayment({
   userId, razorpayPaymentId, razorpayOrderId, razorpayLinkId,

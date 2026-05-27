@@ -44,11 +44,13 @@ const ONLINE_CLEANUP_MS    = 3  * 60_000;   // 3 minutes
 const INSIGHT_BATCH_MS     = 15 * 60_000;   // 15 minutes
 const HOURLY_JOBS_MS       = 60 * 60_000;   // 1 hour
 const DAILY_STATS_MS       = 24 * 60 * 60_000; // 24 hours
+const EXPIRY_CHECK_MS      = 24 * 60 * 60_000; // 24 hours
 
 // Startup delays — stagger jobs to avoid hitting the DB all at once
 const INSIGHT_BATCH_DELAY  = 2  * 60_000;   // insight starts 2 min after server ready
 const HOURLY_JOBS_DELAY    = 5  * 60_000;   // hourly jobs start 5 min after server ready
 const DAILY_STATS_DELAY    = 10 * 60_000;   // daily stats backfill starts 10 min after server ready
+const EXPIRY_CHECK_DELAY   = 15 * 60_000;   // expiry check starts 15 min after server ready
 
 // Thresholds for behavioral event jobs
 const NO_VIDEO_HOURS       = 48;            // user must have signed up 48+ hrs ago
@@ -89,7 +91,13 @@ function start() {
     _timers.push(setInterval(() => _run(_jobDailyStatsBackfill), DAILY_STATS_MS));
   }, DAILY_STATS_DELAY));
 
-  logger.info('[scheduledJobs] Started — online_cleanup(3m) · insight_batch(15m) · hourly(1h) · daily_stats(24h)');
+  // ── plan expiry check: starts after 15 min delay ──────────────────────
+  _timers.push(setTimeout(() => {
+    _run(_jobPlanExpiryCheck);
+    _timers.push(setInterval(() => _run(_jobPlanExpiryCheck), EXPIRY_CHECK_MS));
+  }, EXPIRY_CHECK_DELAY));
+
+  logger.info('[scheduledJobs] Started — online_cleanup(3m) · insight_batch(15m) · hourly(1h) · daily_stats(24h) · plan_expiry(24h)');
 }
 
 function stop() {
@@ -299,6 +307,71 @@ async function _jobDailyStatsBackfill() {
   );
 
   logger.info(`[scheduledJobs] daily_stats_backfill — ${rowCount} video(s) updated for ${dateStr}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// JOB: plan_expiry_check
+//
+// Runs every 24 hours (starts 15 min after server ready).
+// Finds all users whose plan_expires_at has passed and no active Razorpay
+// subscription is in place, then downgrades them to the 'free' plan.
+//
+// Does NOT touch users whose subscription is still active (subscription.charged
+// will have extended plan_expires_at automatically).
+//
+// Also emits a 'plan_expired' behavioral event (triggers DivineLead CRM
+// to notify the user about their expired plan).
+// ─────────────────────────────────────────────────────────────────────────
+
+async function _jobPlanExpiryCheck() {
+  // Find users with expired plans that have no active subscription
+  const { rows: expired } = await pool.query(
+    `SELECT u.id, u.email, p.name AS current_plan
+     FROM   users u
+     JOIN   plans p ON p.id = u.plan_id
+     WHERE  u.is_active         = TRUE
+       AND  u.plan_expires_at   IS NOT NULL
+       AND  u.plan_expires_at   < NOW()
+       AND  u.razorpay_subscription_id IS NULL
+       AND  p.name NOT IN ('free', 'admin_lifetime')`
+  );
+
+  if (expired.length === 0) return;
+
+  logger.info(`[scheduledJobs] plan_expiry_check — ${expired.length} user(s) to downgrade`);
+
+  // Get the free plan ID
+  const { rows: freePlanRows } = await pool.query(
+    `SELECT id FROM plans WHERE name = 'free' AND is_active = TRUE LIMIT 1`
+  );
+  if (!freePlanRows.length) {
+    logger.error('[scheduledJobs] plan_expiry_check: free plan not found in DB');
+    return;
+  }
+  const freePlanId = freePlanRows[0].id;
+
+  for (const { id, email, current_plan } of expired) {
+    try {
+      await pool.query(
+        `UPDATE users
+         SET plan_id          = $1,
+             plan_expires_at  = NULL,
+             plan_enrolled_at = NULL,
+             updated_at       = NOW()
+         WHERE id = $2`,
+        [freePlanId, id]
+      );
+
+      logger.info(`[scheduledJobs] plan_expiry: downgraded ${id} (${email}) ${current_plan} → free`);
+
+      emitEvent(id, 'plan_expired', null, {
+        old_plan: current_plan,
+        new_plan: 'free',
+      });
+    } catch (err) {
+      logger.error(`[scheduledJobs] plan_expiry: failed for user ${id}: ${err.message}`);
+    }
+  }
 }
 
 /**

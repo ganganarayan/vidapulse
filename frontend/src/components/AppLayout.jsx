@@ -1,11 +1,13 @@
 'use strict';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { ThemeToggle } from '../contexts/ThemeContext';
-import { useToast } from '../contexts/ToastContext';
-import { useWebhookAlerts } from '../hooks/useWebhookAlerts';
-import api from '../lib/api';
+import { useAuth }             from '../contexts/AuthContext';
+import { ThemeToggle }         from '../contexts/ThemeContext';
+import { useToast }            from '../contexts/ToastContext';
+import { useUpgrade }          from '../contexts/UpgradeContext';
+import { useWebhookAlerts }    from '../hooks/useWebhookAlerts';
+import ExpiryReminderBanner    from './ExpiryReminderBanner';
+import api                     from '../lib/api';
 
 /**
  * AppLayout — persistent left sidebar + content area.
@@ -16,6 +18,7 @@ export default function AppLayout({ children }) {
     <div className="min-h-screen bg-gray-900 flex">
       <AppSidebar />
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <ExpiryReminderBanner />
         {children}
       </div>
     </div>
@@ -28,6 +31,7 @@ export default function AppLayout({ children }) {
 
 function AppSidebar() {
   const { user, isImpersonating } = useAuth();
+  const { showUpgrade }           = useUpgrade();
   const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -94,21 +98,18 @@ function AppSidebar() {
 
         {/* Upgrade CTA — only shown to free and starter users */}
         {user && (user.plan === 'free' || user.plan === 'starter') && (
-          <Link
-            to="/upgrade"
-            className={`mt-2 flex items-center justify-between gap-2 px-3 py-2 rounded-lg
-                        text-xs font-semibold transition-colors
-                        ${active('/upgrade')
-                          ? 'bg-amber-500/20 text-amber-300'
-                          : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20'
-                        }`}
+          <button
+            onClick={() => showUpgrade(user.plan === 'free' ? 'starter' : 'pro')}
+            className="mt-2 flex items-center justify-between gap-2 px-3 py-2 rounded-lg
+                       text-xs font-semibold transition-colors w-full text-left
+                       bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20"
           >
             <span className="flex items-center gap-1.5">
               <UpgradeIcon />
               {user.plan === 'free' ? 'Upgrade plan' : 'Upgrade to Pro'}
             </span>
             <span className="text-amber-500/70">→</span>
-          </Link>
+          </button>
         )}
 
         {isAdmin && (

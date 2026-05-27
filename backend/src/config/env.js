@@ -56,4 +56,16 @@ module.exports = {
   // Set in Railway env vars. If unset, webhook signature is not verified
   // (safe to leave blank until production payment flows are active).
   RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET || null,
+
+  // Razorpay — API keys for creating Customers and Subscriptions.
+  // Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to Railway env vars.
+  // If unset, subscription creation will return a 503 (configuration error).
+  RAZORPAY_KEY_ID    : process.env.RAZORPAY_KEY_ID     || null,
+  RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || null,
+
+  // Razorpay Plan IDs (optional — if set, these plan IDs are used directly
+  // instead of auto-creating plans via API on first subscription).
+  // Format: 'plan_XXXXXXXXXXXXXX'
+  RAZORPAY_PLAN_ID_STARTER: process.env.RAZORPAY_PLAN_ID_STARTER || null,
+  RAZORPAY_PLAN_ID_PRO    : process.env.RAZORPAY_PLAN_ID_PRO     || null,
 };

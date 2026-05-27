@@ -4,7 +4,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider }         from './contexts/ToastContext';
 import { ThemeProvider }         from './contexts/ThemeContext';
+import { UpgradeProvider }       from './contexts/UpgradeContext';
 import ImpersonationBanner       from './components/ImpersonationBanner';
+import UpgradeModal              from './components/UpgradeModal';
 import { useVersionWatcher }     from './hooks/useVersionWatcher';
 import Login             from './pages/Login';
 import Register          from './pages/Register';
@@ -29,6 +31,7 @@ import ReportsPage       from './pages/ReportsPage';
 import CTATrackingPage   from './pages/CTATrackingPage';
 import AdminWebhookLog   from './pages/AdminWebhookLog';
 import UpgradePage       from './pages/UpgradePage';
+import PaymentSuccess    from './pages/PaymentSuccess';
 
 /**
  * ProtectedRoute
@@ -94,14 +97,16 @@ export default function App() {
     <ThemeProvider>
     <AuthProvider>
       <ToastProvider>
+      <UpgradeProvider>
       <BrowserRouter>
         {/*
-          ImpersonationBanner sits outside <Routes> so it persists across
-          all route transitions during an active impersonation session.
-          It renders nothing when isImpersonating is false.
+          ImpersonationBanner + UpgradeModal sit outside <Routes> so they
+          persist across all route transitions.
+          UpgradeModal renders nothing when upgradeTarget is null.
         */}
         <VersionWatcher />
         <ImpersonationBanner />
+        <UpgradeModal />
         <Routes>
 
           {/* ── Auth pages (public) ─────────────────────────── */}
@@ -164,6 +169,16 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <UpgradePage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ── Payment success / activation polling ─────────────── */}
+          <Route
+            path="/payment/:plan"
+            element={
+              <ProtectedRoute>
+                <PaymentSuccess />
               </ProtectedRoute>
             }
           />
@@ -239,6 +254,7 @@ export default function App() {
 
         </Routes>
       </BrowserRouter>
+      </UpgradeProvider>
       </ToastProvider>
     </AuthProvider>
     </ThemeProvider>
