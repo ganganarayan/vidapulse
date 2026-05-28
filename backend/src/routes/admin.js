@@ -15,7 +15,9 @@
  *   PATCH /api/admin/webhook-settings         — update webhook config
  *   POST  /api/admin/webhook-settings/test    — fire test webhook
  *   GET   /api/admin/onboarding-health        — funnel metrics + recent users
- *   GET   /api/admin/users                    — paginated subscriber list
+ *   GET   /api/admin/users                    — paginated subscriber list (incl. last_login_at, plan_expires_at)
+ *   PATCH /api/admin/users/:id/plan           — change user plan + expiry date
+ *   GET   /api/admin/revenue                  — payment breakdown (grand total + per-user)
  *   POST  /api/admin/impersonate/:userId       — start impersonation session → returns JWT
  *   POST  /api/admin/impersonate/end           — end active impersonation session
  *   GET   /api/admin/impersonation-log         — paginated impersonation audit log
@@ -458,7 +460,8 @@ router.get('/onboarding-health', async (req, res, next) => {
 //
 // Paginated list of all users for the "Enter Account" interface.
 // Returns: id, email, name, plan, plan_display_name, role, is_active,
-//          video_count, joined (created_at), last_seen_at
+//          video_count, joined (created_at), last_login_at, last_seen_at,
+//          plan_expires_at
 //
 // Query params:
 //   page    — 1-based page number (default 1)
@@ -501,7 +504,9 @@ router.get('/users', async (req, res, next) => {
          u.role,
          u.is_active,
          u.created_at,
+         u.last_login_at,
          u.last_seen_at,
+         u.plan_expires_at,
          COALESCE(vc.video_count, 0)::int AS video_count
        FROM users u
        LEFT JOIN plans p ON p.id = u.plan_id
@@ -531,6 +536,152 @@ router.get('/users', async (req, res, next) => {
         has_next    : page < totalPages,
         has_prev    : page > 1,
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/admin/users/:id/plan
+//
+// Admin-only: change a user's plan and/or plan_expires_at.
+//
+// Body:
+//   plan        — 'free' | 'starter' | 'pro' | 'admin_lifetime'
+//   expires_at  — ISO 8601 datetime string, or null (= no expiry / forever)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const updatePlanSchema = z.object({
+  plan      : z.enum(['free', 'starter', 'pro', 'admin_lifetime']),
+  expires_at: z.string().datetime({ offset: true }).nullable().optional(),
+}).strict();
+
+router.patch('/users/:id/plan', async (req, res, next) => {
+  try {
+    const parsed = updatePlanSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error : 'Validation failed',
+        fields: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const { plan, expires_at } = parsed.data;
+    const userId = req.params.id;
+
+    // Verify target user exists and is not admin
+    const { rows: [target] } = await pool.query(
+      `SELECT id, email, role FROM users WHERE id = $1`,
+      [userId]
+    );
+    if (!target) {
+      return res.status(404).json({ error: 'Not found', message: 'User not found' });
+    }
+    if (target.role === 'admin') {
+      return res.status(403).json({ error: 'Forbidden', message: 'Cannot change admin user plan' });
+    }
+
+    // Look up the plan ID
+    const { rows: [planRow] } = await pool.query(
+      `SELECT id, display_name FROM plans WHERE name = $1`,
+      [plan]
+    );
+    if (!planRow) {
+      return res.status(400).json({ error: 'Invalid plan', message: `Plan '${plan}' not found` });
+    }
+
+    // For free plan, always clear the expiry — free is forever free
+    const expiresAt = plan === 'free' ? null : (expires_at ?? null);
+
+    await pool.query(
+      `UPDATE users
+       SET    plan_id          = $1,
+              plan_expires_at  = $2,
+              updated_at       = NOW()
+       WHERE  id = $3`,
+      [planRow.id, expiresAt, userId]
+    );
+
+    logger.info(
+      `[admin] Plan changed for user ${target.email}: plan=${plan} expires_at=${expiresAt ?? 'null'} by admin ${req.user.id}`
+    );
+
+    return res.json({
+      ok          : true,
+      plan,
+      plan_display_name: planRow.display_name ?? plan,
+      expires_at  : expiresAt,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/revenue
+//
+// Payment breakdown from the payments table.
+//
+// Returns:
+//   grand_total_inr  — sum of all captured INR payments (paise → rupees)
+//   users            — per-user breakdown sorted by total desc
+//     Each user: id, name, email,
+//       total_inr (sum of INR payments in rupees),
+//       total_usd (sum of USD payments in cents/100),
+//       last_amount, last_currency, last_payment_at, payment_count
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/revenue', async (req, res, next) => {
+  try {
+    // Grand total: all captured INR payments in rupees
+    const { rows: [totalRow] } = await pool.query(`
+      SELECT COALESCE(SUM(amount_paise), 0)::bigint AS total_inr_paise
+      FROM   payments
+      WHERE  status = 'captured'
+        AND  currency = 'INR'
+    `);
+
+    // Per-user breakdown — subquery for last payment details
+    const { rows: users } = await pool.query(`
+      SELECT
+        u.id,
+        u.name,
+        u.email,
+        COALESCE(SUM(pay.amount_paise) FILTER (WHERE pay.currency = 'INR'), 0)::bigint AS total_inr_paise,
+        COALESCE(SUM(pay.amount_paise) FILTER (WHERE pay.currency = 'USD'), 0)::bigint AS total_usd_cents,
+        MAX(pay.created_at)                                                             AS last_payment_at,
+        COUNT(pay.id)::int                                                              AS payment_count,
+        (
+          SELECT amount_paise FROM payments
+          WHERE  user_id = u.id AND status = 'captured'
+          ORDER  BY created_at DESC LIMIT 1
+        ) AS last_amount_paise,
+        (
+          SELECT currency FROM payments
+          WHERE  user_id = u.id AND status = 'captured'
+          ORDER  BY created_at DESC LIMIT 1
+        ) AS last_currency
+      FROM payments pay
+      JOIN users u ON u.id = pay.user_id
+      WHERE pay.status = 'captured'
+      GROUP BY u.id, u.name, u.email
+      ORDER BY total_inr_paise DESC, total_usd_cents DESC
+    `);
+
+    return res.json({
+      grand_total_inr: Math.round(Number(totalRow.total_inr_paise) / 100),
+      users: users.map(u => ({
+        id             : u.id,
+        name           : u.name,
+        email          : u.email,
+        total_inr      : Math.round(Number(u.total_inr_paise) / 100),
+        total_usd      : Math.round(Number(u.total_usd_cents) / 100),
+        last_payment_at: u.last_payment_at,
+        payment_count  : u.payment_count,
+        last_amount    : u.last_amount_paise != null ? Math.round(Number(u.last_amount_paise) / 100) : null,
+        last_currency  : u.last_currency,
+      })),
     });
   } catch (err) {
     next(err);
