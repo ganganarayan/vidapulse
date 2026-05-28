@@ -40,6 +40,16 @@ const {
   getContactWebhookStatus,
 } = require('../services/contactWebhookSender');
 
+const {
+  getAdminPromotionVideos,
+  createPromotionVideo,
+  updateVisibility,
+  reorderPromotionVideos,
+  deletePromotionVideo,
+  setUserPromoHidden,
+  getUserPromoHiddenIds,
+} = require('../services/promotionService');
+
 // ─────────────────────────────────────────────────────────────────────────────
 // requireImpersonating guard
 // Assumes requireAuth has already run. Allows only active impersonation JWTs.
@@ -1004,6 +1014,96 @@ router.get('/contact-webhook-log', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROMOTION VIDEOS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/admin/promotion-videos — list all for admin panel
+router.get('/promotion-videos', async (req, res, next) => {
+  try {
+    const videos = await getAdminPromotionVideos();
+    return res.json({ videos });
+  } catch (err) { next(err); }
+});
+
+// POST /api/admin/promotion-videos — create a new promotion video
+router.post('/promotion-videos', async (req, res, next) => {
+  try {
+    const { url, title } = req.body ?? {};
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ message: 'url is required' });
+    }
+    try { new URL(url); } catch {
+      return res.status(400).json({ message: 'Invalid URL' });
+    }
+    const promo = await createPromotionVideo(req.user.id, url.trim(), title);
+    logger.info(`[admin] Promotion video created by ${req.user.id}: ${promo.id}`);
+    return res.status(201).json({ promo });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/admin/promotion-videos/:id/visibility — change visibility tier
+router.patch('/promotion-videos/:id/visibility', async (req, res, next) => {
+  try {
+    const { visibility } = req.body ?? {};
+    const updated = await updateVisibility(req.params.id, visibility);
+    if (!updated) return res.status(404).json({ message: 'Promotion video not found' });
+    logger.info(`[admin] Promotion ${req.params.id} visibility → ${visibility} by ${req.user.id}`);
+    return res.json({ promo: updated });
+  } catch (err) {
+    if (err.message === 'Invalid visibility value') {
+      return res.status(400).json({ message: err.message });
+    }
+    next(err);
+  }
+});
+
+// PATCH /api/admin/promotion-videos/reorder — bulk reorder
+router.patch('/promotion-videos/reorder', async (req, res, next) => {
+  try {
+    const { ordered_ids } = req.body ?? {};
+    if (!Array.isArray(ordered_ids)) {
+      return res.status(400).json({ message: 'ordered_ids must be an array' });
+    }
+    await reorderPromotionVideos(ordered_ids);
+    return res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/admin/promotion-videos/:id — delete promotion video
+router.delete('/promotion-videos/:id', async (req, res, next) => {
+  try {
+    const deleted = await deletePromotionVideo(req.params.id);
+    if (!deleted) return res.status(404).json({ message: 'Promotion video not found' });
+    logger.info(`[admin] Promotion ${req.params.id} deleted by ${req.user.id}`);
+    return res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// GET /api/admin/users/:userId/promo-hidden — get hidden promotion IDs for a user
+router.get('/users/:userId/promo-hidden', async (req, res, next) => {
+  try {
+    const hiddenIds = await getUserPromoHiddenIds(req.params.userId);
+    return res.json({ hidden_ids: [...hiddenIds] });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/admin/users/:userId/promo-hidden — set hidden state for a promo+user pair
+// Body: { promotion_video_id, hidden: boolean }
+router.patch('/users/:userId/promo-hidden', async (req, res, next) => {
+  try {
+    const { promotion_video_id, hidden } = req.body ?? {};
+    if (!promotion_video_id || typeof hidden !== 'boolean') {
+      return res.status(400).json({ message: 'promotion_video_id and hidden (bool) required' });
+    }
+    await setUserPromoHidden(req.params.userId, promotion_video_id, hidden);
+    logger.info(
+      `[admin] Promo ${promotion_video_id} ${hidden ? 'hidden' : 'shown'} for user ${req.params.userId} by ${req.user.id}`
+    );
+    return res.json({ ok: true });
+  } catch (err) { next(err); }
 });
 
 // Export the action logging helper for use by other route handlers

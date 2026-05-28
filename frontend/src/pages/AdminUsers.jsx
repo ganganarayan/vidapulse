@@ -184,6 +184,176 @@ function ImpersonateModal({ targetUser, onConfirm, onCancel, loading }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PromoModal — manage per-user promotion video visibility
+// ─────────────────────────────────────────────────────────────────────────────
+
+const VISIBILITY_INFO = {
+  noshow : { label: 'Admin only',  cls: 'text-gray-500'  },
+  free   : { label: 'All users',   cls: 'text-green-400' },
+  starter: { label: 'Starter+',    cls: 'text-blue-400'  },
+  pro    : { label: 'Pro only',    cls: 'text-amber-400' },
+};
+
+function PromoModal({ targetUser, onClose }) {
+  const [promos,    setPromos]    = useState([]);
+  const [hiddenIds, setHiddenIds] = useState(new Set());
+  const [loading,   setLoading]   = useState(true);
+  const [toggling,  setToggling]  = useState(new Set()); // promoIds currently in-flight
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const [promosRes, hiddenRes] = await Promise.all([
+          api.get('/admin/promotion-videos'),
+          api.get(`/admin/users/${targetUser.id}/promo-hidden`),
+        ]);
+        setPromos(promosRes.data.videos ?? []);
+        setHiddenIds(new Set(hiddenRes.data.hidden_ids ?? []));
+      } catch (_) {
+        /* errors shown as empty state below */
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [targetUser.id]);
+
+  async function handleToggle(promoId, currentlyHidden) {
+    if (toggling.has(promoId)) return;
+    setToggling(prev => new Set([...prev, promoId]));
+    const newHidden = !currentlyHidden;
+    try {
+      await api.patch(`/admin/users/${targetUser.id}/promo-hidden`, {
+        promotion_video_id: promoId,
+        hidden: newHidden,
+      });
+      setHiddenIds(prev => {
+        const next = new Set(prev);
+        if (newHidden) next.add(promoId);
+        else next.delete(promoId);
+        return next;
+      });
+    } catch (_) {
+      /* silent — toggle snaps back via state not changing */
+    } finally {
+      setToggling(prev => { const next = new Set(prev); next.delete(promoId); return next; });
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-gray-800 border border-gray-700 rounded-xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
+
+        {/* Header */}
+        <div className="flex items-start justify-between p-6 pb-4 border-b border-gray-700 flex-shrink-0">
+          <div>
+            <h2 className="text-lg font-bold text-white">Promotion Visibility</h2>
+            <p className="text-gray-400 text-sm mt-0.5">
+              Control which featured videos are visible to{' '}
+              <span className="text-white font-medium">{targetUser.name || targetUser.email}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 ml-4 flex-shrink-0">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 overflow-y-auto flex-1">
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : promos.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-8">
+              No promotion videos have been added yet.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {promos.map(promo => {
+                const isHidden  = hiddenIds.has(promo.id);
+                const isBusy    = toggling.has(promo.id);
+                const visInfo   = VISIBILITY_INFO[promo.visibility] ?? VISIBILITY_INFO.noshow;
+
+                return (
+                  <div
+                    key={promo.id}
+                    className="flex items-center gap-3 p-3 bg-gray-700/40 border border-gray-700 rounded-lg"
+                  >
+                    {/* Thumbnail */}
+                    {promo.thumbnail_url ? (
+                      <img
+                        src={promo.thumbnail_url}
+                        alt=""
+                        className="w-14 h-9 rounded object-cover flex-shrink-0 bg-gray-700"
+                      />
+                    ) : (
+                      <div className="w-14 h-9 rounded bg-gray-700 flex-shrink-0 flex items-center justify-center">
+                        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor"
+                          strokeWidth={1.5} viewBox="0 0 24 24">
+                          <polygon points="23 7 16 12 23 17 23 7" />
+                          <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                        </svg>
+                      </div>
+                    )}
+
+                    {/* Title + visibility tier */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-sm font-medium truncate">{promo.title}</p>
+                      <p className={`text-xs mt-0.5 ${visInfo.cls}`}>{visInfo.label}</p>
+                    </div>
+
+                    {/* Toggle switch */}
+                    <button
+                      onClick={() => handleToggle(promo.id, isHidden)}
+                      disabled={isBusy}
+                      title={isHidden ? 'Click to show for this user' : 'Click to hide for this user'}
+                      className={`relative flex-shrink-0 w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none ${
+                        !isHidden ? 'bg-green-600' : 'bg-gray-600'
+                      } ${isBusy ? 'opacity-60' : 'hover:opacity-90'}`}
+                    >
+                      <span
+                        className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${
+                          !isHidden ? 'translate-x-4' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+
+                    {/* Label */}
+                    <span className={`text-xs w-12 text-right flex-shrink-0 ${isHidden ? 'text-gray-500' : 'text-green-400'}`}>
+                      {isBusy ? '…' : isHidden ? 'Hidden' : 'Visible'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-700 flex justify-between items-center flex-shrink-0">
+          <p className="text-xs text-gray-600">
+            Toggle off to hide a featured video for this user only.
+          </p>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 border border-gray-600 hover:border-gray-400 transition-colors"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main page
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -204,6 +374,9 @@ export default function AdminUsers() {
   const [modalUser,       setModalUser]       = useState(null);   // target user row
   const [modalLoading,    setModalLoading]    = useState(false);
   const [modalError,      setModalError]      = useState('');
+
+  // Promotion visibility modal state
+  const [promoModalUser,  setPromoModalUser]  = useState(null);
 
   // "Session expired" notice from api.js redirect param
   const [expiredNotice, setExpiredNotice] = useState(
@@ -428,19 +601,36 @@ export default function AdminUsers() {
 
                       {/* Action */}
                       <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => { setModalUser(user); setModalError(''); }}
-                          disabled={!user.is_active}
-                          className="
-                            px-3 py-1.5 rounded-lg text-xs font-semibold
-                            border border-gray-600 text-gray-300
-                            hover:border-red-500 hover:text-red-400 hover:bg-red-900/20
-                            disabled:opacity-40 disabled:cursor-not-allowed
-                            transition-all duration-150
-                          "
-                        >
-                          Enter Account
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setPromoModalUser(user)}
+                            title="Manage promotion video visibility for this user"
+                            className="
+                              px-2.5 py-1.5 rounded-lg text-xs font-semibold
+                              border border-amber-700/40 text-amber-400
+                              hover:bg-amber-900/20 hover:border-amber-600/60
+                              transition-all duration-150 flex items-center gap-1
+                            "
+                          >
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                            </svg>
+                            Promos
+                          </button>
+                          <button
+                            onClick={() => { setModalUser(user); setModalError(''); }}
+                            disabled={!user.is_active}
+                            className="
+                              px-3 py-1.5 rounded-lg text-xs font-semibold
+                              border border-gray-600 text-gray-300
+                              hover:border-red-500 hover:text-red-400 hover:bg-red-900/20
+                              disabled:opacity-40 disabled:cursor-not-allowed
+                              transition-all duration-150
+                            "
+                          >
+                            Enter Account
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -489,6 +679,14 @@ export default function AdminUsers() {
           onCancel={() => { setModalUser(null); setModalError(''); setModalLoading(false); }}
           loading={modalLoading}
           error={modalError}
+        />
+      )}
+
+      {/* Promotion visibility modal */}
+      {promoModalUser && (
+        <PromoModal
+          targetUser={promoModalUser}
+          onClose={() => setPromoModalUser(null)}
         />
       )}
     </div>

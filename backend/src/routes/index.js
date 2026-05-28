@@ -23,6 +23,7 @@ const logger  = require('../config/logger');
 
 const { requireAuth }  = require('../middleware/requireAuth');
 const { emitEvent }    = require('../services/behavioralEventService');
+const { getVisiblePromotionVideos } = require('../services/promotionService');
 const { startedAt }    = require('../config/serverInfo');
 
 // ── Route modules ─────────────────────────────────────────
@@ -49,6 +50,15 @@ router.use('/help',      helpRoutes);
 router.use('/reports',   reportsRoutes);
 router.use('/cta-links', ctaLinksRoutes);
 router.use('/payments',  paymentsRoutes);
+
+// ── GET /api/promotion-videos ─────────────────────────────────────────────
+// Returns promotion videos visible to the current user (plan-filtered, not hidden).
+router.get('/promotion-videos', requireAuth, async (req, res, next) => {
+  try {
+    const videos = await getVisiblePromotionVideos(req.user.id, req.user.plan);
+    return res.json({ videos });
+  } catch (err) { next(err); }
+});
 
 // ── GET /api/upgrade ──────────────────────────────────────────────────────
 // Called when the user visits the Upgrade page.
