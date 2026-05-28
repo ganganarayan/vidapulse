@@ -102,7 +102,7 @@ export default function ViewerStoriesSection({ videoId, userPlan }) {
       {/* Section header */}
       <div className="flex items-center gap-2 mb-4">
         <span className="text-gray-500 text-sm" aria-hidden="true">◎</span>
-        <h2 className="text-base font-semibold text-gray-200 flex items-center gap-2">Viewer Stories <PlanTierBadge plan="starter" /></h2>
+        <h2 className="text-base font-semibold text-gray-200 flex items-center gap-2">Viewer Stories <PlanTierBadge plan="starter" userPlan={userPlan} /></h2>
       </div>
 
       {isFree ? (

@@ -202,7 +202,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
       >
         <span className="flex-shrink-0 w-4 h-4">{icon}</span>
         <span className="flex-1 truncate">{label}</span>
-        {requiredPlan && <PlanCrown plan={requiredPlan} size={10} />}
+        {requiredPlan && <PlanCrown plan={requiredPlan} size={10} userPlan={user?.plan} />}
         {locked && <LockIcon />}
       </button>
     );

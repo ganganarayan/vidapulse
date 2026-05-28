@@ -44,7 +44,7 @@ const FALLBACK_COLORS = [
   '#f59e0b', '#c084fc', '#facc15', '#a78bfa', '#fb923c',
 ];
 
-export default function BrowsersSection({ videoId }) {
+export default function BrowsersSection({ videoId, userPlan }) {
   const [status, setStatus] = useState('loading');
   const [data,   setData]   = useState([]);
 
@@ -84,7 +84,7 @@ export default function BrowsersSection({ videoId }) {
         <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
           Audience
         </p>
-        <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Browsers <PlanTierBadge plan="starter" /></h2>
+        <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Browsers <PlanTierBadge plan="starter" userPlan={userPlan} /></h2>
         <p className="text-xs text-gray-400 mt-1">
           Which browsers your viewers use to watch your video.
         </p>

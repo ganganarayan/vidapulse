@@ -40,7 +40,7 @@ const DEVICE_ICONS = {
   ),
 };
 
-export default function DevicesSection({ videoId }) {
+export default function DevicesSection({ videoId, userPlan }) {
   const [status, setStatus] = useState('loading');
   const [data,   setData]   = useState([]);
 
@@ -67,7 +67,7 @@ export default function DevicesSection({ videoId }) {
         <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
           Audience
         </p>
-        <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Devices <PlanTierBadge plan="starter" /></h2>
+        <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Devices <PlanTierBadge plan="starter" userPlan={userPlan} /></h2>
         <p className="text-xs text-gray-400 mt-1">
           How your viewers are watching — desktop, mobile, or tablet.
         </p>
