@@ -145,7 +145,7 @@ export default function UpgradeModal() {
           <PlanCard
             planKey     = "pro"
             name        = "Pro"
-            tagline     = "For businesses serious about video"
+            tagline     = "For any serious business, B2B or B2C, to scale through video marketing"
             price       = "₹1,999"
             features    = {PLAN_FEATURES.pro}
             current     = {currentPlan === 'pro' || currentPlan === 'admin_lifetime'}

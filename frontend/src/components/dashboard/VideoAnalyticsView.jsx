@@ -468,7 +468,7 @@ function MetricCard({ label, value, format, visible, accent, className = '', onC
     >
       <p className="text-[11px] text-gray-300 uppercase tracking-wider font-semibold mb-2 leading-tight flex items-center gap-1.5">
         <span className="flex-1 truncate">{label}</span>
-        {requiredPlan && <PlanCrown plan={requiredPlan} size={9} userPlan={userPlan} />}
+        {requiredPlan && <PlanCrown plan={requiredPlan} size={14} userPlan={userPlan} />}
       </p>
       <p className="text-3xl font-bold text-gray-50 tabular-nums">
         {isNull
