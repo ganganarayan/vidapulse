@@ -181,7 +181,7 @@ export default function UpgradePage() {
                   : (upgradeData?.pricing?.pro?.usd_label ?? '$29')}
                 priceSuffix = "/ month"
                 features    = {[
-                  'Unlimited videos',
+                  '20 videos',
                   'All Starter features',
                   'Engagement heatmap (full)',
                   'CTA tracking & conversion',

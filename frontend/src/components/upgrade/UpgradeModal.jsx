@@ -41,7 +41,7 @@ const PLAN_FEATURES = {
     'Domain tracking & embed code',
   ],
   pro: [
-    'Unlimited videos',
+    '20 videos',
     'Engagement heatmaps',
     'Viewer-level analytics',
     'Audience segmentation',
@@ -67,7 +67,7 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
           upgrade_options: currentPlan === 'starter' ? ['pro'] : ['starter', 'pro'],
           pricing: {
             starter: { inr: 999,  usd: 15, inr_label: '₹999',  usd_label: '$15', video_limit: 10   },
-            pro    : { inr: 1999, usd: 29, inr_label: '₹1,999', usd_label: '$29', video_limit: null },
+            pro    : { inr: 1999, usd: 29, inr_label: '₹1,999', usd_label: '$29', video_limit: 20   },
           },
           razorpay_links: { starter: null, pro: null },
         });

@@ -28,7 +28,7 @@ const PLAN_FEATURES = {
     'Priority email support',
   ],
   pro: [
-    'Unlimited videos',
+    '20 videos',
     'All Starter features',
     'Engagement heatmap (full)',
     'CTA tracking & conversion',
