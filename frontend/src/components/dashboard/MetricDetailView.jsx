@@ -1,6 +1,7 @@
 'use strict';
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../lib/api';
+import FeatureWall from '../upgrade/FeatureWall';
 
 /**
  * MetricDetailView
@@ -18,11 +19,24 @@ import api from '../../lib/api';
 // Metric configuration
 // ─────────────────────────────────────────────────────────────────────────
 
+// Which plan is required to view each metric (undefined = Free)
+const METRIC_REQUIRED_PLAN = {
+  unique_views : 'starter',
+  avg_watch    : 'starter',
+  completion   : 'starter',
+  watch_time   : 'starter',
+  dropoff      : 'pro',
+  rewatches    : 'pro',
+};
+
+const PLAN_RANK = { free: 0, starter: 1, pro: 2, admin_lifetime: 3 };
+
 const METRIC_CONFIG = {
   plays: {
     label: 'Total Plays', yLabel: 'Plays',
     backendKey: 'plays', accentColor: '#f59e0b',
     desc: 'How many times your video was played each day.',
+    formula: 'Total Plays = count of every play-button press in the selected period',
     totalLabel: 'Total Plays',
     format: n => Math.round(n).toLocaleString(),
     yTickFormat: n => compactNum(n),
@@ -30,7 +44,8 @@ const METRIC_CONFIG = {
   viewers: {
     label: 'Unique Viewers', yLabel: 'Viewers',
     backendKey: 'viewers', accentColor: '#818cf8',
-    desc: 'Distinct viewers tracked by browser cookie each day.',
+    desc: 'Distinct visitors (by browser cookie) who pressed play at least once.',
+    formula: 'Unique Viewers = distinct browser cookies that pressed play (one per person)',
     totalLabel: 'Total Unique',
     format: n => Math.round(n).toLocaleString(),
     yTickFormat: n => compactNum(n),
@@ -38,7 +53,8 @@ const METRIC_CONFIG = {
   unique_views: {
     label: 'Unique Views', yLabel: 'Visitors',
     backendKey: 'unique_views', accentColor: '#a78bfa',
-    desc: 'Distinct visitors who loaded the video page each day.',
+    desc: 'Distinct page sessions that loaded the embed — whether or not play was pressed.',
+    formula: 'Unique Views = distinct sessions that loaded the embed page (impressions)',
     totalLabel: 'Total Unique',
     format: n => Math.round(n).toLocaleString(),
     yTickFormat: n => compactNum(n),
@@ -46,7 +62,8 @@ const METRIC_CONFIG = {
   total_viewers: {
     label: 'Total Viewers', yLabel: 'Viewers',
     backendKey: 'total_viewers', accentColor: '#fb923c',
-    desc: 'Sessions where the play button was pressed each day.',
+    desc: 'All sessions where play was pressed — includes the same viewer pressing play multiple times.',
+    formula: 'Total Viewers = count of play sessions (Unique Viewers + re-plays by same person)',
     totalLabel: 'Total Viewers',
     format: n => Math.round(n).toLocaleString(),
     yTickFormat: n => compactNum(n),
@@ -54,7 +71,8 @@ const METRIC_CONFIG = {
   avg_watch: {
     label: 'Avg. Watch %', yLabel: 'Watch %',
     backendKey: 'avg_watch', accentColor: '#34d399',
-    desc: 'Average percentage of the video that viewers watched each day.',
+    desc: 'Average percentage of the video watched across all plays each day.',
+    formula: 'Avg. Watch % = Σ(seconds watched per play) ÷ (Total plays × Video duration) × 100',
     totalLabel: 'Period Avg.',
     format: n => `${Number(n).toFixed(1)}%`,
     yTickFormat: n => `${Number(n).toFixed(0)}%`,
@@ -62,7 +80,8 @@ const METRIC_CONFIG = {
   play_rate: {
     label: 'Play Rate', yLabel: 'Plays',
     backendKey: 'plays', accentColor: '#c084fc',
-    desc: 'Daily plays — compare with viewers to gauge your play-rate trend.',
+    desc: 'Daily plays — compare with Unique Views to gauge what fraction of visitors actually pressed play.',
+    formula: 'Play Rate = Total Plays ÷ Unique Page Visitors × 100',
     totalLabel: 'Total Plays',
     format: n => Math.round(n).toLocaleString(),
     yTickFormat: n => compactNum(n),
@@ -70,7 +89,8 @@ const METRIC_CONFIG = {
   completion: {
     label: 'Completion Rate', yLabel: 'Completions',
     backendKey: 'completions', accentColor: '#2dd4bf',
-    desc: 'Sessions where the viewer reached the end of the video.',
+    desc: 'Sessions where the viewer watched at least 95% of the video.',
+    formula: 'Completion Rate = Plays reaching ≥ 95% of video ÷ Total Plays × 100',
     totalLabel: 'Total Completions',
     format: n => Math.round(n).toLocaleString(),
     yTickFormat: n => compactNum(n),
@@ -78,7 +98,8 @@ const METRIC_CONFIG = {
   dropoff: {
     label: 'Drop-off Rate', yLabel: 'Sessions',
     backendKey: 'plays', accentColor: '#f87171',
-    desc: 'Daily play sessions — sessions without completions indicate drop-off.',
+    desc: 'Sessions where viewers stopped before reaching the end.',
+    formula: 'Drop-off Rate = 100% − Completion Rate   |   Plays that did not complete ÷ Total Plays × 100',
     totalLabel: 'Total Sessions',
     format: n => Math.round(n).toLocaleString(),
     yTickFormat: n => compactNum(n),
@@ -86,7 +107,8 @@ const METRIC_CONFIG = {
   watch_time: {
     label: 'Watch Time', yLabel: 'Minutes',
     backendKey: 'watch_seconds', accentColor: '#38bdf8',
-    desc: 'Total watch time accumulated each day (in minutes).',
+    desc: 'Total seconds watched across every play session, expressed in minutes or hours.',
+    formula: 'Watch Time = Σ(seconds watched) across all play sessions in the selected period',
     totalLabel: 'Total Time',
     format: n => {
       const mins = Math.round(n / 60);
@@ -97,7 +119,8 @@ const METRIC_CONFIG = {
   rewatches: {
     label: 'Re-watches', yLabel: 'Plays',
     backendKey: 'plays', accentColor: '#facc15',
-    desc: 'Daily plays — plays beyond unique viewers indicate re-watches.',
+    desc: 'Plays by viewers who came back to watch more than once — indicates high-value content.',
+    formula: 'Re-watches = Total Plays − Unique Viewers   (extra plays beyond one-per-person)',
     totalLabel: 'Total Plays',
     format: n => Math.round(n).toLocaleString(),
     yTickFormat: n => compactNum(n),
@@ -138,8 +161,10 @@ function fmtDate(dateStr) {
 // MetricDetailView — main export
 // ─────────────────────────────────────────────────────────────────────────
 
-export default function MetricDetailView({ videoId, metric, video }) {
-  const cfg       = METRIC_CONFIG[metric];
+export default function MetricDetailView({ videoId, metric, video, userPlan }) {
+  const cfg          = METRIC_CONFIG[metric];
+  const requiredPlan = METRIC_REQUIRED_PLAN[metric];
+  const hasAccess    = !requiredPlan || (PLAN_RANK[userPlan] ?? 0) >= (PLAN_RANK[requiredPlan] ?? 0);
   const [rangeIdx, setRangeIdx] = useState(4); // default: All time
 
   const videoCreated = video?.created_at
@@ -177,6 +202,22 @@ export default function MetricDetailView({ videoId, metric, video }) {
 
   if (!cfg) return null;
 
+  // Plan gate — show FeatureWall if user doesn't have the required plan
+  if (!hasAccess) {
+    return (
+      <div className="px-6 py-6 min-w-0">
+        <div className="mb-5">
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
+            Metric Analysis
+          </p>
+          <h2 className="text-2xl font-bold text-gray-50">{cfg.label}</h2>
+          <p className="text-xs text-gray-400 mt-1">{cfg.desc}</p>
+        </div>
+        <FeatureWall feature={metric} requiredPlan={requiredPlan} currentPlan={userPlan} minHeight="240px" />
+      </div>
+    );
+  }
+
   const hasData = status === 'loaded' && data.length > 0;
 
   return (
@@ -189,6 +230,13 @@ export default function MetricDetailView({ videoId, metric, video }) {
           </p>
           <h2 className="text-2xl font-bold text-gray-50">{cfg.label}</h2>
           <p className="text-xs text-gray-400 mt-1 max-w-sm">{cfg.desc}</p>
+          {cfg.formula && (
+            <p className="text-[10px] font-mono text-gray-500 mt-2 inline-flex items-center gap-1
+                           bg-gray-800/70 border border-gray-700/60 rounded px-2 py-1 max-w-sm leading-relaxed">
+              <span className="text-gray-600 select-none">ƒ</span>
+              {cfg.formula}
+            </p>
+          )}
         </div>
 
         {/* ── Date range picker ─────────────────────────────────────── */}
