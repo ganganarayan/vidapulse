@@ -323,9 +323,9 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
                 </linearGradient>
 
                 <linearGradient id="retentionVertFill" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%"   stopColor="rgb(16,185,129)"  stopOpacity="0.70" />
-                  <stop offset="50%"  stopColor="rgb(234,179,8)"   stopOpacity="0.55" />
-                  <stop offset="100%" stopColor="rgb(239,68,68)"   stopOpacity="0.40" />
+                  <stop offset="0%"   stopColor="rgb(16,185,129)"  stopOpacity="0.10" />
+                  <stop offset="50%"  stopColor="rgb(234,179,8)"   stopOpacity="0.06" />
+                  <stop offset="100%" stopColor="rgb(239,68,68)"   stopOpacity="0.04" />
                 </linearGradient>
 
                 {/* Clip path for animated draw-in */}

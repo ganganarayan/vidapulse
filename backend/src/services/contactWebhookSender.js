@@ -549,7 +549,8 @@ async function retryWebhookEntry(logId) {
 /**
  * Marks a queued entry as 'discarded' so it is never resent.
  * Only operates on status='queued' — other statuses are a no-op.
- * Returns { ok: boolean }.
+ * After discarding, auto-unpauses the webhook if the queue is now empty.
+ * Returns { ok: boolean, autoUnpaused: boolean }.
  * Never rejects.
  */
 async function discardWebhookEntry(logId) {
@@ -560,11 +561,29 @@ async function discardWebhookEntry(logId) {
        WHERE id = $1 AND status = 'queued'`,
       [logId]
     );
-    if (rowCount > 0) logger.info(`[contactWebhook] Discarded queued log_id=${logId}`);
-    return { ok: rowCount > 0 };
+
+    if (rowCount === 0) {
+      // Entry not found or not in queued status — treat as already handled (idempotent)
+      return { ok: true, alreadyHandled: true, autoUnpaused: false };
+    }
+
+    logger.info(`[contactWebhook] Discarded queued log_id=${logId}`);
+
+    // Auto-unpause if the queue is now empty
+    const { rows: [r] } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM contact_webhook_log WHERE status = 'queued'`
+    );
+    let autoUnpaused = false;
+    if (parseInt(r.n, 10) === 0) {
+      await unpauseWebhook();
+      autoUnpaused = true;
+      logger.info('[contactWebhook] Auto-unpaused: all queued entries discarded');
+    }
+
+    return { ok: true, autoUnpaused };
   } catch (err) {
     logger.error(`[contactWebhook] discardWebhookEntry error: ${err.message}`);
-    return { ok: false };
+    return { ok: false, autoUnpaused: false };
   }
 }
 

@@ -931,9 +931,12 @@ router.post('/contact-webhook/discard-entry/:id', async (req, res, next) => {
   try {
     const result = await discardWebhookEntry(req.params.id);
     if (!result.ok) {
-      return res.status(400).json({ ok: false, message: 'Entry not found or not queued' });
+      // DB error — propagate as 500
+      return res.status(500).json({ ok: false, message: 'Failed to discard entry' });
     }
-    logger.info(`[admin] Discarded entry id=${req.params.id} by user ${req.user.id}`);
+    if (!result.alreadyHandled) {
+      logger.info(`[admin] Discarded entry id=${req.params.id} by user ${req.user.id}${result.autoUnpaused ? ' — auto-unpaused (queue empty)' : ''}`);
+    }
     return res.json(result);
   } catch (err) {
     next(err);
