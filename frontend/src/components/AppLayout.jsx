@@ -8,6 +8,7 @@ import { useUpgrade }          from '../contexts/UpgradeContext';
 import { useWebhookAlerts }    from '../hooks/useWebhookAlerts';
 import ExpiryReminderBanner    from './ExpiryReminderBanner';
 import api                     from '../lib/api';
+import { PlanCrown }           from './PlanTierBadge';
 
 /**
  * AppLayout — persistent left sidebar + content area.
@@ -180,7 +181,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
     navigate('/login', { replace: true });
   }
 
-  function navItem(view, icon, label, locked = false, requiredPlan = 'starter') {
+  function navItem(view, icon, label, locked = false, requiredPlan = null) {
     const isActive = activeView === view;
     return (
       <button
@@ -189,7 +190,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
           if (locked) { showUpgrade(requiredPlan); return; }
           onViewChange(view);
         }}
-        title={locked ? 'Upgrade to access' : label}
+        title={locked ? `Upgrade to ${requiredPlan} to access` : label}
         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left
           ${isActive
             ? 'bg-amber-500/15 text-amber-400'
@@ -200,6 +201,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
       >
         <span className="flex-shrink-0 w-4 h-4">{icon}</span>
         <span className="flex-1 truncate">{label}</span>
+        {requiredPlan && <PlanCrown plan={requiredPlan} size={10} />}
         {locked && <LockIcon />}
       </button>
     );

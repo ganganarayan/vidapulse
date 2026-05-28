@@ -1,6 +1,7 @@
 'use strict';
 import React, { useState, useEffect } from 'react';
 import api from '../../lib/api';
+import PlanTierBadge from '../PlanTierBadge';
 
 /**
  * DevicesSection — device-type breakdown (Desktop / Mobile / Tablet).
@@ -66,7 +67,7 @@ export default function DevicesSection({ videoId }) {
         <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
           Audience
         </p>
-        <h2 className="text-2xl font-bold text-gray-50">Devices</h2>
+        <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Devices <PlanTierBadge plan="starter" /></h2>
         <p className="text-xs text-gray-400 mt-1">
           How your viewers are watching — desktop, mobile, or tablet.
         </p>

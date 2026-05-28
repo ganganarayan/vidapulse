@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../lib/api';
 import FeatureWall from '../upgrade/FeatureWall';
+import PlanTierBadge from '../PlanTierBadge';
 
 /**
  * ViewerStoriesSection
@@ -101,7 +102,7 @@ export default function ViewerStoriesSection({ videoId, userPlan }) {
       {/* Section header */}
       <div className="flex items-center gap-2 mb-4">
         <span className="text-gray-500 text-sm" aria-hidden="true">◎</span>
-        <h2 className="text-base font-semibold text-gray-200">Viewer Stories</h2>
+        <h2 className="text-base font-semibold text-gray-200 flex items-center gap-2">Viewer Stories <PlanTierBadge plan="starter" /></h2>
       </div>
 
       {isFree ? (

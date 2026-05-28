@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../lib/api';
 import { BreakdownChart, BreakdownSkeleton } from './DevicesSection';
+import PlanTierBadge from '../PlanTierBadge';
 
 /**
  * BrowsersSection — browser breakdown of viewer sessions.
@@ -83,7 +84,7 @@ export default function BrowsersSection({ videoId }) {
         <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
           Audience
         </p>
-        <h2 className="text-2xl font-bold text-gray-50">Browsers</h2>
+        <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Browsers <PlanTierBadge plan="starter" /></h2>
         <p className="text-xs text-gray-400 mt-1">
           Which browsers your viewers use to watch your video.
         </p>
