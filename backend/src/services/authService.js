@@ -8,7 +8,7 @@
  *     the behavioral event system → divineleads sends the email.
  *   - fireOutboundWebhook (v1) removed. Replaced by emitEvent.
  *   - user_signed_up event emitted for new OAuth users.
- *   - password_reset_requested event emitted instead of sendPasswordResetEmail.
+ *   - password reset fires contact webhook (pass_reset) with contact.pass_reset_link.
  *
  * Account creation paths:
  *   a) Webhook (divineleads) — creates Starter/Pro accounts (paid)
@@ -20,8 +20,9 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const jwt    = require('jsonwebtoken');
 
-const { pool }      = require('../config/database');
-const { emitEvent } = require('./behavioralEventService');
+const { pool }               = require('../config/database');
+const { emitEvent }          = require('./behavioralEventService');
+const { fireContactWebhook } = require('./contactWebhookSender');
 const env    = require('../config/env');
 const logger = require('../config/logger');
 
@@ -234,16 +235,11 @@ async function forgotPassword(email) {
     [user.id, token]
   );
 
-  // Emit behavioral event — divineleads sends the reset email.
-  // The payload includes the full reset URL so divineleads can embed it directly.
+  // Fire contact webhook — CRM automation sends the reset email.
+  // event_type = 'pass_reset', reset link sent as contact.pass_reset_link.
   const resetUrl = `${env.APP_URL}/reset-password?token=${token}`;
-  emitEvent(user.id, 'password_reset_requested', null, {
-    reset_url    : resetUrl,
-    reset_token  : token,
-    user_name    : user.name,
-    user_email   : user.email,
-    expires_in   : '1 hour',
-    // divineleads embeds reset_url in the email they send to the subscriber
+  fireContactWebhook(user.id, 'pass_reset', {
+    pass_reset_link: resetUrl,
   });
 
   logger.info(`[authService] Password reset requested for ${normalizedEmail}`);
