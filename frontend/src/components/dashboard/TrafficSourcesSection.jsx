@@ -330,7 +330,7 @@ function CtaAnalyticsSection({ videoId }) {
 // TrafficSourcesSection — main export
 // ─────────────────────────────────────────────────────────────────────────
 
-export default function TrafficSourcesSection({ videoId }) {
+export default function TrafficSourcesSection({ videoId, userPlan }) {
   return (
     <div className="px-6 py-6 min-w-0">
       {/* Header */}
@@ -338,7 +338,7 @@ export default function TrafficSourcesSection({ videoId }) {
         <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
           Audience
         </p>
-        <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Traffic Sources <PlanTierBadge plan="starter" /></h2>
+        <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Traffic Sources <PlanTierBadge plan="starter" userPlan={userPlan} /></h2>
         <p className="text-xs text-gray-400 mt-1">
           Where your viewers are coming from, how they browse, and which campaigns drive the most engagement.
         </p>

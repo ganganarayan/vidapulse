@@ -308,27 +308,19 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
               onMouseLeave={() => setHoverX(null)}
             >
               <defs>
-                {/*
-                  2D vertical gradient: colour tracks the Y-axis value.
-                  Top of chart = 100% retention = GREEN
-                  Mid  of chart = 50% retention = YELLOW
-                  Bottom        = 0%  retention = RED
-                  Because this gradient is vertical, the SVG automatically
-                  applies the right hue wherever the curve sits on the Y-axis.
-                */}
+                {/* Vertical stroke gradient — green at top, amber mid, red at bottom */}
                 <linearGradient id="retentionVertStroke" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%"   stopColor="rgb(16,185,129)"  stopOpacity="1"   />
-                  <stop offset="50%"  stopColor="rgb(234,179,8)"   stopOpacity="1"   />
-                  <stop offset="100%" stopColor="rgb(239,68,68)"   stopOpacity="1"   />
+                  <stop offset="0%"   stopColor="rgb(16,185,129)"  stopOpacity="1" />
+                  <stop offset="50%"  stopColor="rgb(234,179,8)"   stopOpacity="1" />
+                  <stop offset="100%" stopColor="rgb(239,68,68)"   stopOpacity="1" />
                 </linearGradient>
 
-                <linearGradient id="retentionVertFill" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%"   stopColor="rgb(16,185,129)"  stopOpacity="0.10" />
-                  <stop offset="50%"  stopColor="rgb(234,179,8)"   stopOpacity="0.06" />
-                  <stop offset="100%" stopColor="rgb(239,68,68)"   stopOpacity="0.04" />
-                </linearGradient>
+                {/* Area shape clip — each vertical column is clipped to sit inside the curve */}
+                <clipPath id="areaColorClip">
+                  <path d={areaPath} />
+                </clipPath>
 
-                {/* Clip path for animated draw-in */}
+                {/* Animated draw-in clip */}
                 <clipPath id="retentionClip">
                   <rect x="0" y="0" width={animated ? '100' : '0'} height="100"
                     style={{ transition: 'width 1.4s cubic-bezier(0.22,1,0.36,1)' }} />
@@ -344,10 +336,30 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
                 );
               })}
 
-              {/* Area fill — vertical gradient colours by Y value */}
-              <path d={areaPath} fill="url(#retentionVertFill)" clipPath="url(#retentionClip)" />
+              {/* Colored vertical fill strips — each column uses the color at that x position */}
+              <g clipPath="url(#retentionClip)">
+                <g clipPath="url(#areaColorClip)">
+                  {sampled.map((p, i) => {
+                    const next = sampled[i + 1];
+                    const w = next
+                      ? (next.x - p.x + 0.3)
+                      : (CHART_W / sampled.length + 0.3);
+                    return (
+                      <rect
+                        key={i}
+                        x={p.x}
+                        y={0}
+                        width={w}
+                        height={CHART_H_SVG}
+                        fill={retentionColor(p.pct)}
+                        opacity={0.68}
+                      />
+                    );
+                  })}
+                </g>
+              </g>
 
-              {/* Stroke line — same vertical gradient so the line colour matches the fill */}
+              {/* Stroke line — vertical gradient so colour tracks Y-axis value */}
               <path
                 d={linePath}
                 fill="none"

@@ -17,7 +17,7 @@ const COUNTRY_COLORS = [
   '#fb923c', '#a78bfa',
 ];
 
-export default function GeographySection({ videoId }) {
+export default function GeographySection({ videoId, userPlan }) {
   const [status, setStatus] = useState('loading');
   const [data,   setData]   = useState([]);
   const [total,  setTotal]  = useState(0);
@@ -52,7 +52,7 @@ export default function GeographySection({ videoId }) {
           <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
             Audience
           </p>
-          <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Geography <PlanTierBadge plan="starter" /></h2>
+          <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Geography <PlanTierBadge plan="starter" userPlan={userPlan} /></h2>
           <p className="text-xs text-gray-400 mt-1">
             Where in the world your viewers are watching from.
           </p>

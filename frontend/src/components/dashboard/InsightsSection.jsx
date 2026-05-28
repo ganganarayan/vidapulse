@@ -122,7 +122,7 @@ export default function InsightsSection({ videoId, insightStatus, userPlan }) {
     <div>
       <div className="flex items-center gap-2 mb-4">
         <SparklesIcon className="text-amber-500" />
-        <h2 className="text-base font-semibold text-gray-200 flex items-center gap-2">Insights <PlanTierBadge plan="pro" /></h2>
+        <h2 className="text-base font-semibold text-gray-200 flex items-center gap-2">Insights <PlanTierBadge plan="pro" userPlan={userPlan} /></h2>
         {insights !== null && insights.length > 0 && (
           <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-500/10 text-amber-300 rounded-full border border-amber-500/20">
             {insights.length}
