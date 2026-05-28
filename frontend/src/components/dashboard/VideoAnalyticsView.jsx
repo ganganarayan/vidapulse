@@ -14,6 +14,8 @@ import GeographySection            from './GeographySection';
 import BrowsersSection             from './BrowsersSection';
 import IndividualViewerSection     from './IndividualViewerSection';
 import TrafficSourcesSection       from './TrafficSourcesSection';
+import DomainsSection              from './DomainsSection';
+import PlanTierBadge              from '../PlanTierBadge';
 
 /**
  * VideoAnalyticsView
@@ -62,6 +64,7 @@ const VIEW_LABELS = {
   devices       : 'Devices',
   browsers      : 'Browsers',
   traffic       : 'Traffic Sources',
+  domains       : 'Domains',
   embed         : 'Share & Embed',
   player        : 'Player Settings',
 };
@@ -232,7 +235,7 @@ export default function VideoAnalyticsView({
                 <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
                   Engagement
                 </p>
-                <h2 className="text-2xl font-bold text-gray-50">Viewer Retention</h2>
+                <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Viewer Retention <PlanTierBadge plan="pro" /></h2>
                 <p className="text-xs text-gray-400 mt-1">
                   Percentage of viewers still watching at each point in the video.
                 </p>
@@ -253,7 +256,7 @@ export default function VideoAnalyticsView({
               <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
                 Engagement
               </p>
-              <h2 className="text-2xl font-bold text-gray-50">Viewer Stories</h2>
+              <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Viewer Stories <PlanTierBadge plan="starter" /></h2>
               <p className="text-xs text-gray-400 mt-1">
                 AI-generated narratives about how your audience watched this video.
               </p>
@@ -268,7 +271,7 @@ export default function VideoAnalyticsView({
               <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
                 Engagement
               </p>
-              <h2 className="text-2xl font-bold text-gray-50">Insights</h2>
+              <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Insights <PlanTierBadge plan="pro" /></h2>
               <p className="text-xs text-gray-400 mt-1">
                 Actionable recommendations generated from your audience data.
               </p>
@@ -286,6 +289,7 @@ export default function VideoAnalyticsView({
         {activeView === 'devices'   && <DevicesSection         videoId={video?.id} />}
         {activeView === 'browsers'  && <BrowsersSection        videoId={video?.id} />}
         {activeView === 'traffic'   && <TrafficSourcesSection  videoId={video?.id} />}
+        {activeView === 'domains'   && <DomainsSection         videoId={video?.id} />}
 
         {/* ── Embed view ───────────────────────────────────────────── */}
         {activeView === 'embed' && (

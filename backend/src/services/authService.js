@@ -8,7 +8,7 @@
  *     the behavioral event system → divineleads sends the email.
  *   - fireOutboundWebhook (v1) removed. Replaced by emitEvent.
  *   - user_signed_up event emitted for new OAuth users.
- *   - password_reset_requested event emitted instead of sendPasswordResetEmail.
+ *   - password reset fires contact webhook (pass_reset) with contact.pass_reset_link.
  *
  * Account creation paths:
  *   a) Webhook (divineleads) — creates Starter/Pro accounts (paid)
@@ -234,17 +234,10 @@ async function forgotPassword(email) {
     [user.id, token]
   );
 
-  // Emit behavioral event — divineleads sends the reset email.
-  // The payload includes the full reset URL so divineleads can embed it directly.
+  // Fire dedicated password-reset webhook (non-blocking, best-effort).
+  // Payload uses Divine Leads dot-key format so the automation can send the email.
   const resetUrl = `${env.APP_URL}/reset-password?token=${token}`;
-  emitEvent(user.id, 'password_reset_requested', null, {
-    reset_url    : resetUrl,
-    reset_token  : token,
-    user_name    : user.name,
-    user_email   : user.email,
-    expires_in   : '1 hour',
-    // divineleads embeds reset_url in the email they send to the subscriber
-  });
+  _firePasswordResetWebhook(user, resetUrl);
 
   logger.info(`[authService] Password reset requested for ${normalizedEmail}`);
 }
@@ -440,6 +433,51 @@ async function findOrCreateOAuthUser(provider, providerProfile) {
     throw err;
   } finally {
     client.release();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Password reset webhook — dedicated endpoint, simple fire-and-forget.
+// Payload shape mirrors Divine Leads contact webhook format so the admin's
+// automation can send the reset email without extra mapping.
+// ─────────────────────────────────────────────────────────────────────────
+
+async function _firePasswordResetWebhook(user, resetUrl) {
+  try {
+    const { rows: [s] } = await pool.query(
+      `SELECT password_reset_webhook_url, api_token FROM webhook_settings LIMIT 1`
+    );
+    if (!s?.password_reset_webhook_url) return; // not configured — skip silently
+
+    const body = {
+      contact_name               : user.name  || '',
+      contact_email              : user.email || '',
+      'contact.event_type'       : 'pass_reset',
+      'contact.pass_reset_link'  : resetUrl,
+    };
+
+    let url = s.password_reset_webhook_url;
+    if (s.api_token) {
+      const sep = url.includes('?') ? '&' : '?';
+      url += `${sep}api_token=${encodeURIComponent(s.api_token)}`;
+    }
+
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(url, {
+        method : 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': 'VidaPulse-PasswordReset/1.0' },
+        body   : JSON.stringify(body),
+        signal : controller.signal,
+      });
+      logger.info(`[authService] Password reset webhook → ${res.status} for ${user.email}`);
+    } finally {
+      clearTimeout(tid);
+    }
+  } catch (err) {
+    // Best-effort — never let a webhook failure block the user
+    logger.warn(`[authService] Password reset webhook failed: ${err.message}`);
   }
 }
 

@@ -15,7 +15,9 @@
  *   PATCH /api/admin/webhook-settings         — update webhook config
  *   POST  /api/admin/webhook-settings/test    — fire test webhook
  *   GET   /api/admin/onboarding-health        — funnel metrics + recent users
- *   GET   /api/admin/users                    — paginated subscriber list
+ *   GET   /api/admin/users                    — paginated subscriber list (incl. last_login_at, plan_expires_at)
+ *   PATCH /api/admin/users/:id/plan           — change user plan + expiry date
+ *   GET   /api/admin/revenue                  — payment breakdown (grand total + per-user)
  *   POST  /api/admin/impersonate/:userId       — start impersonation session → returns JWT
  *   POST  /api/admin/impersonate/end           — end active impersonation session
  *   GET   /api/admin/impersonation-log         — paginated impersonation audit log
@@ -39,6 +41,17 @@ const {
   unpauseWebhook,
   getContactWebhookStatus,
 } = require('../services/contactWebhookSender');
+
+const {
+  getAdminPromotionVideos,
+  createPromotionVideo,
+  updateVisibility,
+  reorderPromotionVideos,
+  renamePromotionVideo,
+  deletePromotionVideo,
+  setUserPromoHidden,
+  getUserPromoHiddenIds,
+} = require('../services/promotionService');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // requireImpersonating guard
@@ -250,16 +263,17 @@ const _urlFieldSchema = z.string()
   .optional();
 
 const updateSettingsSchema = z.object({
-  webhook_url              : _urlFieldSchema,
-  notification_webhook_url : _urlFieldSchema,
-  razorpay_starter_url     : _urlFieldSchema,
-  razorpay_pro_url         : _urlFieldSchema,
-  webhook_secret           : z.string().max(200).nullable().optional(),
-  api_token                : z.string().max(500).nullable().optional(),
-  is_active                : z.boolean().optional(),
-  notes                    : z.string().max(2000).nullable().optional(),
-  hourly_cap               : z.number().int().min(1).max(1000).optional(),
-  is_paused                : z.boolean().optional(),
+  webhook_url                  : _urlFieldSchema,
+  notification_webhook_url     : _urlFieldSchema,
+  password_reset_webhook_url   : _urlFieldSchema,
+  razorpay_starter_url         : _urlFieldSchema,
+  razorpay_pro_url             : _urlFieldSchema,
+  webhook_secret               : z.string().max(200).nullable().optional(),
+  api_token                    : z.string().max(500).nullable().optional(),
+  is_active                    : z.boolean().optional(),
+  notes                        : z.string().max(2000).nullable().optional(),
+  hourly_cap                   : z.number().int().min(1).max(1000).optional(),
+  is_paused                    : z.boolean().optional(),
 }).strict();
 
 router.patch('/webhook-settings', async (req, res, next) => {
@@ -278,10 +292,11 @@ router.patch('/webhook-settings', async (req, res, next) => {
     const settingsVals    = [];
     let   p               = 1;
 
-    if (settingsFields.webhook_url              !== undefined) { settingsClauses.push(`webhook_url              = $${p++}`); settingsVals.push(settingsFields.webhook_url);              }
-    if (settingsFields.notification_webhook_url !== undefined) { settingsClauses.push(`notification_webhook_url = $${p++}`); settingsVals.push(settingsFields.notification_webhook_url); }
-    if (settingsFields.razorpay_starter_url     !== undefined) { settingsClauses.push(`razorpay_starter_url     = $${p++}`); settingsVals.push(settingsFields.razorpay_starter_url);     }
-    if (settingsFields.razorpay_pro_url         !== undefined) { settingsClauses.push(`razorpay_pro_url         = $${p++}`); settingsVals.push(settingsFields.razorpay_pro_url);         }
+    if (settingsFields.webhook_url                !== undefined) { settingsClauses.push(`webhook_url                = $${p++}`); settingsVals.push(settingsFields.webhook_url);                }
+    if (settingsFields.notification_webhook_url   !== undefined) { settingsClauses.push(`notification_webhook_url   = $${p++}`); settingsVals.push(settingsFields.notification_webhook_url);   }
+    if (settingsFields.password_reset_webhook_url !== undefined) { settingsClauses.push(`password_reset_webhook_url = $${p++}`); settingsVals.push(settingsFields.password_reset_webhook_url); }
+    if (settingsFields.razorpay_starter_url       !== undefined) { settingsClauses.push(`razorpay_starter_url       = $${p++}`); settingsVals.push(settingsFields.razorpay_starter_url);       }
+    if (settingsFields.razorpay_pro_url           !== undefined) { settingsClauses.push(`razorpay_pro_url           = $${p++}`); settingsVals.push(settingsFields.razorpay_pro_url);           }
     if (settingsFields.webhook_secret           !== undefined) { settingsClauses.push(`webhook_secret           = $${p++}`); settingsVals.push(settingsFields.webhook_secret);           }
     if (settingsFields.api_token                !== undefined) { settingsClauses.push(`api_token                = $${p++}`); settingsVals.push(settingsFields.api_token);                }
     if (settingsFields.is_active                !== undefined) { settingsClauses.push(`is_active                = $${p++}`); settingsVals.push(settingsFields.is_active);                }
@@ -445,7 +460,8 @@ router.get('/onboarding-health', async (req, res, next) => {
 //
 // Paginated list of all users for the "Enter Account" interface.
 // Returns: id, email, name, plan, plan_display_name, role, is_active,
-//          video_count, joined (created_at), last_seen_at
+//          video_count, joined (created_at), last_login_at, last_seen_at,
+//          plan_expires_at
 //
 // Query params:
 //   page    — 1-based page number (default 1)
@@ -488,7 +504,9 @@ router.get('/users', async (req, res, next) => {
          u.role,
          u.is_active,
          u.created_at,
+         u.last_login_at,
          u.last_seen_at,
+         u.plan_expires_at,
          COALESCE(vc.video_count, 0)::int AS video_count
        FROM users u
        LEFT JOIN plans p ON p.id = u.plan_id
@@ -518,6 +536,152 @@ router.get('/users', async (req, res, next) => {
         has_next    : page < totalPages,
         has_prev    : page > 1,
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/admin/users/:id/plan
+//
+// Admin-only: change a user's plan and/or plan_expires_at.
+//
+// Body:
+//   plan        — 'free' | 'starter' | 'pro' | 'admin_lifetime'
+//   expires_at  — ISO 8601 datetime string, or null (= no expiry / forever)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const updatePlanSchema = z.object({
+  plan      : z.enum(['free', 'starter', 'pro', 'admin_lifetime']),
+  expires_at: z.string().datetime({ offset: true }).nullable().optional(),
+}).strict();
+
+router.patch('/users/:id/plan', async (req, res, next) => {
+  try {
+    const parsed = updatePlanSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error : 'Validation failed',
+        fields: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const { plan, expires_at } = parsed.data;
+    const userId = req.params.id;
+
+    // Verify target user exists and is not admin
+    const { rows: [target] } = await pool.query(
+      `SELECT id, email, role FROM users WHERE id = $1`,
+      [userId]
+    );
+    if (!target) {
+      return res.status(404).json({ error: 'Not found', message: 'User not found' });
+    }
+    if (target.role === 'admin') {
+      return res.status(403).json({ error: 'Forbidden', message: 'Cannot change admin user plan' });
+    }
+
+    // Look up the plan ID
+    const { rows: [planRow] } = await pool.query(
+      `SELECT id, display_name FROM plans WHERE name = $1`,
+      [plan]
+    );
+    if (!planRow) {
+      return res.status(400).json({ error: 'Invalid plan', message: `Plan '${plan}' not found` });
+    }
+
+    // For free plan, always clear the expiry — free is forever free
+    const expiresAt = plan === 'free' ? null : (expires_at ?? null);
+
+    await pool.query(
+      `UPDATE users
+       SET    plan_id          = $1,
+              plan_expires_at  = $2,
+              updated_at       = NOW()
+       WHERE  id = $3`,
+      [planRow.id, expiresAt, userId]
+    );
+
+    logger.info(
+      `[admin] Plan changed for user ${target.email}: plan=${plan} expires_at=${expiresAt ?? 'null'} by admin ${req.user.id}`
+    );
+
+    return res.json({
+      ok          : true,
+      plan,
+      plan_display_name: planRow.display_name ?? plan,
+      expires_at  : expiresAt,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/revenue
+//
+// Payment breakdown from the payments table.
+//
+// Returns:
+//   grand_total_inr  — sum of all captured INR payments (paise → rupees)
+//   users            — per-user breakdown sorted by total desc
+//     Each user: id, name, email,
+//       total_inr (sum of INR payments in rupees),
+//       total_usd (sum of USD payments in cents/100),
+//       last_amount, last_currency, last_payment_at, payment_count
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/revenue', async (req, res, next) => {
+  try {
+    // Grand total: all captured INR payments in rupees
+    const { rows: [totalRow] } = await pool.query(`
+      SELECT COALESCE(SUM(amount_paise), 0)::bigint AS total_inr_paise
+      FROM   payments
+      WHERE  status = 'captured'
+        AND  currency = 'INR'
+    `);
+
+    // Per-user breakdown — subquery for last payment details
+    const { rows: users } = await pool.query(`
+      SELECT
+        u.id,
+        u.name,
+        u.email,
+        COALESCE(SUM(pay.amount_paise) FILTER (WHERE pay.currency = 'INR'), 0)::bigint AS total_inr_paise,
+        COALESCE(SUM(pay.amount_paise) FILTER (WHERE pay.currency = 'USD'), 0)::bigint AS total_usd_cents,
+        MAX(pay.created_at)                                                             AS last_payment_at,
+        COUNT(pay.id)::int                                                              AS payment_count,
+        (
+          SELECT amount_paise FROM payments
+          WHERE  user_id = u.id AND status = 'captured'
+          ORDER  BY created_at DESC LIMIT 1
+        ) AS last_amount_paise,
+        (
+          SELECT currency FROM payments
+          WHERE  user_id = u.id AND status = 'captured'
+          ORDER  BY created_at DESC LIMIT 1
+        ) AS last_currency
+      FROM payments pay
+      JOIN users u ON u.id = pay.user_id
+      WHERE pay.status = 'captured'
+      GROUP BY u.id, u.name, u.email
+      ORDER BY total_inr_paise DESC, total_usd_cents DESC
+    `);
+
+    return res.json({
+      grand_total_inr: Math.round(Number(totalRow.total_inr_paise) / 100),
+      users: users.map(u => ({
+        id             : u.id,
+        name           : u.name,
+        email          : u.email,
+        total_inr      : Math.round(Number(u.total_inr_paise) / 100),
+        total_usd      : Math.round(Number(u.total_usd_cents) / 100),
+        last_payment_at: u.last_payment_at,
+        payment_count  : u.payment_count,
+        last_amount    : u.last_amount_paise != null ? Math.round(Number(u.last_amount_paise) / 100) : null,
+        last_currency  : u.last_currency,
+      })),
     });
   } catch (err) {
     next(err);
@@ -918,9 +1082,12 @@ router.post('/contact-webhook/discard-entry/:id', async (req, res, next) => {
   try {
     const result = await discardWebhookEntry(req.params.id);
     if (!result.ok) {
-      return res.status(400).json({ ok: false, message: 'Entry not found or not queued' });
+      // DB error — propagate as 500
+      return res.status(500).json({ ok: false, message: 'Failed to discard entry' });
     }
-    logger.info(`[admin] Discarded entry id=${req.params.id} by user ${req.user.id}`);
+    if (!result.alreadyHandled) {
+      logger.info(`[admin] Discarded entry id=${req.params.id} by user ${req.user.id}${result.autoUnpaused ? ' — auto-unpaused (queue empty)' : ''}`);
+    }
     return res.json(result);
   } catch (err) {
     next(err);
@@ -1004,6 +1171,110 @@ router.get('/contact-webhook-log', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROMOTION VIDEOS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/admin/promotion-videos — list all for admin panel
+router.get('/promotion-videos', async (req, res, next) => {
+  try {
+    const videos = await getAdminPromotionVideos();
+    return res.json({ videos });
+  } catch (err) { next(err); }
+});
+
+// POST /api/admin/promotion-videos — create a new promotion video
+router.post('/promotion-videos', async (req, res, next) => {
+  try {
+    const { url, title } = req.body ?? {};
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ message: 'url is required' });
+    }
+    try { new URL(url); } catch {
+      return res.status(400).json({ message: 'Invalid URL' });
+    }
+    const promo = await createPromotionVideo(req.user.id, url.trim(), title);
+    logger.info(`[admin] Promotion video created by ${req.user.id}: ${promo.id}`);
+    return res.status(201).json({ promo });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/admin/promotion-videos/:id/visibility — change visibility tier
+router.patch('/promotion-videos/:id/visibility', async (req, res, next) => {
+  try {
+    const { visibility } = req.body ?? {};
+    const updated = await updateVisibility(req.params.id, visibility);
+    if (!updated) return res.status(404).json({ message: 'Promotion video not found' });
+    logger.info(`[admin] Promotion ${req.params.id} visibility → ${visibility} by ${req.user.id}`);
+    return res.json({ promo: updated });
+  } catch (err) {
+    if (err.message === 'Invalid visibility value') {
+      return res.status(400).json({ message: err.message });
+    }
+    next(err);
+  }
+});
+
+// PATCH /api/admin/promotion-videos/reorder — bulk reorder
+router.patch('/promotion-videos/reorder', async (req, res, next) => {
+  try {
+    const { ordered_ids } = req.body ?? {};
+    if (!Array.isArray(ordered_ids)) {
+      return res.status(400).json({ message: 'ordered_ids must be an array' });
+    }
+    await reorderPromotionVideos(ordered_ids);
+    return res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/admin/promotion-videos/:id/title — rename the video title
+router.patch('/promotion-videos/:id/title', async (req, res, next) => {
+  try {
+    const { title } = req.body ?? {};
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      return res.status(400).json({ message: 'title is required' });
+    }
+    const updated = await renamePromotionVideo(req.params.id, title);
+    if (!updated) return res.status(404).json({ message: 'Promotion video not found' });
+    logger.info(`[admin] Promotion ${req.params.id} renamed to "${updated.title}" by ${req.user.id}`);
+    return res.json({ title: updated.title });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/admin/promotion-videos/:id — delete promotion video
+router.delete('/promotion-videos/:id', async (req, res, next) => {
+  try {
+    const deleted = await deletePromotionVideo(req.params.id);
+    if (!deleted) return res.status(404).json({ message: 'Promotion video not found' });
+    logger.info(`[admin] Promotion ${req.params.id} deleted by ${req.user.id}`);
+    return res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// GET /api/admin/users/:userId/promo-hidden — get hidden promotion IDs for a user
+router.get('/users/:userId/promo-hidden', async (req, res, next) => {
+  try {
+    const hiddenIds = await getUserPromoHiddenIds(req.params.userId);
+    return res.json({ hidden_ids: [...hiddenIds] });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/admin/users/:userId/promo-hidden — set hidden state for a promo+user pair
+// Body: { promotion_video_id, hidden: boolean }
+router.patch('/users/:userId/promo-hidden', async (req, res, next) => {
+  try {
+    const { promotion_video_id, hidden } = req.body ?? {};
+    if (!promotion_video_id || typeof hidden !== 'boolean') {
+      return res.status(400).json({ message: 'promotion_video_id and hidden (bool) required' });
+    }
+    await setUserPromoHidden(req.params.userId, promotion_video_id, hidden);
+    logger.info(
+      `[admin] Promo ${promotion_video_id} ${hidden ? 'hidden' : 'shown'} for user ${req.params.userId} by ${req.user.id}`
+    );
+    return res.json({ ok: true });
+  } catch (err) { next(err); }
 });
 
 // Export the action logging helper for use by other route handlers

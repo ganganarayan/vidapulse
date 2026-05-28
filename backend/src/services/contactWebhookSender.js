@@ -54,8 +54,13 @@ const HTTP_TIMEOUT_MS = 10_000;
 /**
  * Fire a contact webhook for a user event.
  * Always resolves (never rejects). Non-blocking — caller should not await.
+ *
+ * @param {string} userId    - User UUID
+ * @param {string} eventKey  - Event key (becomes contact.event_type in payload)
+ * @param {Object} [extraFields={}] - Additional dot-key custom fields to include.
+ *   e.g. { pass_reset_link: 'https://...' } → "contact.pass_reset_link" in body
  */
-async function fireContactWebhook(userId, eventKey) {
+async function fireContactWebhook(userId, eventKey, extraFields = {}) {
   try {
     const settings = await _loadSettings();
     if (!settings || !settings.is_active || !settings.webhook_url) return;
@@ -63,7 +68,7 @@ async function fireContactWebhook(userId, eventKey) {
     // ── If paused, queue the entry rather than dropping it ────────────
     if (settings.contact_webhook_paused) {
       const user  = await _loadUser(userId);
-      const lp    = user ? _buildLogParams(user, eventKey, settings) : { event_type: eventKey };
+      const lp    = user ? _buildLogParams(user, eventKey, settings, extraFields) : { event_type: eventKey, ...extraFields };
       await _insertLog({
         eventKey, userId,
         urlSentTo : settings.webhook_url,
@@ -81,7 +86,7 @@ async function fireContactWebhook(userId, eventKey) {
       return;
     }
 
-    await _fireAndLog(userId, eventKey, user, settings);
+    await _fireAndLog(userId, eventKey, user, settings, extraFields);
 
   } catch (err) {
     logger.error(`[contactWebhook] Unexpected error for ${eventKey} user=${userId}: ${err.message}`);
@@ -264,8 +269,8 @@ async function resendFailedWebhooks() {
 // CORE FIRE LOGIC
 // ─────────────────────────────────────────────────────────────────────────
 
-async function _fireAndLog(userId, eventKey, user, settings) {
-  const logParams  = _buildLogParams(user, eventKey, settings);
+async function _fireAndLog(userId, eventKey, user, settings, extraFields = {}) {
+  const logParams  = _buildLogParams(user, eventKey, settings, extraFields);
   const bodyParams = _buildBody(logParams);
   const finalUrl   = _buildUrl(settings.webhook_url, settings.api_token);
   const t0 = Date.now();
@@ -423,7 +428,7 @@ async function _insertLog({ eventKey, userId, urlSentTo, paramsSent, status,
 // PARAM BUILDERS
 // ─────────────────────────────────────────────────────────────────────────
 
-function _buildLogParams(user, eventKey, settings) {
+function _buildLogParams(user, eventKey, settings, extraFields = {}) {
   const planName = user.plan === 'admin_lifetime' ? 'pro' : (user.plan || 'free');
   return {
     contact_name : user.name  || '',
@@ -431,6 +436,7 @@ function _buildLogParams(user, eventKey, settings) {
     ...(user.phone ? { contact_phone: user.phone } : {}),
     contact_plan : planName,
     event_type   : eventKey,
+    ...extraFields,
     ...(settings?.api_token ? { api_token: '[redacted]' } : {}),
   };
 }
@@ -543,7 +549,8 @@ async function retryWebhookEntry(logId) {
 /**
  * Marks a queued entry as 'discarded' so it is never resent.
  * Only operates on status='queued' — other statuses are a no-op.
- * Returns { ok: boolean }.
+ * After discarding, auto-unpauses the webhook if the queue is now empty.
+ * Returns { ok: boolean, autoUnpaused: boolean }.
  * Never rejects.
  */
 async function discardWebhookEntry(logId) {
@@ -554,11 +561,29 @@ async function discardWebhookEntry(logId) {
        WHERE id = $1 AND status = 'queued'`,
       [logId]
     );
-    if (rowCount > 0) logger.info(`[contactWebhook] Discarded queued log_id=${logId}`);
-    return { ok: rowCount > 0 };
+
+    if (rowCount === 0) {
+      // Entry not found or not in queued status — treat as already handled (idempotent)
+      return { ok: true, alreadyHandled: true, autoUnpaused: false };
+    }
+
+    logger.info(`[contactWebhook] Discarded queued log_id=${logId}`);
+
+    // Auto-unpause if the queue is now empty
+    const { rows: [r] } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM contact_webhook_log WHERE status = 'queued'`
+    );
+    let autoUnpaused = false;
+    if (parseInt(r.n, 10) === 0) {
+      await unpauseWebhook();
+      autoUnpaused = true;
+      logger.info('[contactWebhook] Auto-unpaused: all queued entries discarded');
+    }
+
+    return { ok: true, autoUnpaused };
   } catch (err) {
     logger.error(`[contactWebhook] discardWebhookEntry error: ${err.message}`);
-    return { ok: false };
+    return { ok: false, autoUnpaused: false };
   }
 }
 

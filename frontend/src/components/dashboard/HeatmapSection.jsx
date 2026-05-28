@@ -308,17 +308,24 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
               onMouseLeave={() => setHoverX(null)}
             >
               <defs>
-                {/* Horizontal gradient for area fill */}
-                <linearGradient id="retentionAreaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  {gradientStops.map((s, i) => (
-                    <stop key={i} offset={s.offset} stopColor={s.color} stopOpacity={s.opacity} />
-                  ))}
+                {/*
+                  2D vertical gradient: colour tracks the Y-axis value.
+                  Top of chart = 100% retention = GREEN
+                  Mid  of chart = 50% retention = YELLOW
+                  Bottom        = 0%  retention = RED
+                  Because this gradient is vertical, the SVG automatically
+                  applies the right hue wherever the curve sits on the Y-axis.
+                */}
+                <linearGradient id="retentionVertStroke" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%"   stopColor="rgb(16,185,129)"  stopOpacity="1"   />
+                  <stop offset="50%"  stopColor="rgb(234,179,8)"   stopOpacity="1"   />
+                  <stop offset="100%" stopColor="rgb(239,68,68)"   stopOpacity="1"   />
                 </linearGradient>
 
-                {/* Vertical fade gradient (top opaque → bottom transparent) */}
-                <linearGradient id="retentionFadeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%"   stopColor="white" stopOpacity="0.12" />
-                  <stop offset="100%" stopColor="white" stopOpacity="0.0"  />
+                <linearGradient id="retentionVertFill" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%"   stopColor="rgb(16,185,129)"  stopOpacity="0.10" />
+                  <stop offset="50%"  stopColor="rgb(234,179,8)"   stopOpacity="0.06" />
+                  <stop offset="100%" stopColor="rgb(239,68,68)"   stopOpacity="0.04" />
                 </linearGradient>
 
                 {/* Clip path for animated draw-in */}
@@ -337,29 +344,19 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
                 );
               })}
 
-              {/* Area fill */}
-              <path d={areaPath} fill="url(#retentionAreaGrad)" clipPath="url(#retentionClip)" />
-              {/* Vertical fade sheen over area */}
-              <path d={areaPath} fill="url(#retentionFadeGrad)" clipPath="url(#retentionClip)" />
+              {/* Area fill — vertical gradient colours by Y value */}
+              <path d={areaPath} fill="url(#retentionVertFill)" clipPath="url(#retentionClip)" />
 
-              {/* Stroke line on top */}
+              {/* Stroke line — same vertical gradient so the line colour matches the fill */}
               <path
                 d={linePath}
                 fill="none"
-                stroke="url(#retentionLineGrad)"
-                strokeWidth="0.8"
+                stroke="url(#retentionVertStroke)"
+                strokeWidth="0.9"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 clipPath="url(#retentionClip)"
               />
-              {/* Line gradient (separate def so it goes top→bottom for the stroke) */}
-              <defs>
-                <linearGradient id="retentionLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  {gradientStops.map((s, i) => (
-                    <stop key={i} offset={s.offset} stopColor={s.color} stopOpacity="1" />
-                  ))}
-                </linearGradient>
-              </defs>
 
               {/* Hover crosshair */}
               {hoverSvgX != null && hoverBucket && (
@@ -405,7 +402,7 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
       <div className="flex items-center gap-3 px-5 py-3 border-t border-gray-800/50">
         <span className="text-[10px] text-gray-500 font-medium">Low retention</span>
         <div className="flex-1 h-1.5 rounded-full" style={{
-          background: 'linear-gradient(to right, rgb(239,68,68), rgb(251,146,60), rgb(234,179,8), rgb(52,211,153), rgb(16,185,129))',
+          background: 'linear-gradient(to right, rgb(239,68,68), rgb(234,179,8), rgb(16,185,129))',
         }} />
         <span className="text-[10px] text-gray-500 font-medium">High retention</span>
       </div>

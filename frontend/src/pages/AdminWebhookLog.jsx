@@ -33,7 +33,7 @@ export default function AdminWebhookLog() {
     setFetchError('');
     try {
       const params = new URLSearchParams({ page: pg, limit: 50 });
-      if (status === 'sent' || status === 'failed') params.set('status', status);
+      if (['sent', 'failed', 'queued', 'discarded'].includes(status)) params.set('status', status);
       const { data } = await api.get(`/admin/contact-webhook-log?${params}`);
       setLog(data.log ?? []);
       setPagination(data.pagination ?? null);

@@ -8,6 +8,7 @@ import { useUpgrade }          from '../contexts/UpgradeContext';
 import { useWebhookAlerts }    from '../hooks/useWebhookAlerts';
 import ExpiryReminderBanner    from './ExpiryReminderBanner';
 import api                     from '../lib/api';
+import { PlanCrown }           from './PlanTierBadge';
 
 /**
  * AppLayout — persistent left sidebar + content area.
@@ -126,6 +127,8 @@ function AppSidebar() {
           <>
             <SidebarDivider label="Admin" />
             <SidebarItem to="/admin/users"       icon={<UsersIcon />}    label="Users"        active={active('/admin/users')} />
+            <SidebarItem to="/admin/revenue"     icon={<RevenueIcon />}  label="Revenue"      active={active('/admin/revenue')} />
+            <SidebarItem to="/admin/promotion"   icon={<StarIcon />}     label="Promotion"    active={active('/admin/promotion')} />
             <SidebarItem to="/admin/webhook"     icon={<WebhookIcon />}  label="Webhook"      active={active('/admin/webhook', true)} />
             <SidebarItem
               to="/admin/webhook-log"
@@ -179,7 +182,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
     navigate('/login', { replace: true });
   }
 
-  function navItem(view, icon, label, locked = false, requiredPlan = 'starter') {
+  function navItem(view, icon, label, locked = false, requiredPlan = null) {
     const isActive = activeView === view;
     return (
       <button
@@ -188,7 +191,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
           if (locked) { showUpgrade(requiredPlan); return; }
           onViewChange(view);
         }}
-        title={locked ? 'Upgrade to access' : label}
+        title={locked ? `Upgrade to ${requiredPlan} to access` : label}
         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left
           ${isActive
             ? 'bg-amber-500/15 text-amber-400'
@@ -199,6 +202,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
       >
         <span className="flex-shrink-0 w-4 h-4">{icon}</span>
         <span className="flex-1 truncate">{label}</span>
+        {requiredPlan && <PlanCrown plan={requiredPlan} size={10} />}
         {locked && <LockIcon />}
       </button>
     );
@@ -247,11 +251,12 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
         {navItem('dropoff',     <DropoffIcon />, 'Drop-off Rate')}
         {navItem('watch_time',  <ClockIcon />,   'Watch Time')}
         {navItem('rewatches',   <RepeatIcon />,  'Re-watches')}
+        {navItem('domains',     <DomainIcon />,  'Domains')}
 
         <SidebarDivider label="Engagement" />
         {navItem('heatmap',     <HeatmapIcon />, 'Engagement Heatmap', !isPro,     'pro')}
         {navItem('stories',     <StoriesIcon />, 'Viewer Stories',     !isStarter, 'starter')}
-        {navItem('insights',    <SparklesIcon />,'Insights')}
+        {navItem('insights',    <SparklesIcon />,'Insights',           !isPro,     'pro')}
 
         <SidebarDivider label="Audience" />
         {navItem('geography',   <GlobeIcon />,   'Geography',     !isStarter, 'starter')}
@@ -372,6 +377,8 @@ function HelpIcon()         { return I(<><circle cx="12" cy="12" r="10"/><path d
 function WebhookIcon()      { return I(<path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11A2.99 2.99 0 0 0 18 8a3 3 0 1 0 0-6 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81A3 3 0 0 0 6 9a3 3 0 1 0 0 6 3 3 0 0 0 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65a3 3 0 1 0 3-3z"/>); }
 function HeartIcon()        { return I(<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>); }
 function LogIcon()          { return I(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></>); }
+function StarIcon()         { return I(<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>); }
+function RevenueIcon()      { return I(<><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></>); }
 function UpgradeIcon()      { return I(<><polyline points="17 11 12 6 7 11"/><line x1="12" y1="6" x2="12" y2="18"/></>); }
 function BillingIcon()      { return I(<><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></>); }
 function BackIcon()         { return I(<><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>); }
@@ -394,3 +401,4 @@ function BrowserIcon()  { return I(<><circle cx="12" cy="12" r="10"/><line x1="2
 function UTMIcon()      { return I(<><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11A2.99 2.99 0 0 0 18 8a3 3 0 1 0 0-6 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81A3 3 0 0 0 6 9a3 3 0 1 0 0 6 3 3 0 0 0 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65a3 3 0 1 0 3-3z"/></>); }
 function EmbedIcon()    { return I(<><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></>); }
 function PlayerIcon()   { return I(<><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></>); }
+function DomainIcon()   { return I(<><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></>); }

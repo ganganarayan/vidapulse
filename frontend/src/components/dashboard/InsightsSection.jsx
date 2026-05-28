@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../lib/api';
 import { FeatureWall } from '../upgrade';
+import PlanTierBadge from '../PlanTierBadge';
 
 /**
  * InsightsSection
@@ -114,12 +115,14 @@ export default function InsightsSection({ videoId, insightStatus, userPlan }) {
   const primary   = insights?.find(i => i.is_primary) ?? null;
   const secondary = insights?.filter(i => !i.is_primary) ?? [];
 
+  const isPro = (PLAN_RANK[userPlan] ?? 0) >= PLAN_RANK['pro'];
+
   // ── Section header ──────────────────────────────────────────────────────
   return (
     <div>
       <div className="flex items-center gap-2 mb-4">
         <SparklesIcon className="text-amber-500" />
-        <h2 className="text-base font-semibold text-gray-200">Insights</h2>
+        <h2 className="text-base font-semibold text-gray-200 flex items-center gap-2">Insights <PlanTierBadge plan="pro" /></h2>
         {insights !== null && insights.length > 0 && (
           <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-500/10 text-amber-300 rounded-full border border-amber-500/20">
             {insights.length}
@@ -127,42 +130,56 @@ export default function InsightsSection({ videoId, insightStatus, userPlan }) {
         )}
       </div>
 
-      {/* ── Loading ───────────────────────────────────────────────────── */}
-      {loading && <InsightsSkeleton />}
+      {/* ── Pro feature wall — non-pro users see blurred placeholder ───── */}
+      {!isPro ? (
+        <FeatureWall
+          feature="insights"
+          requiredPlan="pro"
+          currentPlan={userPlan}
+          minHeight="220px"
+        >
+          <InsightsSkeleton />
+        </FeatureWall>
+      ) : (
+        <>
+          {/* ── Loading ─────────────────────────────────────────────── */}
+          {loading && <InsightsSkeleton />}
 
-      {/* ── Waiting for data ──────────────────────────────────────────── */}
-      {!loading && (insightStatus === 'pending' || insightStatus === 'generating') && (
-        <InsightsPending />
-      )}
-
-      {/* ── No insights (complete but empty) ─────────────────────────── */}
-      {!loading && insightStatus === 'complete' && insights?.length === 0 && (
-        <InsightsEmpty />
-      )}
-
-      {/* ── Failed ───────────────────────────────────────────────────── */}
-      {!loading && insightStatus === 'failed' && (
-        <InsightsFailed onRetry={fetchInsights} />
-      )}
-
-      {/* ── Insights available ────────────────────────────────────────── */}
-      {!loading && insights && insights.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {primary && (
-            <PrimaryInsightCard
-              insight={primary}
-              userPlan={userPlan}
-              onDismiss={() => handleDismiss(primary.id)}
-            />
+          {/* ── Waiting for data ────────────────────────────────────── */}
+          {!loading && (insightStatus === 'pending' || insightStatus === 'generating') && (
+            <InsightsPending />
           )}
-          {secondary.length > 0 && (
-            <SecondaryInsightsList
-              insights={secondary}
-              userPlan={userPlan}
-              onDismiss={handleDismiss}
-            />
+
+          {/* ── No insights (complete but empty) ───────────────────── */}
+          {!loading && insightStatus === 'complete' && insights?.length === 0 && (
+            <InsightsEmpty />
           )}
-        </div>
+
+          {/* ── Failed ─────────────────────────────────────────────── */}
+          {!loading && insightStatus === 'failed' && (
+            <InsightsFailed onRetry={fetchInsights} />
+          )}
+
+          {/* ── Insights available ─────────────────────────────────── */}
+          {!loading && insights && insights.length > 0 && (
+            <div className="flex flex-col gap-3">
+              {primary && (
+                <PrimaryInsightCard
+                  insight={primary}
+                  userPlan={userPlan}
+                  onDismiss={() => handleDismiss(primary.id)}
+                />
+              )}
+              {secondary.length > 0 && (
+                <SecondaryInsightsList
+                  insights={secondary}
+                  userPlan={userPlan}
+                  onDismiss={handleDismiss}
+                />
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

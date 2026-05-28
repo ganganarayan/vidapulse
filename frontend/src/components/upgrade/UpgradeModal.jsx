@@ -56,23 +56,20 @@ const PLAN_FEATURES = {
 export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClose }) {
   const [upgradeData, setUpgradeData] = useState(null);
   const [loading,     setLoading]     = useState(true);
+  const [region,      setRegion]      = useState('india'); // 'india' | 'international'
 
   // Fetch live pricing + upgrade options
   useEffect(() => {
     api.get('/upgrade')
       .then(res => setUpgradeData(res.data))
       .catch(() => {
-        // Fallback so the modal is still useful if the fetch fails
         setUpgradeData({
           upgrade_options: currentPlan === 'starter' ? ['pro'] : ['starter', 'pro'],
           pricing: {
-            starter: { usd: 10, video_limit: 10   },
-            pro    : { usd: 19, video_limit: null  },
+            starter: { inr: 999,  usd: 15, inr_label: '₹999',  usd_label: '$15', video_limit: 10   },
+            pro    : { inr: 1999, usd: 29, inr_label: '₹1,999', usd_label: '$29', video_limit: null },
           },
-          razorpay_links: {
-            starter: 'https://rzp.io/rzp/VidaPulseStarter',
-            pro    : 'https://rzp.io/rzp/VidaPulsePro',
-          },
+          razorpay_links: { starter: null, pro: null },
         });
       })
       .finally(() => setLoading(false));
@@ -128,45 +125,79 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-50">
-                Unlock {featureLabel}
+                Unlock Pro Features
               </h2>
               <p className="text-sm text-gray-400 mt-0.5">
                 {feature === 'video_upload'
                   ? `You've reached the video limit on your ${capitalize(currentPlan)} plan.`
-                  : `${featureLabel} is available on the ${capitalize(requiredPlan)} plan and above.`
+                  : `Upgrade to unlock ${featureLabel} and all ${capitalize(requiredPlan)} plan features.`
                 }
               </p>
             </div>
           </div>
         </div>
 
-        {/* ── Plan cards ─────────────────────────────────────────── */}
-        <div className={`p-6 ${isSingleCard ? 'flex justify-center' : 'grid grid-cols-1 sm:grid-cols-2 gap-4'}`}>
+        {/* ── Region toggle + Plan cards ──────────────────────────── */}
+        <div className="px-6 pb-2 pt-2">
+          {/* India / International toggle */}
+          <div className="flex justify-center mb-5">
+            <div className="flex items-center bg-gray-900/60 border border-gray-700 rounded-full p-0.5 gap-0.5">
+              <button
+                onClick={() => setRegion('india')}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  region === 'india'
+                    ? 'bg-amber-500 text-gray-900 shadow'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                🇮🇳 India ₹
+              </button>
+              <button
+                onClick={() => setRegion('international')}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  region === 'international'
+                    ? 'bg-amber-500 text-gray-900 shadow'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                🌍 International $
+              </button>
+            </div>
+          </div>
+
           {loading ? (
-            <div className="col-span-2 flex items-center justify-center py-10">
+            <div className="flex items-center justify-center py-10">
               <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
-            options.map(plan => (
-              <PlanCard
-                key={plan}
-                plan={plan}
-                pricing={upgradeData?.pricing?.[plan]}
-                razorpayLink={upgradeData?.razorpay_links?.[plan]}
-                isHighlighted={plan === requiredPlan}
-                features={PLAN_FEATURES[plan] ?? []}
-                singleCard={isSingleCard}
-              />
-            ))
+            <div className={`${isSingleCard ? 'flex justify-center' : 'grid grid-cols-1 sm:grid-cols-2 gap-4'}`}>
+              {options.map(plan => (
+                <PlanCard
+                  key={plan}
+                  plan={plan}
+                  pricing={upgradeData?.pricing?.[plan]}
+                  region={region}
+                  razorpayLink={upgradeData?.razorpay_links?.[plan]}
+                  isHighlighted={plan === requiredPlan}
+                  features={PLAN_FEATURES[plan] ?? []}
+                  singleCard={isSingleCard}
+                />
+              ))}
+            </div>
           )}
         </div>
 
         {/* ── Footer ─────────────────────────────────────────────── */}
-        <div className="px-6 pb-5 text-center">
+        <div className="px-6 pb-5 pt-2 text-center">
           <p className="text-xs text-gray-500">
             Free plan is free forever — no credit card required.{' '}
-            Upgrades are one-time payments processed securely via Razorpay.
+            Upgrades are processed securely via Razorpay.
           </p>
+          {region === 'international' && (
+            <p className="text-xs text-amber-500/70 mt-1">
+              International payments: select USD at checkout.
+            </p>
+          )}
         </div>
       </div>
     </div>,
@@ -178,7 +209,7 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
 // PlanCard
 // ─────────────────────────────────────────────────────────────────────────
 
-function PlanCard({ plan, pricing, razorpayLink, isHighlighted, features, singleCard }) {
+function PlanCard({ plan, pricing, region, razorpayLink, isHighlighted, features, singleCard }) {
   const isPro = plan === 'pro';
 
   const borderCls = isHighlighted
@@ -192,6 +223,10 @@ function PlanCard({ plan, pricing, razorpayLink, isHighlighted, features, single
   const btnCls = isPro
     ? 'bg-indigo-500 hover:bg-indigo-400 text-white'
     : 'bg-amber-500  hover:bg-amber-400  text-gray-900';
+
+  const priceLabel = region === 'india'
+    ? (pricing?.inr_label ?? `₹${pricing?.inr ?? '—'}`)
+    : (pricing?.usd_label ?? `$${pricing?.usd ?? '—'}`);
 
   return (
     <div
@@ -216,7 +251,7 @@ function PlanCard({ plan, pricing, razorpayLink, isHighlighted, features, single
           <PlanBadge plan={plan} />
         </div>
         <div className="flex items-baseline gap-1">
-          <span className="text-2xl font-bold text-gray-50">${pricing?.usd ?? '—'}</span>
+          <span className="text-2xl font-bold text-gray-100">{priceLabel}</span>
           <span className="text-sm text-gray-400">/ month</span>
         </div>
         <p className="text-xs text-gray-500 mt-0.5">

@@ -310,36 +310,60 @@ router.post('/', requireAuth, videoLimitGate, async (req, res, next) => {
 // Returns full detail for a single video. Verifies ownership.
 // ─────────────────────────────────────────────────────────────────────────
 
+const PLAN_RANK = { free: 0, starter: 1, pro: 2, admin_lifetime: 99 };
+
 router.get('/:id', requireAuth, async (req, res, next) => {
   try {
+    const planRank = PLAN_RANK[req.user.plan] ?? 0;
+
     const { rows } = await pool.query(
-      `SELECT id,
-              title,
-              description,
-              original_url,
-              source_type,
-              playable_url,
-              thumbnail_url,
-              duration_seconds,
-              total_plays,
-              unique_viewers,
-              avg_watch_pct,
-              processing_status,
-              processing_error,
-              insight_status,
-              insight_generated_at,
-              story_status,
-              story_generated_at,
-              primary_drop_off_second,
-              primary_drop_off_pct,
-              is_archived,
-              created_at,
-              updated_at
-       FROM   videos
-       WHERE  id       = $1
-         AND  user_id  = $2
-         AND  is_active = TRUE`,
-      [req.params.id, req.user.id]
+      `SELECT v.id,
+              v.title,
+              v.description,
+              v.original_url,
+              v.source_type,
+              v.playable_url,
+              v.thumbnail_url,
+              v.duration_seconds,
+              v.total_plays,
+              v.unique_viewers,
+              v.avg_watch_pct,
+              v.processing_status,
+              v.processing_error,
+              v.insight_status,
+              v.insight_generated_at,
+              v.story_status,
+              v.story_generated_at,
+              v.primary_drop_off_second,
+              v.primary_drop_off_pct,
+              v.is_archived,
+              v.created_at,
+              v.updated_at,
+              -- is_promo: true when viewed by a non-owner via promotion
+              (v.user_id != $2) AS is_promo,
+              pv_check.promo_id AS promotion_id
+       FROM   videos v
+       LEFT JOIN LATERAL (
+         SELECT pv.id AS promo_id
+           FROM promotion_videos pv
+          WHERE pv.video_id = v.id
+            AND NOT EXISTS (
+                  SELECT 1 FROM promotion_video_hidden pvh
+                   WHERE pvh.promotion_video_id = pv.id
+                     AND pvh.user_id = $2
+                )
+            AND CASE pv.visibility
+                  WHEN 'free'    THEN $3 >= 0
+                  WHEN 'starter' THEN $3 >= 1
+                  WHEN 'pro'     THEN $3 >= 2
+                  ELSE                $3 >= 99
+                END
+          LIMIT 1
+       ) pv_check ON TRUE
+       WHERE  v.id        = $1
+         AND  v.is_active = TRUE
+         AND  (v.user_id  = $2 OR pv_check.promo_id IS NOT NULL)`,
+      [req.params.id, req.user.id, planRank]
     );
 
     if (rows.length === 0) {
@@ -417,7 +441,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
       logger.warn(`[videos] extra stats query failed for ${video.id}: ${err.message}`);
     }
 
-    return res.json({ video: { ...video, ...extraStats } });
+    return res.json({ video: { ...video, ...extraStats, is_promo: video.is_promo ?? false } });
   } catch (err) {
     next(err);
   }

@@ -278,6 +278,39 @@ router.post('/set-password', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// GET /api/auth/reset-token-email?token=XXX
+// Returns the email associated with a valid (unexpired, unused) reset token.
+// Used by the Reset Password page to pre-fill a hidden email field so all
+// browsers (Safari iOS, Firefox, Edge) can associate the new password with
+// the correct account and show the "Save password?" prompt.
+// Safe: read-only — does NOT consume or validate the token for password use.
+// ─────────────────────────────────────────────────────────────
+
+router.get('/reset-token-email', async (req, res, next) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ error: 'token required' });
+
+    const { rows } = await pool.query(
+      `SELECT u.email, u.name
+       FROM   auth_tokens t
+       JOIN   users       u ON u.id = t.user_id
+       WHERE  t.token      = $1
+         AND  t.purpose    = 'reset_password'
+         AND  t.used_at   IS NULL
+         AND  t.expires_at > NOW()`,
+      [token]
+    );
+
+    if (!rows.length) return res.status(404).json({ error: 'invalid or expired token' });
+
+    return res.json({ email: rows[0].email, name: rows[0].name });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
 // POST /api/auth/forgot-password
 // ─────────────────────────────────────────────────────────────
 

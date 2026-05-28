@@ -42,6 +42,7 @@ export default function Dashboard() {
 
   const [videos,        setVideos]        = useState(null);
   const [videosLoading, setVideosLoading] = useState(true);
+  const [promoVideos,   setPromoVideos]   = useState([]);
 
   // After OAuth login the backend redirects to /dashboard?token=JWT.
   // Strip the token from the URL immediately so it never sits in browser history.
@@ -56,6 +57,7 @@ export default function Dashboard() {
     }
   }, []);
 
+  // Fetch user's own videos
   useEffect(() => {
     if (!user) return;
     api.get('/videos')
@@ -64,6 +66,17 @@ export default function Dashboard() {
       .finally(() => setVideosLoading(false));
   }, [user?.id]);
 
+  // Fetch promotion videos (non-blocking — renders when ready)
+  useEffect(() => {
+    if (!user) return;
+    api.get('/promotion-videos')
+      .then(res => setPromoVideos(res.data.videos ?? []))
+      .catch(() => {});
+  }, [user?.id]);
+
+  const hasPromo     = promoVideos.length > 0;
+  const hasUserVideos = videos?.length > 0;
+
   return (
     <AppLayout>
       {/* Content header */}
@@ -71,7 +84,8 @@ export default function Dashboard() {
         <h1 className="text-sm font-semibold text-gray-200">Videos</h1>
         <div className="flex items-center gap-3">
           <NotificationBell />
-          {videos?.length > 0 && (
+          {/* Show add button once user has own videos, OR promo videos are visible (so they have context) */}
+          {(hasUserVideos || hasPromo) && (
             <AddVideoButton user={user} onVideoAdded={(v) => {
               setVideos(prev => [v, ...(prev ?? [])]);
               updateUser({ video_count: (user?.video_count ?? 0) + 1 });
@@ -84,7 +98,7 @@ export default function Dashboard() {
       <main className="flex-1 overflow-y-auto">
         {videosLoading ? (
           <LoadingSkeleton />
-        ) : !videos?.length ? (
+        ) : !hasUserVideos && !hasPromo ? (
           <EmptyState
             user={user}
             onVideoAdded={(video) => {
@@ -94,7 +108,12 @@ export default function Dashboard() {
             }}
           />
         ) : (
-          <VideoList videos={videos} setVideos={setVideos} user={user} />
+          <VideoList
+            videos={videos ?? []}
+            setVideos={setVideos}
+            user={user}
+            promoVideos={promoVideos}
+          />
         )}
       </main>
     </AppLayout>
@@ -135,31 +154,89 @@ const SOURCE_LABELS = {
 // VideoList
 // ─────────────────────────────────────────────────────────────────────────
 
-function VideoList({ videos, setVideos, user }) {
+function VideoList({ videos, setVideos, user, promoVideos = [] }) {
   const navigate = useNavigate();
+  const hasUserVideos = videos.length > 0;
+  const hasPromoVideos = promoVideos.length > 0;
+
   return (
     <div className="max-w-5xl w-full mx-auto px-6 py-8">
-      {user?.video_limit !== null && (
-        <div className="mb-5">
-          <VideoLimitBanner
-            currentCount={user?.video_count ?? 0}
-            videoLimit={user?.video_limit}
-            currentPlan={user?.plan}
-          />
+
+      {/* ── Promotion videos — pinned at top ─────────────────── */}
+      {hasPromoVideos && (
+        <div className={hasUserVideos ? 'mb-0' : 'mb-4'}>
+          {/* "Featured" label */}
+          <div className="flex items-center gap-2 mb-3">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"
+              className="text-amber-400 flex-shrink-0">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+            <span className="text-[11px] font-bold text-amber-400 uppercase tracking-widest">Featured</span>
+          </div>
+          <div className="flex flex-col gap-3">
+            {promoVideos.map(video => (
+              <PromoVideoCard
+                key={video.promotion_id ?? video.id}
+                video={video}
+                onClick={() => navigate(`/dashboard/videos/${video.id}`)}
+              />
+            ))}
+          </div>
         </div>
       )}
-      <div className="flex flex-col gap-3">
-        {videos.map(video => (
-          <VideoCard
-            key={video.id}
-            video={video}
-            onClick={() => navigate(`/dashboard/videos/${video.id}`)}
-            onTitleUpdate={(newTitle) =>
-              setVideos(prev => prev.map(v => v.id === video.id ? { ...v, title: newTitle } : v))
-            }
-          />
-        ))}
-      </div>
+
+      {/* ── Divider between promo and user videos ────────────── */}
+      {hasPromoVideos && hasUserVideos && (
+        <div className="flex items-center gap-3 my-6">
+          <div className="flex-1 h-px bg-gray-700/60" />
+          <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-widest">Your Videos</span>
+          <div className="flex-1 h-px bg-gray-700/60" />
+        </div>
+      )}
+
+      {/* ── User's videos ─────────────────────────────────────── */}
+      {hasUserVideos ? (
+        <>
+          {user?.video_limit !== null && (
+            <div className="mb-5">
+              <VideoLimitBanner
+                currentCount={user?.video_count ?? 0}
+                videoLimit={user?.video_limit}
+                currentPlan={user?.plan}
+              />
+            </div>
+          )}
+          <div className="flex flex-col gap-3">
+            {videos.map(video => (
+              <VideoCard
+                key={video.id}
+                video={video}
+                onClick={() => navigate(`/dashboard/videos/${video.id}`)}
+                onTitleUpdate={(newTitle) =>
+                  setVideos(prev => prev.map(v => v.id === video.id ? { ...v, title: newTitle } : v))
+                }
+              />
+            ))}
+          </div>
+        </>
+      ) : hasPromoVideos ? (
+        /* Promo videos visible but user has no own videos yet */
+        <div className="mt-4">
+          {user?.video_limit !== null && (
+            <div className="mb-4">
+              <VideoLimitBanner
+                currentCount={user?.video_count ?? 0}
+                videoLimit={user?.video_limit}
+                currentPlan={user?.plan}
+              />
+            </div>
+          )}
+          <div className="py-8 border border-dashed border-gray-700/60 rounded-xl text-center">
+            <p className="text-sm text-gray-400 mb-1">Ready to track your own videos?</p>
+            <p className="text-xs text-gray-600">Click "Add video" above to paste a video URL and get started.</p>
+          </div>
+        </div>
+      ) : null}
 
     </div>
   );
@@ -273,6 +350,73 @@ function VideoCard({ video, onClick, onTitleUpdate }) {
         />
       )}
     </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PromoVideoCard — read-only card for admin-featured promotion videos
+// ─────────────────────────────────────────────────────────────────────────
+
+function PromoVideoCard({ video, onClick }) {
+  const sourceLabel   = SOURCE_LABELS[video.source_type] ?? 'Video';
+  const duration      = fmtDuration(video.duration_seconds);
+  const totalViews    = (video.total_views    ?? 0).toLocaleString();
+  const uniqueViews   = (video.unique_views   ?? 0).toLocaleString();
+  const totalViewers  = (video.total_viewers  ?? 0).toLocaleString();
+  const uniqueViewers = (video.unique_session_viewers ?? video.unique_viewers ?? 0).toLocaleString();
+
+  return (
+    <div className="bg-gray-800 border border-amber-500/25 rounded-xl hover:border-amber-500/50 transition-colors">
+      <div className="flex items-center gap-3 px-4 py-3">
+
+        {/* Thumbnail with duration */}
+        <button
+          onClick={onClick}
+          className="flex-shrink-0 relative w-24 h-14 rounded-lg bg-gray-700 flex items-center justify-center overflow-hidden group/thumb"
+        >
+          {video.thumbnail_url
+            ? <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
+            : <VideoIcon className="text-gray-500" />
+          }
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 transition-opacity flex items-center justify-center">
+            <span className="text-white text-lg select-none">{'▶︎'}</span>
+          </div>
+          {duration && (
+            <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[10px] font-medium px-1 py-0.5 rounded leading-none pointer-events-none">
+              {duration}
+            </span>
+          )}
+        </button>
+
+        {/* Title + meta */}
+        <button onClick={onClick} className="flex-1 min-w-0 text-left">
+          <p className="font-semibold text-gray-100 truncate">{video.title}</p>
+          <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+            <span>{sourceLabel}</span>
+            <span className="sm:hidden text-gray-600">·</span>
+            <span className="sm:hidden">{totalViews} views</span>
+            <span className="sm:hidden text-gray-600">·</span>
+            <span className="sm:hidden">{uniqueViewers} unique viewers</span>
+          </p>
+        </button>
+
+        {/* Metric columns */}
+        <div className="hidden sm:flex items-center gap-5 flex-shrink-0">
+          <StatCol label="Total Views"    value={totalViews}   />
+          <StatCol label="Unique Views"   value={uniqueViews}  />
+          <div className="hidden lg:block w-px h-8 bg-gray-700" />
+          <StatCol label="Total Viewers"  value={totalViewers}  className="hidden lg:block" />
+          <StatCol label="Unique Viewers" value={uniqueViewers} className="hidden lg:block" />
+        </div>
+
+        {/* Featured indicator (replaces action icons) */}
+        <div className="flex-shrink-0 ml-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400/50">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+        </div>
+      </div>
+    </div>
   );
 }
 

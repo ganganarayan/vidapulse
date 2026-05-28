@@ -34,6 +34,8 @@ const FEATURE_LABELS = {
   events               : 'Custom Events',
   reports              : 'Reports',
   alerts               : 'Smart Alerts',
+  insights             : 'AI Insights',
+  viewer_stories       : 'Viewer Stories',
 };
 
 const PLAN_DESCRIPTIONS = {
@@ -96,7 +98,7 @@ export default function FeatureWall({
 
             {/* Feature name */}
             <p className="text-sm font-semibold text-gray-200 mb-1">
-              {featureLabel}
+              {requiredPlan === 'pro' ? 'Pro Features' : featureLabel}
             </p>
 
             {/* Description */}

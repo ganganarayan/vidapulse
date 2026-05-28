@@ -54,19 +54,30 @@ function getPoolStats() {
 /**
  * Verifies the database connection is alive.
  * Called once at server startup — throws if the DB is unreachable.
+ * Enforces a hard 15-second timeout so a hung TCP connection doesn't
+ * block the health check window indefinitely.
  */
 async function testConnection() {
-  const client = await pool.connect();
-  try {
-    const { rows } = await client.query(
-      'SELECT NOW() AS now, current_database() AS db, version() AS pg_version'
-    );
-    const { db, now, pg_version } = rows[0];
-    logger.info(`[db] ✓ Connected — database: "${db}" | server time: ${now}`);
-    logger.debug(`[db]   PostgreSQL version: ${pg_version.split(',')[0]}`);
-  } finally {
-    client.release();
-  }
+  const TIMEOUT_MS = 15_000;
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`Database connection timed out after ${TIMEOUT_MS / 1000}s — check DATABASE_URL`)), TIMEOUT_MS)
+  );
+
+  const connectPromise = (async () => {
+    const client = await pool.connect();
+    try {
+      const { rows } = await client.query(
+        'SELECT NOW() AS now, current_database() AS db, version() AS pg_version'
+      );
+      const { db, now, pg_version } = rows[0];
+      logger.info(`[db] ✓ Connected — database: "${db}" | server time: ${now}`);
+      logger.debug(`[db]   PostgreSQL version: ${pg_version.split(',')[0]}`);
+    } finally {
+      client.release();
+    }
+  })();
+
+  await Promise.race([connectPromise, timeoutPromise]);
 }
 
 module.exports = { pool, testConnection, getPoolStats };

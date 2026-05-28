@@ -184,6 +184,371 @@ function ImpersonateModal({ targetUser, onConfirm, onCancel, loading }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PromoModal — manage per-user promotion video visibility
+// ─────────────────────────────────────────────────────────────────────────────
+
+const VISIBILITY_INFO = {
+  noshow : { label: 'Admin only',  cls: 'text-gray-500'  },
+  free   : { label: 'All users',   cls: 'text-green-400' },
+  starter: { label: 'Starter+',    cls: 'text-blue-400'  },
+  pro    : { label: 'Pro only',    cls: 'text-amber-400' },
+};
+
+function PromoModal({ targetUser, onClose }) {
+  const [promos,    setPromos]    = useState([]);
+  const [hiddenIds, setHiddenIds] = useState(new Set());
+  const [loading,   setLoading]   = useState(true);
+  const [toggling,  setToggling]  = useState(new Set()); // promoIds currently in-flight
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const [promosRes, hiddenRes] = await Promise.all([
+          api.get('/admin/promotion-videos'),
+          api.get(`/admin/users/${targetUser.id}/promo-hidden`),
+        ]);
+        setPromos(promosRes.data.videos ?? []);
+        setHiddenIds(new Set(hiddenRes.data.hidden_ids ?? []));
+      } catch (_) {
+        /* errors shown as empty state below */
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [targetUser.id]);
+
+  async function handleToggle(promoId, currentlyHidden) {
+    if (toggling.has(promoId)) return;
+    setToggling(prev => new Set([...prev, promoId]));
+    const newHidden = !currentlyHidden;
+    try {
+      await api.patch(`/admin/users/${targetUser.id}/promo-hidden`, {
+        promotion_video_id: promoId,
+        hidden: newHidden,
+      });
+      setHiddenIds(prev => {
+        const next = new Set(prev);
+        if (newHidden) next.add(promoId);
+        else next.delete(promoId);
+        return next;
+      });
+    } catch (_) {
+      /* silent — toggle snaps back via state not changing */
+    } finally {
+      setToggling(prev => { const next = new Set(prev); next.delete(promoId); return next; });
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-gray-800 border border-gray-700 rounded-xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
+
+        {/* Header */}
+        <div className="flex items-start justify-between p-6 pb-4 border-b border-gray-700 flex-shrink-0">
+          <div>
+            <h2 className="text-lg font-bold text-white">Promotion Visibility</h2>
+            <p className="text-gray-400 text-sm mt-0.5">
+              Control which featured videos are visible to{' '}
+              <span className="text-white font-medium">{targetUser.name || targetUser.email}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 ml-4 flex-shrink-0">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 overflow-y-auto flex-1">
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : promos.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-8">
+              No promotion videos have been added yet.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {promos.map(promo => {
+                const isHidden  = hiddenIds.has(promo.id);
+                const isBusy    = toggling.has(promo.id);
+                const visInfo   = VISIBILITY_INFO[promo.visibility] ?? VISIBILITY_INFO.noshow;
+
+                return (
+                  <div
+                    key={promo.id}
+                    className="flex items-center gap-3 p-3 bg-gray-700/40 border border-gray-700 rounded-lg"
+                  >
+                    {/* Thumbnail */}
+                    {promo.thumbnail_url ? (
+                      <img
+                        src={promo.thumbnail_url}
+                        alt=""
+                        className="w-14 h-9 rounded object-cover flex-shrink-0 bg-gray-700"
+                      />
+                    ) : (
+                      <div className="w-14 h-9 rounded bg-gray-700 flex-shrink-0 flex items-center justify-center">
+                        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor"
+                          strokeWidth={1.5} viewBox="0 0 24 24">
+                          <polygon points="23 7 16 12 23 17 23 7" />
+                          <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                        </svg>
+                      </div>
+                    )}
+
+                    {/* Title + visibility tier */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-sm font-medium truncate">{promo.title}</p>
+                      <p className={`text-xs mt-0.5 ${visInfo.cls}`}>{visInfo.label}</p>
+                    </div>
+
+                    {/* Toggle switch */}
+                    <button
+                      onClick={() => handleToggle(promo.id, isHidden)}
+                      disabled={isBusy}
+                      title={isHidden ? 'Click to show for this user' : 'Click to hide for this user'}
+                      className={`relative flex-shrink-0 w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none ${
+                        !isHidden ? 'bg-green-600' : 'bg-gray-600'
+                      } ${isBusy ? 'opacity-60' : 'hover:opacity-90'}`}
+                    >
+                      <span
+                        className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${
+                          !isHidden ? 'translate-x-4' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+
+                    {/* Label */}
+                    <span className={`text-xs w-12 text-right flex-shrink-0 ${isHidden ? 'text-gray-500' : 'text-green-400'}`}>
+                      {isBusy ? '…' : isHidden ? 'Hidden' : 'Visible'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-700 flex justify-between items-center flex-shrink-0">
+          <p className="text-xs text-gray-600">
+            Toggle off to hide a featured video for this user only.
+          </p>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 border border-gray-600 hover:border-gray-400 transition-colors"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UserRow — table row with inline plan select + date input (auto-save)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function isoToDateInput(iso) {
+  if (!iso) return '';
+  return new Date(iso).toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick }) {
+  const [planVal,   setPlanVal]   = useState(user.plan ?? 'free');
+  const [dateVal,   setDateVal]   = useState(isoToDateInput(user.plan_expires_at));
+  const [saving,    setSaving]    = useState(false);
+  const [saveErr,   setSaveErr]   = useState('');
+  const [saved,     setSaved]     = useState(false); // brief ✓ flash
+  const prevDateRef = useRef(isoToDateInput(user.plan_expires_at));
+
+  // Keep local state in sync when parent re-fetches users
+  useEffect(() => {
+    setPlanVal(user.plan ?? 'free');
+    const d = isoToDateInput(user.plan_expires_at);
+    setDateVal(d);
+    prevDateRef.current = d;
+  }, [user.plan, user.plan_expires_at]);
+
+  const neverExpires = planVal === 'free' || planVal === 'admin_lifetime';
+
+  async function persist(newPlan, newDate) {
+    setSaving(true);
+    setSaveErr('');
+    setSaved(false);
+    try {
+      const body = {
+        plan      : newPlan,
+        expires_at: (newPlan === 'free' || newPlan === 'admin_lifetime')
+          ? null
+          : (newDate ? new Date(newDate).toISOString() : null),
+      };
+      const { data } = await api.patch(`/admin/users/${user.id}/plan`, body);
+      onPlanUpdate(user.id, {
+        plan             : data.plan,
+        plan_display_name: data.plan_display_name,
+        plan_expires_at  : data.expires_at,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setSaveErr(err.response?.data?.message ?? 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handlePlanChange(e) {
+    const val = e.target.value;
+    setPlanVal(val);
+    if (val === 'free' || val === 'admin_lifetime') setDateVal('');
+    persist(val, val === 'free' || val === 'admin_lifetime' ? '' : dateVal);
+  }
+
+  function handleDateChange(e) {
+    setDateVal(e.target.value);
+  }
+
+  function handleDateBlur() {
+    if (dateVal !== prevDateRef.current) {
+      prevDateRef.current = dateVal;
+      persist(planVal, dateVal);
+    }
+  }
+
+  return (
+    <tr className="hover:bg-gray-700/30 transition-colors">
+
+      {/* User */}
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center flex-shrink-0">
+            <span className="text-gray-200 text-xs font-bold">
+              {(user.name || user.email || '?')[0].toUpperCase()}
+            </span>
+          </div>
+          <div className="min-w-0">
+            <p className="text-white font-medium truncate">
+              {user.name || <span className="text-gray-500 italic">No name</span>}
+            </p>
+            <p className="text-gray-400 text-xs truncate">{user.email}</p>
+          </div>
+          {!user.is_active && (
+            <span className="ml-1 px-1.5 py-0.5 bg-red-900/60 text-red-400 text-xs rounded flex-shrink-0">
+              Deactivated
+            </span>
+          )}
+        </div>
+      </td>
+
+      {/* Plan — inline select */}
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1.5">
+          <select
+            value={planVal}
+            onChange={handlePlanChange}
+            disabled={saving}
+            className="
+              bg-gray-700 border border-gray-600 rounded px-2 py-1
+              text-xs text-white font-semibold uppercase tracking-wide
+              focus:outline-none focus:border-amber-500
+              disabled:opacity-60 cursor-pointer
+            "
+          >
+            <option value="free">Free</option>
+            <option value="starter">Starter</option>
+            <option value="pro">Pro</option>
+            <option value="admin_lifetime">Admin Lifetime</option>
+          </select>
+          {saving && (
+            <span className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+          )}
+          {saved && !saving && (
+            <svg className="w-3.5 h-3.5 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </div>
+        {saveErr && <p className="text-red-400 text-xs mt-0.5 max-w-[120px] truncate" title={saveErr}>{saveErr}</p>}
+      </td>
+
+      {/* Plan Expires — inline date input */}
+      <td className="px-4 py-3 hidden md:table-cell">
+        {neverExpires ? (
+          <span className="text-green-400 text-xs font-medium">Forever</span>
+        ) : (
+          <input
+            type="date"
+            value={dateVal}
+            onChange={handleDateChange}
+            onBlur={handleDateBlur}
+            disabled={saving}
+            className="
+              bg-gray-700 border border-gray-600 rounded px-2 py-1
+              text-xs text-white focus:outline-none focus:border-amber-500
+              disabled:opacity-60 cursor-pointer
+              [color-scheme:dark]
+            "
+          />
+        )}
+      </td>
+
+      {/* Videos */}
+      <td className="px-4 py-3 hidden sm:table-cell text-gray-300 text-xs">
+        {user.video_count}
+      </td>
+
+      {/* Last Login */}
+      <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">
+        {formatRelative(user.last_login_at)}
+      </td>
+
+      {/* Action */}
+      <td className="px-4 py-3 text-right">
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={onPromoClick}
+            title="Manage promotion video visibility for this user"
+            className="
+              px-2.5 py-1.5 rounded-lg text-xs font-semibold
+              border border-amber-700/40 text-amber-400
+              hover:bg-amber-900/20 hover:border-amber-600/60
+              transition-all duration-150 flex items-center gap-1
+            "
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+            Promos
+          </button>
+          <button
+            onClick={onEnterClick}
+            disabled={!user.is_active}
+            className="
+              px-3 py-1.5 rounded-lg text-xs font-semibold
+              border border-gray-600 text-gray-300
+              hover:border-red-500 hover:text-red-400 hover:bg-red-900/20
+              disabled:opacity-40 disabled:cursor-not-allowed
+              transition-all duration-150
+            "
+          >
+            Enter Account
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main page
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -204,6 +569,9 @@ export default function AdminUsers() {
   const [modalUser,       setModalUser]       = useState(null);   // target user row
   const [modalLoading,    setModalLoading]    = useState(false);
   const [modalError,      setModalError]      = useState('');
+
+  // Promotion visibility modal state
+  const [promoModalUser,  setPromoModalUser]  = useState(null);
 
   // "Session expired" notice from api.js redirect param
   const [expiredNotice, setExpiredNotice] = useState(
@@ -238,6 +606,16 @@ export default function AdminUsers() {
     }, 300);
     return () => clearTimeout(id);
   }, [searchInput]);
+
+  // ── Inline plan update callback (called by UserRow on save) ───────────────
+
+  function handlePlanUpdate(userId, { plan, plan_display_name, plan_expires_at }) {
+    setUsers(prev => prev.map(u =>
+      u.id === userId
+        ? { ...u, plan, plan_display_name: plan_display_name ?? u.plan_display_name, plan_expires_at }
+        : u
+    ));
+  }
 
   // ── Impersonation ───────────────────────────────────────────────────────
 
@@ -349,9 +727,9 @@ export default function AdminUsers() {
                 <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase tracking-wider">
                   <th className="px-4 py-3 text-left font-medium">User</th>
                   <th className="px-4 py-3 text-left font-medium">Plan</th>
+                  <th className="px-4 py-3 text-left font-medium hidden md:table-cell">Plan Expires</th>
                   <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">Videos</th>
-                  <th className="px-4 py-3 text-left font-medium hidden md:table-cell">Joined</th>
-                  <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Last seen</th>
+                  <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Last Login</th>
                   <th className="px-4 py-3 text-right font-medium">Action</th>
                 </tr>
               </thead>
@@ -369,8 +747,8 @@ export default function AdminUsers() {
                         </div>
                       </td>
                       <td className="px-4 py-3"><div className="h-5 w-14 bg-gray-700 rounded" /></td>
-                      <td className="px-4 py-3 hidden sm:table-cell"><div className="h-3 w-6 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3 hidden md:table-cell"><div className="h-3 w-20 bg-gray-700 rounded" /></td>
+                      <td className="px-4 py-3 hidden sm:table-cell"><div className="h-3 w-6 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3 hidden lg:table-cell"><div className="h-3 w-16 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3"><div className="h-7 w-24 bg-gray-700 rounded ml-auto" /></td>
                     </tr>
@@ -383,66 +761,13 @@ export default function AdminUsers() {
                   </tr>
                 ) : (
                   users.map(user => (
-                    <tr key={user.id} className="hover:bg-gray-700/30 transition-colors">
-                      {/* User */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center flex-shrink-0">
-                            <span className="text-gray-200 text-xs font-bold">
-                              {(user.name || user.email || '?')[0].toUpperCase()}
-                            </span>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-white font-medium truncate">
-                              {user.name || <span className="text-gray-500 italic">No name</span>}
-                            </p>
-                            <p className="text-gray-400 text-xs truncate">{user.email}</p>
-                          </div>
-                          {!user.is_active && (
-                            <span className="ml-1 px-1.5 py-0.5 bg-red-900/60 text-red-400 text-xs rounded">
-                              Deactivated
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Plan */}
-                      <td className="px-4 py-3">
-                        <PlanChip plan={user.plan} />
-                      </td>
-
-                      {/* Videos */}
-                      <td className="px-4 py-3 hidden sm:table-cell text-gray-300">
-                        {user.video_count}
-                      </td>
-
-                      {/* Joined */}
-                      <td className="px-4 py-3 hidden md:table-cell text-gray-400 text-xs">
-                        {formatDate(user.created_at)}
-                      </td>
-
-                      {/* Last seen */}
-                      <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">
-                        {formatRelative(user.last_seen_at)}
-                      </td>
-
-                      {/* Action */}
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => { setModalUser(user); setModalError(''); }}
-                          disabled={!user.is_active}
-                          className="
-                            px-3 py-1.5 rounded-lg text-xs font-semibold
-                            border border-gray-600 text-gray-300
-                            hover:border-red-500 hover:text-red-400 hover:bg-red-900/20
-                            disabled:opacity-40 disabled:cursor-not-allowed
-                            transition-all duration-150
-                          "
-                        >
-                          Enter Account
-                        </button>
-                      </td>
-                    </tr>
+                    <UserRow
+                      key={user.id}
+                      user={user}
+                      onPlanUpdate={handlePlanUpdate}
+                      onPromoClick={() => setPromoModalUser(user)}
+                      onEnterClick={() => { setModalUser(user); setModalError(''); }}
+                    />
                   ))
                 )}
               </tbody>
@@ -491,6 +816,15 @@ export default function AdminUsers() {
           error={modalError}
         />
       )}
+
+      {/* Promotion visibility modal */}
+      {promoModalUser && (
+        <PromoModal
+          targetUser={promoModalUser}
+          onClose={() => setPromoModalUser(null)}
+        />
+      )}
+
     </div>
   );
 }

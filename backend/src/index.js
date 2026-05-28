@@ -53,7 +53,8 @@ app.use(helmet({
 // In production: only allow requests from vidapulse.in domains.
 // In development: allow everything (for local testing with curl/Postman).
 const allowedOrigins = env.NODE_ENV === 'production'
-  ? ['https://app.vidapulse.in', 'https://vidapulse.in', 'https://www.vidapulse.in']
+  ? ['https://app.vidapulse.in', 'https://vidapulse.in', 'https://www.vidapulse.in',
+     'https://orbitq.vidapulse.in']
   : '*';
 
 app.use(cors({

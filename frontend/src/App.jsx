@@ -30,6 +30,8 @@ import AlertsPage        from './pages/AlertsPage';
 import ReportsPage       from './pages/ReportsPage';
 import CTATrackingPage   from './pages/CTATrackingPage';
 import AdminWebhookLog   from './pages/AdminWebhookLog';
+import AdminPromotionPage from './pages/AdminPromotionPage';
+import AdminRevenue       from './pages/AdminRevenue';
 import UpgradePage       from './pages/UpgradePage';
 import PaymentSuccess    from './pages/PaymentSuccess';
 import BillingPage       from './pages/BillingPage';
@@ -252,6 +254,22 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminWebhookLog />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/promotion"
+            element={
+              <AdminRoute>
+                <AdminPromotionPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/revenue"
+            element={
+              <AdminRoute>
+                <AdminRevenue />
               </AdminRoute>
             }
           />
