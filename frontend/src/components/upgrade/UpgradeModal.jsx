@@ -198,6 +198,12 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
               International payments: select USD at checkout.
             </p>
           )}
+          <p className="text-xs text-gray-500 mt-1.5">
+            Need more than 20 videos?{' '}
+            <a href="mailto:support@vidapulse.in" className="text-amber-400 hover:text-amber-300 transition-colors">
+              Contact support@vidapulse.in
+            </a>
+          </p>
         </div>
       </div>
     </div>,

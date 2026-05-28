@@ -213,6 +213,12 @@ export default function UpgradePage() {
                   Contact support
                 </button>
               </p>
+              <p className="text-xs text-gray-600 mt-1">
+                Need more than 20 videos?{' '}
+                <a href="mailto:support@vidapulse.in" className="text-amber-400 hover:text-amber-300 transition-colors">
+                  Contact support@vidapulse.in
+                </a>
+              </p>
             </div>
           )}
 

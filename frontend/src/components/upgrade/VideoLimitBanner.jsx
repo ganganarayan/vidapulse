@@ -79,7 +79,11 @@ export default function VideoLimitBanner({ currentCount, videoLimit, currentPlan
 
           {isAtLimit && (
             <p className="text-xs text-gray-500 mt-1.5">
-              Add more videos by upgrading your plan.
+              Add more videos by upgrading your plan.{' '}
+              Need more than 20?{' '}
+              <a href="mailto:support@vidapulse.in" className="text-amber-400 hover:text-amber-300 transition-colors">
+                Contact support@vidapulse.in
+              </a>
             </p>
           )}
         </div>
