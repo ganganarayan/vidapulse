@@ -115,6 +115,7 @@ export default function Login() {
             </label>
             <input
               type="email"
+              name="email"
               autoComplete="email"
               required
               value={email}
@@ -139,6 +140,7 @@ export default function Login() {
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
+                name="password"
                 autoComplete="current-password"
                 required
                 value={password}

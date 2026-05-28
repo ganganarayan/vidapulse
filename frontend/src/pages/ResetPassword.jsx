@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,12 +8,24 @@ export default function ResetPassword() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') || '';
 
+  const [email,        setEmail]        = useState('');   // fetched from token
   const [password,     setPassword]     = useState('');
   const [confirm,      setConfirm]      = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm,  setShowConfirm]  = useState(false);
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState('');
+
+  // Fetch the email for this token so we can:
+  //  1. Show "Resetting password for: user@example.com" (good UX)
+  //  2. Include a name="email" input so ALL browsers associate the new
+  //     password with the correct account and show "Save password?"
+  useEffect(() => {
+    if (!token) return;
+    api.get(`/auth/reset-token-email?token=${encodeURIComponent(token)}`)
+      .then(res => setEmail(res.data.email ?? ''))
+      .catch(() => {}); // silent — email field just stays empty
+  }, [token]);
 
   function strength(pw) {
     let s = 0;
@@ -23,7 +35,7 @@ export default function ResetPassword() {
     return s;
   }
 
-  const pw_strength  = strength(password);
+  const pw_strength   = strength(password);
   const strengthLabel = ['', 'Weak', 'Good', 'Strong'][pw_strength];
   const strengthColor = ['', 'bg-red-500', 'bg-amber-500', 'bg-green-500'][pw_strength];
 
@@ -49,7 +61,7 @@ export default function ResetPassword() {
       await api.post('/auth/reset-password', { token, password });
       await refetch();
       // Hard navigation so the browser detects the password form submission
-      // and shows the native "Save password?" prompt.
+      // and shows the native "Save password?" prompt on all browsers.
       window.location.replace('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Something went wrong. Please try again.');
@@ -93,12 +105,43 @@ export default function ResetPassword() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
+          {/*
+            Hidden email field — critical for cross-browser password saving.
+            Safari iOS, Firefox, and Edge use name="email" + autocomplete="email"
+            to know which account the new password belongs to. Without this,
+            most mobile browsers silently skip the "Save password?" prompt.
+          */}
+          <input
+            type="email"
+            name="email"
+            autoComplete="email"
+            value={email}
+            readOnly
+            aria-hidden="true"
+            tabIndex={-1}
+            style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', height: 0 }}
+          />
+
+          {/* Account indicator — visible only once email is loaded */}
+          {email && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-gray-700/50 border border-gray-700 rounded-lg">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                className="text-gray-500 flex-shrink-0">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span className="text-xs text-gray-400 truncate">{email}</span>
+            </div>
+          )}
+
           {/* New password */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">New password</label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
+                name="new-password"
                 autoComplete="new-password"
                 required
                 value={password}
@@ -140,6 +183,7 @@ export default function ResetPassword() {
             <div className="relative">
               <input
                 type={showConfirm ? 'text' : 'password'}
+                name="confirm-password"
                 autoComplete="new-password"
                 required
                 value={confirm}
