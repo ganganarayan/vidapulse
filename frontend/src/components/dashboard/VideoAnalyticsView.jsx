@@ -223,7 +223,7 @@ export default function VideoAnalyticsView({
 
         {/* ── Metric time-series views ──────────────────────────────── */}
         {METRIC_VIEWS.has(activeView) && (
-          <MetricDetailView videoId={video?.id} metric={activeView} video={video} />
+          <MetricDetailView videoId={video?.id} metric={activeView} video={video} userPlan={user?.plan} />
         )}
 
         {/* ── Engagement sub-views ─────────────────────────────────── */}

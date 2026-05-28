@@ -338,7 +338,7 @@ export default function TrafficSourcesSection({ videoId, userPlan }) {
         <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
           Audience
         </p>
-        <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Traffic Sources <PlanTierBadge plan="starter" userPlan={userPlan} /></h2>
+        <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Traffic Sources <PlanTierBadge plan="pro" userPlan={userPlan} /></h2>
         <p className="text-xs text-gray-400 mt-1">
           Where your viewers are coming from, how they browse, and which campaigns drive the most engagement.
         </p>

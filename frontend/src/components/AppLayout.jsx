@@ -242,15 +242,15 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
 
         <SidebarDivider label="Metrics" />
         {navItem('plays',         <PlaysIcon />,    'Total Views')}
-        {navItem('unique_views',  <ViewersIcon />,  'Unique Views')}
+        {navItem('unique_views',  <ViewersIcon />,  'Unique Views',    !isStarter, 'starter')}
         {navItem('total_viewers', <PlaysIcon />,    'Total Viewers')}
         {navItem('viewers',       <ViewersIcon />,  'Unique Viewers')}
-        {navItem('avg_watch',   <WatchIcon />,   'Avg. Watch %')}
+        {navItem('avg_watch',   <WatchIcon />,   'Avg. Watch %',   !isStarter, 'starter')}
         {navItem('play_rate',   <PlayRateIcon />,'Play Rate')}
-        {navItem('completion',  <CheckIcon />,   'Completion Rate')}
-        {navItem('dropoff',     <DropoffIcon />, 'Drop-off Rate')}
-        {navItem('watch_time',  <ClockIcon />,   'Watch Time')}
-        {navItem('rewatches',   <RepeatIcon />,  'Re-watches')}
+        {navItem('completion',  <CheckIcon />,   'Completion Rate', !isStarter, 'starter')}
+        {navItem('dropoff',     <DropoffIcon />, 'Drop-off Rate',   !isPro,     'pro')}
+        {navItem('watch_time',  <ClockIcon />,   'Watch Time',      !isStarter, 'starter')}
+        {navItem('rewatches',   <RepeatIcon />,  'Re-watches',      !isPro,     'pro')}
         {navItem('domains',     <DomainIcon />,  'Domains')}
 
         <SidebarDivider label="Engagement" />
@@ -262,7 +262,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
         {navItem('geography',   <GlobeIcon />,   'Geography',     !isStarter, 'starter')}
         {navItem('devices',     <DeviceIcon />,  'Devices',       !isStarter, 'starter')}
         {navItem('browsers',    <BrowserIcon />, 'Browsers',      !isStarter, 'starter')}
-        {navItem('traffic',     <UTMIcon />,     'Traffic Sources', !isStarter, 'starter')}
+        {navItem('traffic',     <UTMIcon />,     'Traffic Sources', !isPro,     'pro')}
 
         <SidebarDivider label="Settings" />
         {navItem('embed',       <EmbedIcon />,   'Share & Embed')}
