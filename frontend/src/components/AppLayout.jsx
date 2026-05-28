@@ -95,11 +95,11 @@ function AppSidebar() {
         <SidebarItem to="/videos"    icon={<VideoIcon />}  label="Videos"   active={active('/videos')} />
 
         <SidebarDivider label="Analytics" />
-        <SidebarItem to="/events"       icon={<EventsIcon />}  label="Events"       active={active('/events')} />
-        <SidebarItem to="/funnels"      icon={<FunnelIcon />}  label="Funnels"      active={active('/funnels')} />
-        <SidebarItem to="/cta-tracking" icon={<CtaIcon />}     label="CTA Tracking" active={active('/cta-tracking')} />
-        <SidebarItem to="/reports"      icon={<ReportsIcon />} label="Reports"      active={active('/reports')} />
-        <SidebarItem to="/alerts"       icon={<BellIcon />}    label="Alerts"       active={active('/alerts')} />
+        <SidebarItem to="/events"       icon={<EventsIcon />}  label="Events"       active={active('/events')}       plan="pro" userPlan={user?.plan} />
+        <SidebarItem to="/funnels"      icon={<FunnelIcon />}  label="Funnels"      active={active('/funnels')}      plan="pro" userPlan={user?.plan} />
+        <SidebarItem to="/cta-tracking" icon={<CtaIcon />}     label="CTA Tracking" active={active('/cta-tracking')} plan="pro" userPlan={user?.plan} />
+        <SidebarItem to="/reports"      icon={<ReportsIcon />} label="Reports"      active={active('/reports')}      plan="pro" userPlan={user?.plan} />
+        <SidebarItem to="/alerts"       icon={<BellIcon />}    label="Alerts"       active={active('/alerts')}       plan="pro" userPlan={user?.plan} />
 
         <SidebarDivider label="Account" />
         <SidebarItem to="/account"       icon={<SettingsIcon />}     label="Settings"       active={active('/account', true)} />
@@ -202,7 +202,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
       >
         <span className="flex-shrink-0 w-4 h-4">{icon}</span>
         <span className="flex-1 truncate">{label}</span>
-        {requiredPlan && <PlanCrown plan={requiredPlan} size={10} userPlan={user?.plan} />}
+        {requiredPlan && <PlanCrown plan={requiredPlan} size={16} userPlan={user?.plan} />}
         {locked && <LockIcon />}
       </button>
     );
@@ -292,7 +292,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
 // Shared sub-components
 // ─────────────────────────────────────────────────────────────────────────
 
-function SidebarItem({ to, icon, label, active, coming = false, badge = null }) {
+function SidebarItem({ to, icon, label, active, coming = false, badge = null, plan = null, userPlan = null }) {
   const cls = `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors
     ${active
       ? 'bg-amber-500/15 text-amber-400'
@@ -304,6 +304,7 @@ function SidebarItem({ to, icon, label, active, coming = false, badge = null }) 
     <>
       <span className="flex-shrink-0 w-4 h-4">{icon}</span>
       <span className="flex-1 truncate">{label}</span>
+      {plan && <PlanCrown plan={plan} size={16} userPlan={userPlan} />}
       {badge != null && (
         <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white
                          text-[10px] font-bold flex items-center justify-center leading-none">
