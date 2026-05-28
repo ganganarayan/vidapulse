@@ -76,3 +76,42 @@ export function pixelTrack(event, data) {
 export function pixelPageView() {
   pixelTrack('PageView');
 }
+
+// ─── Purchase intent helpers ─────────────────────────────────────────────────
+//
+// Before redirecting to Razorpay, call savePurchaseIntent() with the plan,
+// currency (INR | USD), and numeric value the user is about to pay.
+// localStorage is used instead of sessionStorage so the value survives
+// when Razorpay opens in a new tab and redirects back to /payment/:plan.
+//
+// On the return page call popPurchaseIntent() — it reads and immediately
+// deletes the stored value so it fires only once.
+
+const INTENT_KEY = 'vp_pixel_purchase';
+
+/**
+ * Save the pending purchase details before leaving for Razorpay.
+ * @param {{ plan: string, currency: 'INR'|'USD', value: number }} intent
+ */
+export function savePurchaseIntent({ plan, currency, value }) {
+  try {
+    localStorage.setItem(INTENT_KEY, JSON.stringify({ plan, currency, value }));
+  } catch {
+    // localStorage blocked (private browsing strict mode) — fail silently
+  }
+}
+
+/**
+ * Read and immediately delete the stored purchase intent.
+ * Returns null if nothing was saved.
+ * @returns {{ plan: string, currency: string, value: number } | null}
+ */
+export function popPurchaseIntent() {
+  try {
+    const raw = localStorage.getItem(INTENT_KEY);
+    localStorage.removeItem(INTENT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}

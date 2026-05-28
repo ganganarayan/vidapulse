@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate }             from 'react-router-dom';
 import { useAuth }                            from '../contexts/AuthContext';
-import { pixelTrack }                         from '../lib/pixel';
+import { pixelTrack, popPurchaseIntent }       from '../lib/pixel';
 
 /**
  * PaymentSuccess — /payment/:plan
@@ -94,10 +94,14 @@ export default function PaymentSuccess() {
       activated.current = true;
       setPhase('success');
 
-      // Fire Meta Pixel Purchase event once plan is confirmed
+      // Fire Meta Pixel Purchase event once plan is confirmed.
+      // Use the currency/value saved before the Razorpay redirect so
+      // USD payments are reported correctly. Falls back to INR if no
+      // intent was stored (e.g. user navigated to this URL directly).
+      const intent = popPurchaseIntent();
       pixelTrack('Purchase', {
-        value        : PLAN_VALUES[plan] ?? 0,
-        currency     : 'INR',
+        value        : intent?.value    ?? PLAN_VALUES[plan] ?? 0,
+        currency     : intent?.currency ?? 'INR',
         content_name : `VidaPulse ${planLabel} Plan`,
       });
 

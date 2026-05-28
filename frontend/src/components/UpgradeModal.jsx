@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useUpgrade }  from '../contexts/UpgradeContext';
-import { useAuth }     from '../contexts/AuthContext';
-import api             from '../lib/api';
+import { useUpgrade }        from '../contexts/UpgradeContext';
+import { useAuth }           from '../contexts/AuthContext';
+import api                   from '../lib/api';
+import { savePurchaseIntent } from '../lib/pixel';
 
 /**
  * UpgradeModal
@@ -67,6 +68,12 @@ export default function UpgradeModal() {
     setLoading(plan);
     try {
       const { data } = await api.post('/payments/subscribe', { plan });
+      // Save purchase intent (INR only — this modal has no currency toggle)
+      savePurchaseIntent({
+        plan,
+        currency: 'INR',
+        value   : plan === 'starter' ? 999 : 1999,
+      });
       // Redirect to Razorpay hosted payment page (full page navigation)
       window.location.href = data.paymentUrl;
     } catch (err) {

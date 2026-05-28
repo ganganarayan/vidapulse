@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import AppLayout from '../components/AppLayout';
+import { savePurchaseIntent } from '../lib/pixel';
 
 /**
  * UpgradePage — /upgrade
@@ -69,6 +70,17 @@ export default function UpgradePage() {
     const baseUrl = upgradeData.razorpay_links?.[plan];
     if (!baseUrl) return;
     const url = buildRazorpayUrl(baseUrl, plan);
+
+    // Save purchase intent so PaymentSuccess can fire the correct currency
+    const isIndia = region === 'india';
+    savePurchaseIntent({
+      plan,
+      currency: isIndia ? 'INR' : 'USD',
+      value   : isIndia
+        ? (upgradeData.pricing?.[plan]?.inr ?? (plan === 'starter' ? 999  : 1999))
+        : (upgradeData.pricing?.[plan]?.usd ?? (plan === 'starter' ? 15   : 29)),
+    });
+
     // Open in same tab — Razorpay handles the full payment flow
     window.location.href = url;
   }

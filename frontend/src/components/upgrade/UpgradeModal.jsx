@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../lib/api';
+import { savePurchaseIntent } from '../../lib/pixel';
 
 /**
  * UpgradeModal
@@ -280,6 +281,17 @@ function PlanCard({ plan, pricing, region, razorpayLink, isHighlighted, features
         href={razorpayLink ?? '#'}
         target="_blank"
         rel="noopener noreferrer"
+        onClick={() => {
+          // Save currency/value so PaymentSuccess fires the correct Purchase event
+          const isIndia = region === 'india';
+          savePurchaseIntent({
+            plan,
+            currency: isIndia ? 'INR' : 'USD',
+            value   : isIndia
+              ? (pricing?.inr ?? (plan === 'pro' ? 1999 : 999))
+              : (pricing?.usd ?? (plan === 'pro' ? 29   : 15)),
+          });
+        }}
         className={`w-full text-center py-2.5 px-4 rounded-lg font-semibold text-sm transition-colors ${btnCls}`}
       >
         Upgrade to {capitalize(plan)}
