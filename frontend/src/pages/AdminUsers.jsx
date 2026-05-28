@@ -3,13 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 
-const PLAN_OPTIONS = [
-  { value: 'free',           label: 'Forever Free',    note: 'No expiry date needed' },
-  { value: 'starter',        label: 'Starter',         note: 'Set an expiry date' },
-  { value: 'pro',            label: 'Pro',             note: 'Set an expiry date' },
-  { value: 'admin_lifetime', label: 'Admin Lifetime',  note: 'No expiry date needed' },
-];
-
 /**
  * AdminUsers — /admin/users
  *
@@ -361,135 +354,197 @@ function PromoModal({ targetUser, onClose }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EditPlanModal — change a user's plan + expiry date
+// UserRow — table row with inline plan select + date input (auto-save)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function EditPlanModal({ targetUser, onSave, onClose }) {
-  const [plan,      setPlan]      = useState(targetUser.plan ?? 'free');
-  const [expiresAt, setExpiresAt] = useState(
-    targetUser.plan_expires_at
-      ? new Date(targetUser.plan_expires_at).toISOString().slice(0, 10)  // YYYY-MM-DD
-      : ''
-  );
+function isoToDateInput(iso) {
+  if (!iso) return '';
+  return new Date(iso).toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick }) {
+  const [planVal,   setPlanVal]   = useState(user.plan ?? 'free');
+  const [dateVal,   setDateVal]   = useState(isoToDateInput(user.plan_expires_at));
   const [saving,    setSaving]    = useState(false);
-  const [error,     setError]     = useState('');
+  const [saveErr,   setSaveErr]   = useState('');
+  const [saved,     setSaved]     = useState(false); // brief ✓ flash
+  const prevDateRef = useRef(isoToDateInput(user.plan_expires_at));
 
-  const neverExpires = plan === 'free' || plan === 'admin_lifetime';
+  // Keep local state in sync when parent re-fetches users
+  useEffect(() => {
+    setPlanVal(user.plan ?? 'free');
+    const d = isoToDateInput(user.plan_expires_at);
+    setDateVal(d);
+    prevDateRef.current = d;
+  }, [user.plan, user.plan_expires_at]);
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    if (saving) return;
+  const neverExpires = planVal === 'free' || planVal === 'admin_lifetime';
 
-    // Validate: paid plan with no expiry date is OK (admin's choice)
+  async function persist(newPlan, newDate) {
     setSaving(true);
-    setError('');
+    setSaveErr('');
+    setSaved(false);
     try {
       const body = {
-        plan,
-        expires_at: neverExpires ? null : (expiresAt ? new Date(expiresAt).toISOString() : null),
+        plan      : newPlan,
+        expires_at: (newPlan === 'free' || newPlan === 'admin_lifetime')
+          ? null
+          : (newDate ? new Date(newDate).toISOString() : null),
       };
-      const { data: saved } = await api.patch(`/admin/users/${targetUser.id}/plan`, body);
-      onSave({ plan, plan_display_name: saved.plan_display_name, plan_expires_at: body.expires_at });
+      const { data } = await api.patch(`/admin/users/${user.id}/plan`, body);
+      onPlanUpdate(user.id, {
+        plan             : data.plan,
+        plan_display_name: data.plan_display_name,
+        plan_expires_at  : data.expires_at,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
     } catch (err) {
-      setError(err.response?.data?.message ?? err.response?.data?.fields?.plan?.[0] ?? 'Failed to save');
+      setSaveErr(err.response?.data?.message ?? 'Save failed');
     } finally {
       setSaving(false);
     }
   }
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="bg-gray-800 border border-gray-700 rounded-xl w-full max-w-md shadow-2xl">
+  function handlePlanChange(e) {
+    const val = e.target.value;
+    setPlanVal(val);
+    if (val === 'free' || val === 'admin_lifetime') setDateVal('');
+    persist(val, val === 'free' || val === 'admin_lifetime' ? '' : dateVal);
+  }
 
-        {/* Header */}
-        <div className="flex items-start justify-between p-6 pb-4">
-          <div>
-            <h2 className="text-lg font-bold text-white">Edit Plan</h2>
-            <p className="text-gray-400 text-sm mt-0.5 truncate max-w-xs">
-              {targetUser.name || targetUser.email}
-            </p>
+  function handleDateChange(e) {
+    setDateVal(e.target.value);
+  }
+
+  function handleDateBlur() {
+    if (dateVal !== prevDateRef.current) {
+      prevDateRef.current = dateVal;
+      persist(planVal, dateVal);
+    }
+  }
+
+  return (
+    <tr className="hover:bg-gray-700/30 transition-colors">
+
+      {/* User */}
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center flex-shrink-0">
+            <span className="text-gray-200 text-xs font-bold">
+              {(user.name || user.email || '?')[0].toUpperCase()}
+            </span>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 ml-4 flex-shrink-0">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          <div className="min-w-0">
+            <p className="text-white font-medium truncate">
+              {user.name || <span className="text-gray-500 italic">No name</span>}
+            </p>
+            <p className="text-gray-400 text-xs truncate">{user.email}</p>
+          </div>
+          {!user.is_active && (
+            <span className="ml-1 px-1.5 py-0.5 bg-red-900/60 text-red-400 text-xs rounded flex-shrink-0">
+              Deactivated
+            </span>
+          )}
+        </div>
+      </td>
+
+      {/* Plan — inline select */}
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1.5">
+          <select
+            value={planVal}
+            onChange={handlePlanChange}
+            disabled={saving}
+            className="
+              bg-gray-700 border border-gray-600 rounded px-2 py-1
+              text-xs text-white font-semibold uppercase tracking-wide
+              focus:outline-none focus:border-amber-500
+              disabled:opacity-60 cursor-pointer
+            "
+          >
+            <option value="free">Free</option>
+            <option value="starter">Starter</option>
+            <option value="pro">Pro</option>
+            <option value="admin_lifetime">Admin Lifetime</option>
+          </select>
+          {saving && (
+            <span className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+          )}
+          {saved && !saving && (
+            <svg className="w-3.5 h-3.5 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
+          )}
+        </div>
+        {saveErr && <p className="text-red-400 text-xs mt-0.5 max-w-[120px] truncate" title={saveErr}>{saveErr}</p>}
+      </td>
+
+      {/* Plan Expires — inline date input */}
+      <td className="px-4 py-3 hidden md:table-cell">
+        {neverExpires ? (
+          <span className="text-green-400 text-xs font-medium">Forever</span>
+        ) : (
+          <input
+            type="date"
+            value={dateVal}
+            onChange={handleDateChange}
+            onBlur={handleDateBlur}
+            disabled={saving}
+            className="
+              bg-gray-700 border border-gray-600 rounded px-2 py-1
+              text-xs text-white focus:outline-none focus:border-amber-500
+              disabled:opacity-60 cursor-pointer
+              [color-scheme:dark]
+            "
+          />
+        )}
+      </td>
+
+      {/* Videos */}
+      <td className="px-4 py-3 hidden sm:table-cell text-gray-300 text-xs">
+        {user.video_count}
+      </td>
+
+      {/* Last Login */}
+      <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">
+        {formatRelative(user.last_login_at)}
+      </td>
+
+      {/* Action */}
+      <td className="px-4 py-3 text-right">
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={onPromoClick}
+            title="Manage promotion video visibility for this user"
+            className="
+              px-2.5 py-1.5 rounded-lg text-xs font-semibold
+              border border-amber-700/40 text-amber-400
+              hover:bg-amber-900/20 hover:border-amber-600/60
+              transition-all duration-150 flex items-center gap-1
+            "
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+            Promos
+          </button>
+          <button
+            onClick={onEnterClick}
+            disabled={!user.is_active}
+            className="
+              px-3 py-1.5 rounded-lg text-xs font-semibold
+              border border-gray-600 text-gray-300
+              hover:border-red-500 hover:text-red-400 hover:bg-red-900/20
+              disabled:opacity-40 disabled:cursor-not-allowed
+              transition-all duration-150
+            "
+          >
+            Enter Account
           </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="px-6 pb-6 flex flex-col gap-4">
-          {/* Plan selector */}
-          <div>
-            <label className="block text-sm text-gray-300 mb-1.5">Plan</label>
-            <select
-              value={plan}
-              onChange={e => setPlan(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
-            >
-              {PLAN_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <p className="text-gray-500 text-xs mt-1">
-              {PLAN_OPTIONS.find(o => o.value === plan)?.note}
-            </p>
-          </div>
-
-          {/* Expiry date — only for paid plans */}
-          {!neverExpires && (
-            <div>
-              <label className="block text-sm text-gray-300 mb-1.5">
-                Plan Expires <span className="text-gray-500 font-normal">(optional — leave blank for no expiry)</span>
-              </label>
-              <input
-                type="date"
-                value={expiresAt}
-                onChange={e => setExpiresAt(e.target.value)}
-                min={new Date().toISOString().slice(0, 10)}
-                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
-              />
-            </div>
-          )}
-
-          {neverExpires && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-gray-700/40 rounded-lg border border-gray-700">
-              <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-              <p className="text-gray-400 text-sm">
-                {plan === 'free' ? 'Free plan never expires.' : 'Admin Lifetime plan never expires.'}
-              </p>
-            </div>
-          )}
-
-          {error && (
-            <p className="text-red-400 text-sm">{error}</p>
-          )}
-
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-gray-300 border border-gray-600 hover:border-gray-400 transition-colors disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-600 text-white hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-            >
-              {saving ? (
-                <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving…</>
-              ) : 'Save Changes'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </td>
+    </tr>
   );
 }
 
@@ -517,9 +572,6 @@ export default function AdminUsers() {
 
   // Promotion visibility modal state
   const [promoModalUser,  setPromoModalUser]  = useState(null);
-
-  // Edit plan modal state
-  const [editPlanUser,    setEditPlanUser]    = useState(null);
 
   // "Session expired" notice from api.js redirect param
   const [expiredNotice, setExpiredNotice] = useState(
@@ -555,16 +607,14 @@ export default function AdminUsers() {
     return () => clearTimeout(id);
   }, [searchInput]);
 
-  // ── Edit Plan ────────────────────────────────────────────────────────────
+  // ── Inline plan update callback (called by UserRow on save) ───────────────
 
-  function handlePlanSaved({ plan, plan_display_name, plan_expires_at }) {
-    // Update the row in-place so the table reflects the change immediately
+  function handlePlanUpdate(userId, { plan, plan_display_name, plan_expires_at }) {
     setUsers(prev => prev.map(u =>
-      u.id === editPlanUser.id
+      u.id === userId
         ? { ...u, plan, plan_display_name: plan_display_name ?? u.plan_display_name, plan_expires_at }
         : u
     ));
-    setEditPlanUser(null);
   }
 
   // ── Impersonation ───────────────────────────────────────────────────────
@@ -711,107 +761,13 @@ export default function AdminUsers() {
                   </tr>
                 ) : (
                   users.map(user => (
-                    <tr key={user.id} className="hover:bg-gray-700/30 transition-colors">
-                      {/* User */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center flex-shrink-0">
-                            <span className="text-gray-200 text-xs font-bold">
-                              {(user.name || user.email || '?')[0].toUpperCase()}
-                            </span>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-white font-medium truncate">
-                              {user.name || <span className="text-gray-500 italic">No name</span>}
-                            </p>
-                            <p className="text-gray-400 text-xs truncate">{user.email}</p>
-                          </div>
-                          {!user.is_active && (
-                            <span className="ml-1 px-1.5 py-0.5 bg-red-900/60 text-red-400 text-xs rounded">
-                              Deactivated
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Plan */}
-                      <td className="px-4 py-3">
-                        <PlanChip plan={user.plan} />
-                      </td>
-
-                      {/* Plan Expires */}
-                      <td className="px-4 py-3 hidden md:table-cell text-xs">
-                        {user.plan === 'free' || user.plan === 'admin_lifetime' ? (
-                          <span className="text-green-400 font-medium">Forever</span>
-                        ) : user.plan_expires_at ? (
-                          <span className={
-                            new Date(user.plan_expires_at) < new Date()
-                              ? 'text-red-400'
-                              : 'text-gray-300'
-                          }>
-                            {formatDate(user.plan_expires_at)}
-                          </span>
-                        ) : (
-                          <span className="text-gray-500">—</span>
-                        )}
-                      </td>
-
-                      {/* Videos */}
-                      <td className="px-4 py-3 hidden sm:table-cell text-gray-300 text-xs">
-                        {user.video_count}
-                      </td>
-
-                      {/* Last Login */}
-                      <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">
-                        {formatRelative(user.last_login_at)}
-                      </td>
-
-                      {/* Action */}
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => setPromoModalUser(user)}
-                            title="Manage promotion video visibility for this user"
-                            className="
-                              px-2.5 py-1.5 rounded-lg text-xs font-semibold
-                              border border-amber-700/40 text-amber-400
-                              hover:bg-amber-900/20 hover:border-amber-600/60
-                              transition-all duration-150 flex items-center gap-1
-                            "
-                          >
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                            </svg>
-                            Promos
-                          </button>
-                          <button
-                            onClick={() => setEditPlanUser(user)}
-                            title="Change plan or expiry date"
-                            className="
-                              px-2.5 py-1.5 rounded-lg text-xs font-semibold
-                              border border-blue-700/40 text-blue-400
-                              hover:bg-blue-900/20 hover:border-blue-600/60
-                              transition-all duration-150
-                            "
-                          >
-                            Plan
-                          </button>
-                          <button
-                            onClick={() => { setModalUser(user); setModalError(''); }}
-                            disabled={!user.is_active}
-                            className="
-                              px-3 py-1.5 rounded-lg text-xs font-semibold
-                              border border-gray-600 text-gray-300
-                              hover:border-red-500 hover:text-red-400 hover:bg-red-900/20
-                              disabled:opacity-40 disabled:cursor-not-allowed
-                              transition-all duration-150
-                            "
-                          >
-                            Enter Account
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                    <UserRow
+                      key={user.id}
+                      user={user}
+                      onPlanUpdate={handlePlanUpdate}
+                      onPromoClick={() => setPromoModalUser(user)}
+                      onEnterClick={() => { setModalUser(user); setModalError(''); }}
+                    />
                   ))
                 )}
               </tbody>
@@ -869,14 +825,6 @@ export default function AdminUsers() {
         />
       )}
 
-      {/* Edit plan modal */}
-      {editPlanUser && (
-        <EditPlanModal
-          targetUser={editPlanUser}
-          onSave={handlePlanSaved}
-          onClose={() => setEditPlanUser(null)}
-        />
-      )}
     </div>
   );
 }
