@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate }             from 'react-router-dom';
 import { useAuth }                            from '../contexts/AuthContext';
+import { pixelTrack }                         from '../lib/pixel';
 
 /**
  * PaymentSuccess — /payment/:plan
@@ -21,6 +22,12 @@ import { useAuth }                            from '../contexts/AuthContext';
 const PLAN_LABELS = {
   starter: 'Starter',
   pro    : 'Pro',
+};
+
+// INR values matched to plan pricing
+const PLAN_VALUES = {
+  starter: 999,
+  pro    : 1999,
 };
 
 const POLL_INTERVAL_MS = 3_000;   // poll every 3 s
@@ -86,6 +93,13 @@ export default function PaymentSuccess() {
     if (planMatches) {
       activated.current = true;
       setPhase('success');
+
+      // Fire Meta Pixel Purchase event once plan is confirmed
+      pixelTrack('Purchase', {
+        value        : PLAN_VALUES[plan] ?? 0,
+        currency     : 'INR',
+        content_name : `VidaPulse ${planLabel} Plan`,
+      });
 
       // Auto-redirect to dashboard after 3 s
       const t = setTimeout(() => navigate('/dashboard', { replace: true }), REDIRECT_DELAY);

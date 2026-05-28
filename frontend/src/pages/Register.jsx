@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+import { pixelTrack } from '../lib/pixel';
 
 /**
  * Register — self-signup for new subscribers (free plan).
@@ -53,6 +54,7 @@ export default function Register() {
         ...(phone.trim() ? { phone: phone.trim() } : {}),
       });
       await refetch();
+      pixelTrack('CompleteRegistration');
       navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err.response?.data?.message ?? 'Registration failed. Please try again.');
