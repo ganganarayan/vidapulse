@@ -175,7 +175,7 @@ export default function UpgradePage() {
               <PlanCard
                 planKey     = "pro"
                 name        = "Pro"
-                tagline     = "For businesses serious about video"
+                tagline     = "For any serious business, B2B or B2C, to scale through video marketing"
                 price       = {region === 'india'
                   ? (upgradeData?.pricing?.pro?.inr_label ?? '₹1,999')
                   : (upgradeData?.pricing?.pro?.usd_label ?? '$29')}

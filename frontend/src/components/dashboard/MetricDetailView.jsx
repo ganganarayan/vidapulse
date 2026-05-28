@@ -231,9 +231,9 @@ export default function MetricDetailView({ videoId, metric, video, userPlan }) {
           <h2 className="text-2xl font-bold text-gray-50">{cfg.label}</h2>
           <p className="text-xs text-gray-400 mt-1 max-w-sm">{cfg.desc}</p>
           {cfg.formula && (
-            <p className="text-[10px] font-mono text-gray-500 mt-2 inline-flex items-center gap-1
-                           bg-gray-800/70 border border-gray-700/60 rounded px-2 py-1 max-w-sm leading-relaxed">
-              <span className="text-gray-600 select-none">ƒ</span>
+            <p className="text-[11px] font-mono text-gray-200 mt-2 inline-flex items-center gap-1.5
+                           bg-gray-800 border border-gray-600 rounded px-2.5 py-1.5 max-w-sm leading-relaxed">
+              <span className="text-amber-400 select-none font-bold">ƒ</span>
               {cfg.formula}
             </p>
           )}
