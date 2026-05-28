@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function ResetPassword() {
-  const navigate = useNavigate();
   const { refetch } = useAuth();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') || '';
 
-  const [password,  setPassword]  = useState('');
-  const [confirm,   setConfirm]   = useState('');
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState('');
+  const [password,     setPassword]     = useState('');
+  const [confirm,      setConfirm]      = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm,  setShowConfirm]  = useState(false);
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState('');
 
   function strength(pw) {
     let s = 0;
@@ -22,7 +23,7 @@ export default function ResetPassword() {
     return s;
   }
 
-  const pw_strength = strength(password);
+  const pw_strength  = strength(password);
   const strengthLabel = ['', 'Weak', 'Good', 'Strong'][pw_strength];
   const strengthColor = ['', 'bg-red-500', 'bg-amber-500', 'bg-green-500'][pw_strength];
 
@@ -47,10 +48,11 @@ export default function ResetPassword() {
     try {
       await api.post('/auth/reset-password', { token, password });
       await refetch();
-      navigate('/dashboard', { replace: true });
+      // Hard navigation so the browser detects the password form submission
+      // and shows the native "Save password?" prompt.
+      window.location.replace('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Something went wrong. Please try again.');
-    } finally {
       setLoading(false);
     }
   }
@@ -90,19 +92,31 @@ export default function ResetPassword() {
         )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+
+          {/* New password */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">New password</label>
-            <input
-              type="password"
-              autoComplete="new-password"
-              required
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full bg-gray-700 border border-gray-600 text-gray-100
-                         placeholder-gray-500 rounded-lg px-3.5 py-2.5 text-sm
-                         focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-              placeholder="Minimum 8 characters"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                required
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full bg-gray-700 border border-gray-600 text-gray-100
+                           placeholder-gray-500 rounded-lg px-3.5 py-2.5 pr-10 text-sm
+                           focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                placeholder="Minimum 8 characters"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
             {password.length > 0 && (
               <div className="mt-2 flex items-center gap-2">
                 <div className="flex gap-1 flex-1">
@@ -120,20 +134,31 @@ export default function ResetPassword() {
             )}
           </div>
 
+          {/* Confirm password */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">Confirm password</label>
-            <input
-              type="password"
-              autoComplete="new-password"
-              required
-              value={confirm}
-              onChange={e => setConfirm(e.target.value)}
-              className={`w-full bg-gray-700 border text-gray-100
-                          placeholder-gray-500 rounded-lg px-3.5 py-2.5 text-sm
-                          focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent
-                          ${confirm && password !== confirm ? 'border-red-500' : 'border-gray-600'}`}
-              placeholder="Re-enter your password"
-            />
+            <div className="relative">
+              <input
+                type={showConfirm ? 'text' : 'password'}
+                autoComplete="new-password"
+                required
+                value={confirm}
+                onChange={e => setConfirm(e.target.value)}
+                className={`w-full bg-gray-700 border text-gray-100
+                            placeholder-gray-500 rounded-lg px-3.5 py-2.5 pr-10 text-sm
+                            focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent
+                            ${confirm && password !== confirm ? 'border-red-500' : 'border-gray-600'}`}
+                placeholder="Re-enter your password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                tabIndex={-1}
+              >
+                {showConfirm ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
             {confirm && password !== confirm && (
               <p className="mt-1 text-xs text-red-400">Passwords do not match</p>
             )}
@@ -157,5 +182,28 @@ export default function ResetPassword() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Icons ────────────────────────────────────────────────────────────────────
+
+function EyeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
   );
 }

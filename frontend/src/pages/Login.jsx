@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -11,15 +11,15 @@ const OAUTH_ERRORS = {
 };
 
 export default function Login() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { refetch } = useAuth();
 
-  const [email,          setEmail]          = useState('');
-  const [password,       setPassword]       = useState('');
-  const [loading,        setLoading]        = useState(false);
-  const [error,          setError]          = useState('');
-  const [googleEnabled,  setGoogleEnabled]  = useState(false);
+  const [email,         setEmail]         = useState('');
+  const [password,      setPassword]      = useState('');
+  const [showPassword,  setShowPassword]  = useState(false);
+  const [loading,       setLoading]       = useState(false);
+  const [error,         setError]         = useState('');
+  const [googleEnabled, setGoogleEnabled] = useState(false);
 
   // Pick up any OAuth error from query params
   useEffect(() => {
@@ -43,12 +43,13 @@ export default function Login() {
       // Refetch user BEFORE navigating — the httpOnly cookie is now set and
       // AuthContext needs to load the user so ProtectedRoute lets us through.
       await refetch();
-      navigate('/dashboard', { replace: true });
+      // Hard navigation so the browser detects the password form submission
+      // and shows the native "Save password?" prompt.
+      window.location.replace('/dashboard');
     } catch (err) {
       // Server returns { error: '...' } for both 401 and first-login 400
       const msg = err.response?.data?.error || err.response?.data?.message || 'Something went wrong. Please try again.';
       setError(msg);
-    } finally {
       setLoading(false);
     }
   }
@@ -106,15 +107,15 @@ export default function Login() {
           </>
         )}
 
-        {/* Email/password form */}
-        <form onSubmit={handleLogin} autoComplete="off" className="flex flex-col gap-4">
+        {/* Email/password form — autocomplete attributes enable browser password saving */}
+        <form onSubmit={handleLogin} className="flex flex-col gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
               Email address
             </label>
             <input
               type="email"
-              autoComplete="off"
+              autoComplete="email"
               required
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -135,17 +136,27 @@ export default function Login() {
                 Forgot password?
               </Link>
             </div>
-            <input
-              type="password"
-              autoComplete="off"
-              required
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full bg-gray-700 border border-gray-600 text-gray-100
-                         placeholder-gray-500 rounded-lg px-3.5 py-2.5 text-sm
-                         focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full bg-gray-700 border border-gray-600 text-gray-100
+                           placeholder-gray-500 rounded-lg px-3.5 py-2.5 pr-10 text-sm
+                           focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
           </div>
 
           <button
@@ -172,6 +183,29 @@ export default function Login() {
   );
 }
 
+// ── Icons ─────────────────────────────────────────────────────────────────
+
+function EyeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  );
+}
+
 // ── Brand SVG icon ────────────────────────────────────────────
 
 function GoogleIcon() {
@@ -184,5 +218,3 @@ function GoogleIcon() {
     </svg>
   );
 }
-
-// MicrosoftIcon removed — Microsoft OAuth not active yet.
