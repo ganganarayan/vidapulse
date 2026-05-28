@@ -210,13 +210,49 @@ async function createPromotionVideo(adminUserId, url, titleOverride) {
     await client.query('COMMIT');
 
     logger.info(`[promotion] Created promotion video ${promo.id} (video ${video.id}) by admin ${adminUserId}`);
-    return { ...promo, ...video, promotion_id: promo.id };
+
+    // Explicit mapping — do NOT spread promo+video together because video.id
+    // would overwrite promo.id, breaking all subsequent visibility/reorder/delete calls.
+    return {
+      id                   : promo.id,
+      promotion_id         : promo.id,
+      video_id             : video.id,
+      visibility           : promo.visibility,
+      sort_order           : promo.sort_order,
+      created_at           : promo.created_at,
+      title                : video.title,
+      original_url         : video.original_url,
+      source_type          : video.source_type,
+      playable_url         : video.playable_url,
+      thumbnail_url        : video.thumbnail_url,
+      duration_seconds     : video.duration_seconds,
+      processing_status    : video.processing_status,
+      using_iframe_fallback: video.using_iframe_fallback,
+      total_views          : 0,
+      unique_views         : 0,
+      hidden_count         : 0,
+    };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
   } finally {
     client.release();
   }
+}
+
+/**
+ * Rename the underlying video title for a promotion video.
+ */
+async function renamePromotionVideo(promoId, title) {
+  const trimmed = title?.trim();
+  if (!trimmed) throw new Error('title is required');
+  const { rows: [row] } = await pool.query(
+    `UPDATE videos SET title = $1, updated_at = NOW()
+      WHERE id = (SELECT video_id FROM promotion_videos WHERE id = $2)
+      RETURNING id, title`,
+    [trimmed, promoId]
+  );
+  return row ?? null;
 }
 
 /**
@@ -305,6 +341,7 @@ module.exports = {
   getAdminPromotionVideos,
   getVisiblePromotionVideos,
   createPromotionVideo,
+  renamePromotionVideo,
   updateVisibility,
   reorderPromotionVideos,
   deletePromotionVideo,

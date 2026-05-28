@@ -158,6 +158,21 @@ export default function AdminPromotionPage() {
     }
   }
 
+  // ── Rename ──────────────────────────────────────────────────────────────
+
+  async function handleRename(promoId, newTitle) {
+    const trimmed = newTitle.trim();
+    if (!trimmed) return;
+    // Optimistic update
+    setPromos(prev => prev.map(p => p.id === promoId ? { ...p, title: trimmed } : p));
+    try {
+      await api.patch(`/admin/promotion-videos/${promoId}/title`, { title: trimmed });
+    } catch (err) {
+      showToast(err.response?.data?.message ?? 'Failed to rename', 'error');
+      load(); // revert
+    }
+  }
+
   // ── Delete ──────────────────────────────────────────────────────────────
 
   async function handleDelete(promoId) {
@@ -288,6 +303,7 @@ export default function AdminPromotionPage() {
                 total={promos.length}
                 onVisibilityChange={handleVisibility}
                 onMove={movePromo}
+                onRename={handleRename}
                 onDelete={handleDelete}
               />
             ))}
@@ -302,10 +318,40 @@ export default function AdminPromotionPage() {
 // PromotionVideoRow — video bar + radio buttons + controls
 // ─────────────────────────────────────────────────────────────────────────
 
-function PromotionVideoRow({ promo, index, total, onVisibilityChange, onMove, onDelete }) {
+function PromotionVideoRow({ promo, index, total, onVisibilityChange, onMove, onRename, onDelete }) {
   const [embedCopied, setEmbedCopied] = useState(false);
+  const [editing,     setEditing]     = useState(false);
+  const [editValue,   setEditValue]   = useState('');
+  const [saving,      setSaving]      = useState(false);
+  const editInputRef  = useRef(null);
+
   const duration    = fmtDuration(promo.duration_seconds);
   const sourceLabel = SOURCE_LABELS[promo.source_type] ?? 'Video';
+
+  function startEdit() {
+    setEditValue(promo.title);
+    setEditing(true);
+    setTimeout(() => editInputRef.current?.select(), 30);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setEditValue('');
+  }
+
+  async function commitEdit() {
+    const trimmed = editValue.trim();
+    if (!trimmed || trimmed === promo.title) { cancelEdit(); return; }
+    setSaving(true);
+    await onRename(promo.id, trimmed);
+    setSaving(false);
+    setEditing(false);
+  }
+
+  function handleEditKeyDown(e) {
+    if (e.key === 'Enter')  { e.preventDefault(); commitEdit(); }
+    if (e.key === 'Escape') { cancelEdit(); }
+  }
 
   function handleEmbedCopy(e) {
     e.stopPropagation();
@@ -355,7 +401,48 @@ function PromotionVideoRow({ promo, index, total, onVisibilityChange, onMove, on
 
         {/* Title + meta */}
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-100 truncate">{promo.title}</p>
+          {editing ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                ref={editInputRef}
+                type="text"
+                value={editValue}
+                onChange={e => setEditValue(e.target.value)}
+                onKeyDown={handleEditKeyDown}
+                onBlur={commitEdit}
+                disabled={saving}
+                className="flex-1 min-w-0 bg-gray-700 border border-amber-500 text-gray-100 rounded-md
+                           px-2 py-1 text-sm focus:outline-none"
+              />
+              <button
+                onMouseDown={e => { e.preventDefault(); commitEdit(); }}
+                disabled={saving}
+                className="flex-shrink-0 p-1 rounded text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                title="Save"
+              >
+                <CheckIcon />
+              </button>
+              <button
+                onMouseDown={e => { e.preventDefault(); cancelEdit(); }}
+                className="flex-shrink-0 p-1 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-700 transition-colors"
+                title="Cancel"
+              >
+                <XIcon />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 group/title min-w-0">
+              <p className="font-semibold text-gray-100 truncate">{promo.title}</p>
+              <button
+                onClick={startEdit}
+                className="flex-shrink-0 p-1 rounded text-gray-600 hover:text-gray-300 hover:bg-gray-700
+                           opacity-0 group-hover/title:opacity-100 transition-all"
+                title="Rename"
+              >
+                <PencilIcon />
+              </button>
+            </div>
+          )}
           <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
             <span>{sourceLabel}</span>
             <span className="text-gray-600">·</span>
@@ -485,6 +572,21 @@ function TrashIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+    </svg>
+  );
+}
+function PencilIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </svg>
+  );
+}
+function XIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
     </svg>
   );
 }

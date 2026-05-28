@@ -45,6 +45,7 @@ const {
   createPromotionVideo,
   updateVisibility,
   reorderPromotionVideos,
+  renamePromotionVideo,
   deletePromotionVideo,
   setUserPromoHidden,
   getUserPromoHiddenIds,
@@ -1071,6 +1072,20 @@ router.patch('/promotion-videos/reorder', async (req, res, next) => {
     }
     await reorderPromotionVideos(ordered_ids);
     return res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/admin/promotion-videos/:id/title — rename the video title
+router.patch('/promotion-videos/:id/title', async (req, res, next) => {
+  try {
+    const { title } = req.body ?? {};
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      return res.status(400).json({ message: 'title is required' });
+    }
+    const updated = await renamePromotionVideo(req.params.id, title);
+    if (!updated) return res.status(404).json({ message: 'Promotion video not found' });
+    logger.info(`[admin] Promotion ${req.params.id} renamed to "${updated.title}" by ${req.user.id}`);
+    return res.json({ title: updated.title });
   } catch (err) { next(err); }
 });
 
