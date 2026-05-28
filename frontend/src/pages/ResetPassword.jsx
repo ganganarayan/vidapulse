@@ -3,12 +3,15 @@ import { useSearchParams, Link } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 
+// tokenStatus: 'loading' | 'valid' | 'expired' | 'missing'
+
 export default function ResetPassword() {
   const { refetch } = useAuth();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') || '';
 
-  const [email,        setEmail]        = useState('');   // fetched from token
+  const [tokenStatus,  setTokenStatus]  = useState(token ? 'loading' : 'missing');
+  const [email,        setEmail]        = useState('');
   const [password,     setPassword]     = useState('');
   const [confirm,      setConfirm]      = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -16,15 +19,16 @@ export default function ResetPassword() {
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState('');
 
-  // Fetch the email for this token so we can:
-  //  1. Show "Resetting password for: user@example.com" (good UX)
-  //  2. Include a name="email" input so ALL browsers associate the new
-  //     password with the correct account and show "Save password?"
+  // Validate the token immediately on load.
+  // If expired/invalid, show "Link expired" straight away — no form.
   useEffect(() => {
     if (!token) return;
     api.get(`/auth/reset-token-email?token=${encodeURIComponent(token)}`)
-      .then(res => setEmail(res.data.email ?? ''))
-      .catch(() => {}); // silent — email field just stays empty
+      .then(res => {
+        setEmail(res.data.email ?? '');
+        setTokenStatus('valid');
+      })
+      .catch(() => setTokenStatus('expired'));
   }, [token]);
 
   function strength(pw) {
@@ -64,9 +68,57 @@ export default function ResetPassword() {
       // and shows the native "Save password?" prompt on all browsers.
       window.location.replace('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Something went wrong. Please try again.');
+      const msg = err.response?.data?.message || '';
+      if (err.response?.status === 400 && (msg.toLowerCase().includes('expired') || msg.toLowerCase().includes('invalid'))) {
+        setTokenStatus('expired');
+      } else {
+        setError(msg || 'Something went wrong. Please try again.');
+      }
       setLoading(false);
     }
+  }
+
+  // ── Token status screens ────────────────────────────────────────────────
+
+  if (tokenStatus === 'loading') {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <span className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (tokenStatus === 'expired' || tokenStatus === 'missing') {
+    return (
+      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center px-4 py-12">
+        <div className="mb-8 text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <span className="text-amber-500 text-3xl">▶</span>
+            <span className="text-2xl font-bold text-amber-500 tracking-tight">VidaPulse</span>
+          </div>
+        </div>
+        <div className="w-full max-w-md bg-gray-800 border border-gray-700 rounded-2xl p-8 shadow-xl text-center">
+          <div className="w-12 h-12 rounded-full bg-red-900/30 border border-red-700/40 flex items-center justify-center mx-auto mb-4">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round" className="text-red-400">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <h1 className="text-lg font-bold text-gray-50 mb-2">Reset link expired</h1>
+          <p className="text-sm text-gray-400 mb-6">
+            This password reset link has expired or already been used.
+            Request a new one and try again.
+          </p>
+          <Link
+            to="/forgot-password"
+            className="inline-block w-full bg-amber-500 hover:bg-amber-400 text-gray-900
+                       font-semibold text-sm rounded-lg py-2.5 transition-colors"
+          >
+            Request new reset link
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -85,21 +137,10 @@ export default function ResetPassword() {
         <h1 className="text-xl font-bold text-gray-50 mb-1">Reset your password</h1>
         <p className="text-sm text-gray-400 mb-6">Enter a new password for your account.</p>
 
-        {/* Error banner */}
+        {/* Error banner — generic errors only (expired handled by tokenStatus screen) */}
         {error && (
           <div className="mb-4 px-4 py-3 bg-red-900/40 border border-red-700/50 rounded-lg text-red-300 text-sm">
-            {error}{' '}
-            {(error.includes('expired') || error.includes('Invalid')) && (
-              <Link to="/forgot-password" className="text-amber-400 hover:text-amber-300 underline ml-1">
-                Request a new link
-              </Link>
-            )}
-          </div>
-        )}
-
-        {!token && !error && (
-          <div className="mb-4 px-4 py-3 bg-amber-900/30 border border-amber-700/50 rounded-lg text-amber-300 text-sm">
-            No token found. Please use the link from your reset email.
+            {error}
           </div>
         )}
 

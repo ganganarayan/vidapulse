@@ -107,8 +107,8 @@ router.get('/upgrade', requireAuth, async (req, res, next) => {
       total_plays_to_date: parseInt(stats.total_plays_to_date, 10),
       upgrade_options,
       pricing: {
-        starter: { inr: 999,  label: '₹999/mo',  video_limit: 10  },
-        pro    : { inr: 1999, label: '₹1,999/mo', video_limit: null },
+        starter: { inr: 999,  usd: 15, inr_label: '₹999',   usd_label: '$15',  label: '₹999/mo',  video_limit: 10  },
+        pro    : { inr: 1999, usd: 29, inr_label: '₹1,999', usd_label: '$29',  label: '₹1,999/mo', video_limit: null },
       },
       // Base Razorpay payment page URLs (admin-configured).
       // Frontend appends user params before redirecting.
