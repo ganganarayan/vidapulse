@@ -160,19 +160,10 @@ export default function AdminPromotionPage() {
     }
   }
 
-  // ── Rename ──────────────────────────────────────────────────────────────
+  // ── Rename (called by RenameModal after successful API save) ────────────
 
-  async function handleRename(promoId, newTitle) {
-    const trimmed = newTitle.trim();
-    if (!trimmed) return;
-    // Optimistic update
-    setPromos(prev => prev.map(p => p.id === promoId ? { ...p, title: trimmed } : p));
-    try {
-      await api.patch(`/admin/promotion-videos/${promoId}/title`, { title: trimmed });
-    } catch (err) {
-      showToast(err.response?.data?.message ?? 'Failed to rename', 'error');
-      load(); // revert
-    }
+  function handleRename(promoId, newTitle) {
+    setPromos(prev => prev.map(p => p.id === promoId ? { ...p, title: newTitle } : p));
   }
 
   // ── Delete ──────────────────────────────────────────────────────────────
@@ -322,38 +313,15 @@ export default function AdminPromotionPage() {
 
 function PromotionVideoRow({ promo, index, total, onVisibilityChange, onMove, onRename, onDelete }) {
   const [embedCopied, setEmbedCopied] = useState(false);
-  const [editing,     setEditing]     = useState(false);
-  const [editValue,   setEditValue]   = useState('');
-  const [saving,      setSaving]      = useState(false);
-  const editInputRef  = useRef(null);
+  const [showRename,  setShowRename]  = useState(false);
 
   const duration    = fmtDuration(promo.duration_seconds);
   const sourceLabel = SOURCE_LABELS[promo.source_type] ?? 'Video';
 
-  function startEdit() {
-    setEditValue(promo.title);
-    setEditing(true);
-    setTimeout(() => editInputRef.current?.select(), 30);
-  }
-
-  function cancelEdit() {
-    setEditing(false);
-    setEditValue('');
-  }
-
-  async function commitEdit() {
-    const trimmed = editValue.trim();
-    if (!trimmed || trimmed === promo.title) { cancelEdit(); return; }
-    setSaving(true);
-    await onRename(promo.id, trimmed);
-    setSaving(false);
-    setEditing(false);
-  }
-
-  function handleEditKeyDown(e) {
-    if (e.key === 'Enter')  { e.preventDefault(); commitEdit(); }
-    if (e.key === 'Escape') { cancelEdit(); }
-  }
+  const totalViews    = (promo.total_views    ?? 0).toLocaleString();
+  const uniqueViews   = (promo.unique_views   ?? 0).toLocaleString();
+  const totalViewers  = (promo.total_viewers  ?? 0).toLocaleString();
+  const uniqueViewers = (promo.unique_views   ?? 0).toLocaleString(); // promo stat shape
 
   function handleEmbedCopy(e) {
     e.stopPropagation();
@@ -365,155 +333,219 @@ function PromotionVideoRow({ promo, index, total, onVisibilityChange, onMove, on
   }
 
   return (
-    <div className="bg-gray-800/60 border border-gray-700/50 rounded-xl overflow-hidden">
-      {/* Video bar */}
-      <div className="flex items-center gap-3 px-4 py-3">
-        {/* Sort controls */}
-        <div className="flex flex-col gap-0.5 flex-shrink-0">
-          <button
-            onClick={() => onMove(index, -1)}
-            disabled={index === 0}
-            className="p-0.5 text-gray-600 hover:text-gray-300 disabled:opacity-20 transition-colors"
-            title="Move up"
-          >
-            <ChevronUpIcon />
-          </button>
-          <button
-            onClick={() => onMove(index, 1)}
-            disabled={index === total - 1}
-            className="p-0.5 text-gray-600 hover:text-gray-300 disabled:opacity-20 transition-colors"
-            title="Move down"
-          >
-            <ChevronDownIcon />
-          </button>
-        </div>
+    <>
+      <div className="bg-gray-800 border border-gray-700 rounded-xl hover:border-gray-600 transition-colors">
+        {/* Video bar — identical layout to subscriber VideoCard */}
+        <div className="flex items-center gap-3 px-4 py-3">
 
-        {/* Thumbnail */}
-        <div className="flex-shrink-0 relative w-24 h-14 rounded-lg bg-gray-700 flex items-center justify-center overflow-hidden">
-          {promo.thumbnail_url
-            ? <img src={promo.thumbnail_url} alt="" className="w-full h-full object-cover" />
-            : <VideoPlaceholderIcon />
-          }
-          {duration && (
-            <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[10px] font-medium px-1 py-0.5 rounded leading-none">
-              {duration}
-            </span>
-          )}
-        </div>
+          {/* Sort controls */}
+          <div className="flex flex-col gap-0.5 flex-shrink-0">
+            <button
+              onClick={() => onMove(index, -1)}
+              disabled={index === 0}
+              className="p-0.5 text-gray-600 hover:text-gray-300 disabled:opacity-20 transition-colors"
+              title="Move up"
+            >
+              <ChevronUpIcon />
+            </button>
+            <button
+              onClick={() => onMove(index, 1)}
+              disabled={index === total - 1}
+              className="p-0.5 text-gray-600 hover:text-gray-300 disabled:opacity-20 transition-colors"
+              title="Move down"
+            >
+              <ChevronDownIcon />
+            </button>
+          </div>
 
-        {/* Title + meta */}
-        <div className="flex-1 min-w-0">
-          {editing ? (
-            <div className="flex items-center gap-1.5">
-              <input
-                ref={editInputRef}
-                type="text"
-                value={editValue}
-                onChange={e => setEditValue(e.target.value)}
-                onKeyDown={handleEditKeyDown}
-                onBlur={commitEdit}
-                disabled={saving}
-                className="flex-1 min-w-0 bg-gray-700 border border-amber-500 text-gray-100 rounded-md
-                           px-2 py-1 text-sm focus:outline-none"
-              />
-              <button
-                onMouseDown={e => { e.preventDefault(); commitEdit(); }}
-                disabled={saving}
-                className="flex-shrink-0 p-1 rounded text-emerald-400 hover:bg-emerald-500/10 transition-colors"
-                title="Save"
-              >
-                <CheckIcon />
-              </button>
-              <button
-                onMouseDown={e => { e.preventDefault(); cancelEdit(); }}
-                className="flex-shrink-0 p-1 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-700 transition-colors"
-                title="Cancel"
-              >
-                <XIcon />
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 group/title min-w-0">
-              <p className="font-semibold text-gray-100 truncate">{promo.title}</p>
-              <button
-                onClick={startEdit}
-                className="flex-shrink-0 p-1 rounded text-gray-600 hover:text-gray-300 hover:bg-gray-700
-                           opacity-0 group-hover/title:opacity-100 transition-all"
-                title="Rename"
-              >
-                <PencilIcon />
-              </button>
-            </div>
-          )}
-          <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
-            <span>{sourceLabel}</span>
-            <span className="text-gray-600">·</span>
-            <span>{(promo.total_views ?? 0).toLocaleString()} views</span>
-            {promo.hidden_count > 0 && (
-              <>
-                <span className="text-gray-600">·</span>
-                <span className="text-amber-500/70">{promo.hidden_count} hidden</span>
-              </>
+          {/* Thumbnail */}
+          <div className="flex-shrink-0 relative w-24 h-14 rounded-lg bg-gray-700 flex items-center justify-center overflow-hidden">
+            {promo.thumbnail_url
+              ? <img src={promo.thumbnail_url} alt="" className="w-full h-full object-cover" />
+              : <VideoPlaceholderIcon />
+            }
+            {duration && (
+              <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[10px] font-medium px-1 py-0.5 rounded leading-none">
+                {duration}
+              </span>
             )}
-          </p>
+          </div>
+
+          {/* Title + meta */}
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-gray-100 truncate">{promo.title}</p>
+            <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+              <span>{sourceLabel}</span>
+              {promo.hidden_count > 0 && (
+                <>
+                  <span className="text-gray-600">·</span>
+                  <span className="text-amber-500/70">{promo.hidden_count} hidden</span>
+                </>
+              )}
+              <span className="sm:hidden text-gray-600">·</span>
+              <span className="sm:hidden">{totalViews} views</span>
+            </p>
+          </div>
+
+          {/* Metric columns — matching VideoCard exactly */}
+          <div className="hidden sm:flex items-center gap-5 flex-shrink-0">
+            <StatCol label="Total Views"    value={totalViews}   />
+            <StatCol label="Unique Views"   value={uniqueViews}  />
+            <div className="hidden lg:block w-px h-8 bg-gray-700" />
+            <StatCol label="Total Viewers"  value={totalViewers}  className="hidden lg:block" />
+            <StatCol label="Unique Viewers" value={uniqueViewers} className="hidden lg:block" />
+          </div>
+
+          {/* Action buttons — matching VideoCard exactly */}
+          <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+            <button
+              onClick={handleEmbedCopy}
+              title="Copy embed code"
+              className={`p-1.5 rounded-lg transition-colors ${
+                embedCopied
+                  ? 'text-emerald-400 bg-emerald-500/10'
+                  : 'text-gray-500 hover:text-gray-300 hover:bg-gray-700'
+              }`}
+            >
+              {embedCopied ? <CheckIcon /> : <EmbedIcon />}
+            </button>
+            <button
+              onClick={() => setShowRename(true)}
+              title="Edit video name"
+              className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-700 transition-colors"
+            >
+              <PencilIcon />
+            </button>
+            <button
+              onClick={() => onDelete(promo.id)}
+              title="Delete promotion video"
+              className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              <TrashIcon />
+            </button>
+          </div>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button
-            onClick={handleEmbedCopy}
-            title="Copy embed code"
-            className={`p-1.5 rounded-lg transition-colors ${
-              embedCopied
-                ? 'text-emerald-400 bg-emerald-500/10'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-gray-700'
-            }`}
-          >
-            {embedCopied ? <CheckIcon /> : <EmbedIcon />}
-          </button>
-          <button
-            onClick={() => onDelete(promo.id)}
-            title="Delete promotion video"
-            className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-          >
-            <TrashIcon />
-          </button>
+        {/* Visibility radio buttons */}
+        <div className="border-t border-gray-700/40 px-4 py-3 flex items-center gap-1 sm:gap-3 flex-wrap">
+          <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest mr-1 flex-shrink-0">
+            Visibility
+          </span>
+          {VISIBILITY_OPTIONS.map(opt => {
+            const active = promo.visibility === opt.value;
+            return (
+              <label
+                key={opt.value}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg cursor-pointer
+                  border transition-all select-none text-xs font-medium
+                  ${active
+                    ? `${opt.color} border-current bg-current/5 ring-1 ${opt.ring}`
+                    : 'text-gray-500 border-gray-700 hover:border-gray-500 hover:text-gray-300'
+                  }`}
+              >
+                <input
+                  type="radio"
+                  name={`visibility-${promo.id}`}
+                  value={opt.value}
+                  checked={active}
+                  onChange={() => onVisibilityChange(promo.id, opt.value)}
+                  className="sr-only"
+                />
+                {active && <span className={`w-1.5 h-1.5 rounded-full ${opt.dot} flex-shrink-0`} />}
+                <span>{opt.label}</span>
+                <span className={`text-[10px] ${active ? 'opacity-70' : 'opacity-40'}`}>
+                  ({opt.desc})
+                </span>
+              </label>
+            );
+          })}
         </div>
       </div>
 
-      {/* Visibility radio buttons */}
-      <div className="border-t border-gray-700/40 px-4 py-3 flex items-center gap-1 sm:gap-3 flex-wrap">
-        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest mr-1 flex-shrink-0">
-          Visibility
-        </span>
-        {VISIBILITY_OPTIONS.map(opt => {
-          const active = promo.visibility === opt.value;
-          return (
-            <label
-              key={opt.value}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg cursor-pointer
-                border transition-all select-none text-xs font-medium
-                ${active
-                  ? `${opt.color} border-current bg-current/5 ring-1 ${opt.ring}`
-                  : 'text-gray-500 border-gray-700 hover:border-gray-500 hover:text-gray-300'
-                }`}
-            >
-              <input
-                type="radio"
-                name={`visibility-${promo.id}`}
-                value={opt.value}
-                checked={active}
-                onChange={() => onVisibilityChange(promo.id, opt.value)}
-                className="sr-only"
-              />
-              {active && <span className={`w-1.5 h-1.5 rounded-full ${opt.dot} flex-shrink-0`} />}
-              <span>{opt.label}</span>
-              <span className={`text-[10px] ${active ? 'opacity-70' : 'opacity-40'}`}>
-                ({opt.desc})
-              </span>
-            </label>
-          );
-        })}
+      {/* Rename modal */}
+      {showRename && (
+        <RenameModal
+          promo={promo}
+          onSave={(newTitle) => { onRename(promo.id, newTitle); setShowRename(false); }}
+          onClose={() => setShowRename(false)}
+        />
+      )}
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// StatCol
+// ─────────────────────────────────────────────────────────────────────────
+
+function StatCol({ label, value, className = '' }) {
+  return (
+    <div className={`text-center ${className}`}>
+      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
+      <p className="text-sm font-bold text-gray-200 mt-0.5">{value}</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// RenameModal
+// ─────────────────────────────────────────────────────────────────────────
+
+function RenameModal({ promo, onSave, onClose }) {
+  const [title,  setTitle]  = useState(promo.title);
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 50); }, []);
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  async function handleSave(e) {
+    e.preventDefault();
+    const trimmed = title.trim();
+    if (!trimmed || trimmed === promo.title) { onClose(); return; }
+    setSaving(true);
+    setError('');
+    try {
+      await api.patch(`/admin/promotion-videos/${promo.id}/title`, { title: trimmed });
+      onSave(trimmed);
+    } catch (err) {
+      setError(err.response?.data?.message ?? 'Could not save. Try again.');
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6">
+        <h2 className="text-base font-bold text-gray-50 mb-4">Rename video</h2>
+        <form onSubmit={handleSave}>
+          <input
+            ref={inputRef}
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            maxLength={500}
+            className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+          />
+          {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
+          <div className="flex gap-2 mt-4 justify-end">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving || !title.trim()}
+              className="px-4 py-2 text-sm font-medium bg-amber-500 hover:bg-amber-400 text-gray-900 rounded-lg transition-colors disabled:opacity-50">
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

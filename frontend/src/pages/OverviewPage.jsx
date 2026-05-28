@@ -14,8 +14,9 @@ import api from '../lib/api';
 export default function OverviewPage() {
   const { user } = useAuth();
   const navigate  = useNavigate();
-  const [data,    setData]    = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data,        setData]        = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [promoVideos, setPromoVideos] = useState([]);
 
   // Strip token param from OAuth redirect
   useEffect(() => {
@@ -33,6 +34,13 @@ export default function OverviewPage() {
       .then(r => setData(r.data))
       .catch(() => setData(null))
       .finally(() => setLoading(false));
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
+    api.get('/promotion-videos')
+      .then(r => setPromoVideos(r.data.videos ?? []))
+      .catch(() => {});
   }, [user?.id]);
 
   function fmtWatchTime(secs) {
@@ -63,52 +71,77 @@ export default function OverviewPage() {
           <div className="flex items-center justify-center py-32 gap-2 text-gray-500 text-sm">
             <span className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : !data || data.total_videos === 0 ? (
+        ) : (!data || data.total_videos === 0) && promoVideos.length === 0 ? (
           <EmptyOverview />
         ) : (
           <div className="max-w-5xl mx-auto px-6 py-8 flex flex-col gap-8">
 
-            {/* ── Stat cards ─────────────────────────────────────── */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard label="Total Views"    value={(data.total_views    ?? 0).toLocaleString()} icon={<PlaysCardIcon />} />
-              <StatCard label="Unique Views"   value={(data.unique_views   ?? 0).toLocaleString()} icon={<ViewersCardIcon />} />
-              <StatCard label="Total Viewers"  value={(data.total_viewers  ?? 0).toLocaleString()} icon={<WatchCardIcon />} />
-              <StatCard label="Unique Viewers" value={(data.unique_viewers ?? 0).toLocaleString()} icon={<VideoCardIcon />} />
-            </div>
-
-            {/* Watch time highlight */}
-            {data.total_watch_seconds > 0 && (
-              <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl px-5 py-4 flex items-center gap-4">
-                <ClockBigIcon />
-                <div className="flex-1">
-                  <p className="text-2xl font-bold text-amber-400">{fmtWatchTime(data.total_watch_seconds)}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">total watch time across {data.total_videos} {data.total_videos === 1 ? 'video' : 'videos'}</p>
-                </div>
-              </div>
-            )}
-
-            {/* ── Top videos ──────────────────────────────────────── */}
-            {data.top_videos?.length > 0 && (
+            {/* ── Featured / promotion videos ─────────────────────── */}
+            {promoVideos.length > 0 && (
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">
-                    Top Videos
-                  </h2>
-                  <Link to="/videos" className="text-xs text-amber-400 hover:text-amber-300 transition-colors">
-                    View all →
-                  </Link>
+                <div className="flex items-center gap-2 mb-3">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400 flex-shrink-0">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                  <span className="text-[11px] font-bold text-amber-400 uppercase tracking-widest">Featured</span>
                 </div>
                 <div className="flex flex-col gap-2">
-                  {data.top_videos.map((video, i) => (
-                    <TopVideoRow
-                      key={video.id}
-                      rank={i + 1}
+                  {promoVideos.map(video => (
+                    <OverviewPromoRow
+                      key={video.promotion_id ?? video.id}
                       video={video}
                       onClick={() => navigate(`/dashboard/videos/${video.id}`)}
                     />
                   ))}
                 </div>
               </div>
+            )}
+
+            {/* ── Stat cards (only when user has own videos) ──────── */}
+            {data && data.total_videos > 0 && (
+              <>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <StatCard label="Total Views"    value={(data.total_views    ?? 0).toLocaleString()} icon={<PlaysCardIcon />} />
+                  <StatCard label="Unique Views"   value={(data.unique_views   ?? 0).toLocaleString()} icon={<ViewersCardIcon />} />
+                  <StatCard label="Total Viewers"  value={(data.total_viewers  ?? 0).toLocaleString()} icon={<WatchCardIcon />} />
+                  <StatCard label="Unique Viewers" value={(data.unique_viewers ?? 0).toLocaleString()} icon={<VideoCardIcon />} />
+                </div>
+
+                {/* Watch time highlight */}
+                {data.total_watch_seconds > 0 && (
+                  <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl px-5 py-4 flex items-center gap-4">
+                    <ClockBigIcon />
+                    <div className="flex-1">
+                      <p className="text-2xl font-bold text-amber-400">{fmtWatchTime(data.total_watch_seconds)}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">total watch time across {data.total_videos} {data.total_videos === 1 ? 'video' : 'videos'}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Top videos ────────────────────────────────────── */}
+                {data.top_videos?.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">
+                        Top Videos
+                      </h2>
+                      <Link to="/videos" className="text-xs text-amber-400 hover:text-amber-300 transition-colors">
+                        View all →
+                      </Link>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {data.top_videos.map((video, i) => (
+                        <TopVideoRow
+                          key={video.id}
+                          rank={i + 1}
+                          video={video}
+                          onClick={() => navigate(`/dashboard/videos/${video.id}`)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {/* ── Quick nav tiles ─────────────────────────────────── */}
@@ -118,10 +151,10 @@ export default function OverviewPage() {
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
-                  { to: '/events',  label: 'Events',  desc: 'Live event stream',        icon: '📋' },
-                  { to: '/funnels', label: 'Funnels', desc: 'Viewer journey',            icon: '▽' },
-                  { to: '/reports', label: 'Reports', desc: 'Export & schedule',         icon: '📄' },
-                  { to: '/alerts',  label: 'Alerts',  desc: 'Notification rules',        icon: '🔔' },
+                  { to: '/events',  label: 'Events',  desc: 'Live event stream',  icon: '📋' },
+                  { to: '/funnels', label: 'Funnels', desc: 'Viewer journey',      icon: '▽' },
+                  { to: '/reports', label: 'Reports', desc: 'Export & schedule',   icon: '📄' },
+                  { to: '/alerts',  label: 'Alerts',  desc: 'Notification rules',  icon: '🔔' },
                 ].map(item => (
                   <Link
                     key={item.to}
@@ -141,6 +174,97 @@ export default function OverviewPage() {
         )}
       </main>
     </AppLayout>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// OverviewPromoRow — featured video row matching the Videos page card style
+// ─────────────────────────────────────────────────────────────────────────
+
+const SOURCE_LABELS_OV = {
+  youtube: 'YouTube', vimeo: 'Vimeo', loom: 'Loom', zoom: 'Zoom',
+  google_drive: 'Google Drive', dropbox: 'Dropbox',
+  mp4_direct: 'Direct MP4', hls_stream: 'HLS Stream',
+  amazon_s3: 'Amazon S3', azure_blob: 'Azure Blob', other: 'Video',
+};
+
+function fmtDurationOv(secs) {
+  if (!secs || secs <= 0) return null;
+  const s = Math.round(secs);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  return `${m}:${String(sec).padStart(2,'0')}`;
+}
+
+function OverviewPromoRow({ video, onClick }) {
+  const sourceLabel   = SOURCE_LABELS_OV[video.source_type] ?? 'Video';
+  const duration      = fmtDurationOv(video.duration_seconds);
+  const totalViews    = (video.total_views    ?? 0).toLocaleString();
+  const uniqueViews   = (video.unique_views   ?? 0).toLocaleString();
+  const totalViewers  = (video.total_viewers  ?? 0).toLocaleString();
+  const uniqueViewers = (video.unique_session_viewers ?? video.unique_viewers ?? 0).toLocaleString();
+
+  return (
+    <div className="bg-gray-800 border border-amber-500/25 rounded-xl hover:border-amber-500/50 transition-colors">
+      <div className="flex items-center gap-3 px-4 py-3">
+
+        {/* Thumbnail */}
+        <button
+          onClick={onClick}
+          className="flex-shrink-0 relative w-24 h-14 rounded-lg bg-gray-700 flex items-center justify-center overflow-hidden group/thumb"
+        >
+          {video.thumbnail_url
+            ? <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
+            : <VideoThumbIcon />
+          }
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 transition-opacity flex items-center justify-center">
+            <span className="text-white text-lg select-none">{'▶︎'}</span>
+          </div>
+          {duration && (
+            <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[10px] font-medium px-1 py-0.5 rounded leading-none pointer-events-none">
+              {duration}
+            </span>
+          )}
+        </button>
+
+        {/* Title + meta */}
+        <button onClick={onClick} className="flex-1 min-w-0 text-left">
+          <p className="font-semibold text-gray-100 truncate">{video.title}</p>
+          <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+            <span>{sourceLabel}</span>
+            <span className="sm:hidden text-gray-600">·</span>
+            <span className="sm:hidden">{totalViews} views</span>
+          </p>
+        </button>
+
+        {/* Metric columns */}
+        <div className="hidden sm:flex items-center gap-5 flex-shrink-0">
+          <OvStatCol label="Total Views"    value={totalViews}   />
+          <OvStatCol label="Unique Views"   value={uniqueViews}  />
+          <div className="hidden lg:block w-px h-8 bg-gray-700" />
+          <OvStatCol label="Total Viewers"  value={totalViewers}  className="hidden lg:block" />
+          <OvStatCol label="Unique Viewers" value={uniqueViewers} className="hidden lg:block" />
+        </div>
+
+        {/* Featured star */}
+        <div className="flex-shrink-0 ml-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400/50">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OvStatCol({ label, value, className = '' }) {
+  return (
+    <div className={`text-center ${className}`}>
+      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
+      <p className="text-sm font-bold text-gray-200 mt-0.5">{value}</p>
+    </div>
   );
 }
 
