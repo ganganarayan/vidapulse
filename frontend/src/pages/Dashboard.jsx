@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useUpgrade } from '../contexts/UpgradeContext';
 import { VideoLimitBanner } from '../components/upgrade';
 import NotificationBell from '../components/dashboard/NotificationBell';
 import AppLayout from '../components/AppLayout';
@@ -507,8 +508,13 @@ function AddVideoButton({ user, onVideoAdded }) {
   const [submitting, setSubmitting] = useState(false);
   const [error,      setError]      = useState('');
   const { updateUser } = useAuth();
+  const { showUpgrade } = useUpgrade();
   const inputRef = useRef(null);
   const navigate = useNavigate();
+
+  // True when the user has used all their video slots
+  const atLimit = user?.video_limit != null && (user?.video_count ?? 0) >= user?.video_limit;
+  const nextPlan = user?.plan === 'free' ? 'starter' : 'pro';
 
   useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
 
@@ -533,6 +539,22 @@ function AddVideoButton({ user, onVideoAdded }) {
   }
 
   if (!open) {
+    // Limit reached — gray out + show upgrade modal on click
+    if (atLimit) {
+      return (
+        <button
+          onClick={() => showUpgrade(nextPlan)}
+          title={`Video limit reached — upgrade to add more videos`}
+          className="flex items-center gap-1.5 px-3 py-1.5
+                     bg-gray-700/80 text-gray-400 text-sm font-semibold rounded-lg
+                     border border-gray-600/60 hover:bg-gray-600/80 hover:text-gray-300
+                     transition-colors cursor-pointer"
+        >
+          <PlusIcon />
+          Add video
+        </button>
+      );
+    }
     return (
       <button
         onClick={() => setOpen(true)}
