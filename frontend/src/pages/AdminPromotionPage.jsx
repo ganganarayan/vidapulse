@@ -134,6 +134,8 @@ export default function AdminPromotionPage() {
     setPromos(prev => prev.map(p => p.id === promoId ? { ...p, visibility: newVisibility } : p));
     try {
       await api.patch(`/admin/promotion-videos/${promoId}/visibility`, { visibility: newVisibility });
+      const label = VISIBILITY_OPTIONS.find(o => o.value === newVisibility)?.label ?? newVisibility;
+      showToast(`Visibility set to ${label}`);
     } catch (err) {
       showToast(err.response?.data?.message ?? 'Failed to update visibility', 'error');
       load(); // revert
