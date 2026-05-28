@@ -101,21 +101,25 @@ router.get('/upgrade', requireAuth, async (req, res, next) => {
       total_plays_to_date: parseInt(stats.total_plays_to_date, 10),
     });
 
+    const env = require('../config/env');
+
     return res.json({
       current_plan       : plan,
       videos_count       : parseInt(stats.video_count, 10),
       total_plays_to_date: parseInt(stats.total_plays_to_date, 10),
       upgrade_options,
       pricing: {
-        starter: { inr: 999,  usd: 15, inr_label: '₹999',   usd_label: '$15',  label: '₹999/mo',  video_limit: 10  },
-        pro    : { inr: 1999, usd: 29, inr_label: '₹1,999', usd_label: '$29',  label: '₹1,999/mo', video_limit: null },
+        starter: { inr: 999,  usd: 15, inr_label: '₹999',   usd_label: '$15', video_limit: 10   },
+        pro    : { inr: 1999, usd: 29, inr_label: '₹1,999', usd_label: '$29', video_limit: 20   },
       },
-      // Base Razorpay payment page URLs (admin-configured).
-      // Frontend appends user params before redirecting.
+      // Razorpay: static payment-link URLs for INR one-time / subscription entry
       razorpay_links: {
         starter: settings.razorpay_starter_url || null,
         pro    : settings.razorpay_pro_url     || null,
       },
+      // Cashfree: dynamic subscription API available for both INR and USD
+      // Frontend calls POST /api/payments/cashfree-subscribe when this is true
+      cashfree_enabled: !!(env.CASHFREE_APP_ID && env.CASHFREE_SECRET_KEY),
     });
   } catch (err) {
     next(err);

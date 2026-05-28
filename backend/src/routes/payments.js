@@ -38,6 +38,7 @@ const logger             = require('../config/logger');
 const { emitEvent }      = require('../services/behavioralEventService');
 const { requireAuth }    = require('../middleware/requireAuth');
 const razorpay           = require('../services/razorpayService');
+const cashfree           = require('../services/cashfreeService');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/payments/subscribe   (authenticated)
@@ -290,6 +291,341 @@ router.post('/razorpay', async (req, res, next) => {
     next(err);
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/payments/cashfree-subscribe   (authenticated)
+// Creates a Cashfree Subscription for the calling user and returns the
+// hosted payment URL. Frontend redirects there.
+// Body: { plan: 'starter'|'pro', currency: 'INR'|'USD' }
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/cashfree-subscribe', requireAuth, async (req, res, next) => {
+  try {
+    const { plan, currency = 'INR' } = req.body;
+
+    if (!['starter', 'pro'].includes(plan)) {
+      return res.status(400).json({ error: 'plan must be "starter" or "pro"' });
+    }
+    if (!['INR', 'USD'].includes(currency)) {
+      return res.status(400).json({ error: 'currency must be "INR" or "USD"' });
+    }
+    if (!env.CASHFREE_APP_ID || !env.CASHFREE_SECRET_KEY) {
+      logger.error('[payments] Cashfree API keys not configured');
+      return res.status(503).json({ error: 'Payment service not configured. Please contact support.' });
+    }
+
+    const user = req.user;
+
+    // Block if user is already on this plan or higher
+    const PLAN_ORDER = { free: 0, starter: 1, pro: 2, admin_lifetime: 3 };
+    if ((PLAN_ORDER[plan] ?? 0) <= (PLAN_ORDER[user.plan] ?? 0)) {
+      return res.status(400).json({ error: `You are already on the ${user.plan} plan or higher` });
+    }
+
+    const returnUrl = `${env.APP_URL}/payment/${plan}`;
+
+    const { subscriptionId, paymentUrl } = await cashfree.createSubscription(
+      { id: user.id, name: user.name, email: user.email, phone: user.phone },
+      plan,
+      currency,
+      returnUrl,
+    );
+
+    logger.info(`[payments] Cashfree subscription ${subscriptionId} created for user ${user.id} (${plan} ${currency})`);
+    return res.json({ paymentUrl, subscriptionId });
+
+  } catch (err) {
+    logger.error(`[payments] /cashfree-subscribe error: ${err.message}`);
+    const status = err.message.includes('Cashfree API') ? 502 : 500;
+    return res.status(status).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/payments/cashfree   (public — called by Cashfree servers)
+//
+// Webhook URL to set in Cashfree Dashboard → Developers → Webhooks:
+//   https://app.vidapulse.in/api/payments/cashfree
+//
+// Events handled:
+//   SUBSCRIPTION_NEW / SUBSCRIPTION_FIRST_CHARGE_SUCCESS → activate plan
+//   SUBSCRIPTION_PAYMENT_SUCCESS                         → extend plan 30 days
+//   SUBSCRIPTION_PAYMENT_FAILED                          → emit failure event
+//   SUBSCRIPTION_CANCELLED / SUBSCRIPTION_COMPLETED      → clear subscription
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/cashfree', async (req, res, next) => {
+  try {
+    const body = req.body;
+
+    // ── 1. Signature verification ──────────────────────────────────────────
+    if (env.CASHFREE_WEBHOOK_SECRET) {
+      if (!cashfree.verifyWebhookSignature(body)) {
+        logger.warn('[payments] Cashfree webhook signature mismatch — rejected');
+        return res.status(400).json({ error: 'Invalid signature' });
+      }
+    }
+
+    const eventType = (body?.event || body?.type || '').toUpperCase();
+
+    logger.info(`[payments] Cashfree webhook — event=${eventType} subscription=${body?.subscriptionId}`);
+
+    // ── 2. Route to handler ────────────────────────────────────────────────
+    const ACTIVATE_EVENTS = [
+      'SUBSCRIPTION_NEW',
+      'SUBSCRIPTION_FIRST_CHARGE_SUCCESS',
+      'PAYMENT_SUCCESS',                   // some Cashfree versions use this
+    ];
+    const RENEWAL_EVENTS = [
+      'SUBSCRIPTION_PAYMENT_SUCCESS',
+    ];
+    const FAILURE_EVENTS = [
+      'SUBSCRIPTION_PAYMENT_FAILED',
+      'PAYMENT_FAILED',
+    ];
+    const ENDED_EVENTS = [
+      'SUBSCRIPTION_CANCELLED',
+      'SUBSCRIPTION_COMPLETED',
+    ];
+
+    if (ACTIVATE_EVENTS.includes(eventType)) {
+      return await _cfHandleActivation(body, eventType, res);
+    }
+    if (RENEWAL_EVENTS.includes(eventType)) {
+      return await _cfHandleRenewal(body, res);
+    }
+    if (FAILURE_EVENTS.includes(eventType)) {
+      return await _cfHandleFailure(body, res);
+    }
+    if (ENDED_EVENTS.includes(eventType)) {
+      return await _cfHandleEnded(body, eventType, res);
+    }
+
+    logger.debug(`[payments] Cashfree: ignoring event "${eventType}"`);
+    return res.json({ ok: true, ignored: true });
+
+  } catch (err) {
+    logger.error(`[payments] Cashfree webhook error: ${err.message}`);
+    next(err);
+  }
+});
+
+// ─── Cashfree webhook handlers ────────────────────────────────────────────────
+
+/**
+ * Parse user_id and plan from the Cashfree webhook body.
+ * tNote is stored as a JSON string: { user_id, plan, currency }
+ * Falls back to email lookup if tNote is missing.
+ */
+async function _cfParseIdentity(body) {
+  let userId   = null;
+  let planKey  = null;
+  let currency = 'INR';
+
+  // Primary: parse tNote
+  try {
+    const note = JSON.parse(body.tNote || '{}');
+    userId   = note.user_id ? String(note.user_id).trim() : null;
+    planKey  = (note.plan || '').toLowerCase().trim() || null;
+    currency = (note.currency || 'INR').toUpperCase();
+  } catch {
+    logger.warn('[payments] Cashfree: could not parse tNote');
+  }
+
+  // Fallback: match by cashfree_subscription_id on users table
+  if (!userId && body.subscriptionId) {
+    const { rows } = await pool.query(
+      `SELECT id FROM users WHERE cashfree_subscription_id = $1 AND is_active = TRUE LIMIT 1`,
+      [body.subscriptionId]
+    );
+    userId = rows[0]?.id ?? null;
+  }
+
+  // Fallback: match by email
+  if (!userId && body.customerEmail) {
+    const { rows } = await pool.query(
+      `SELECT id FROM users WHERE email = $1 AND is_active = TRUE LIMIT 1`,
+      [body.customerEmail.toLowerCase()]
+    );
+    userId = rows[0]?.id ?? null;
+  }
+
+  return { userId, planKey, currency };
+}
+
+async function _cfHandleActivation(body, eventType, res) {
+  const { userId, planKey, currency } = await _cfParseIdentity(body);
+
+  const cfPaymentId      = body.referenceId || body.authReferenceId || null;
+  const cfSubscriptionId = body.subscriptionId || null;
+  const amountRaw        = parseFloat(body.amount || 0);
+  const amountPaise      = currency === 'INR' ? Math.round(amountRaw * 100) : null;
+  const amountCents      = currency === 'USD' ? Math.round(amountRaw * 100) : null;
+
+  logger.info(
+    `[payments] Cashfree ${eventType} — user=${userId} plan=${planKey} ` +
+    `currency=${currency} amount=${amountRaw} ref=${cfPaymentId}`
+  );
+
+  if (!['starter', 'pro'].includes(planKey)) {
+    logger.warn(`[payments] Cashfree ${eventType}: unknown plan "${planKey}"`);
+    return res.json({ ok: true, warning: 'Unknown plan in tNote' });
+  }
+
+  // Deduplication
+  if (cfPaymentId) {
+    const { rows } = await pool.query(
+      `SELECT id FROM payments WHERE cashfree_payment_id = $1`, [cfPaymentId]
+    );
+    if (rows.length) return res.json({ ok: true, duplicate: true });
+  }
+
+  await _cfLogPayment({
+    userId, cfPaymentId, cfSubscriptionId, planKey,
+    amount: currency === 'INR' ? amountPaise : amountCents,
+    currency, eventType, body,
+  });
+
+  if (!userId) {
+    return res.json({ ok: true, warning: 'user not identified' });
+  }
+
+  await _upgradePlan(userId, planKey, amountPaise ?? 0, cfPaymentId, eventType);
+  return res.json({ ok: true, upgraded: true, plan: planKey });
+}
+
+async function _cfHandleRenewal(body, res) {
+  const { userId, planKey, currency } = await _cfParseIdentity(body);
+
+  const cfPaymentId      = body.referenceId || null;
+  const cfSubscriptionId = body.subscriptionId || null;
+  const amountRaw        = parseFloat(body.amount || 0);
+  const amountPaise      = currency === 'INR' ? Math.round(amountRaw * 100) : null;
+
+  logger.info(
+    `[payments] Cashfree RENEWAL — user=${userId} plan=${planKey} ` +
+    `currency=${currency} amount=${amountRaw}`
+  );
+
+  if (!userId) {
+    logger.warn('[payments] Cashfree renewal: cannot identify user');
+    return res.json({ ok: true, warning: 'user not identified' });
+  }
+
+  // Deduplication
+  if (cfPaymentId) {
+    const { rows } = await pool.query(
+      `SELECT id FROM payments WHERE cashfree_payment_id = $1`, [cfPaymentId]
+    );
+    if (rows.length) return res.json({ ok: true, duplicate: true });
+  }
+
+  if (planKey && ['starter', 'pro'].includes(planKey)) {
+    await _cfLogPayment({
+      userId, cfPaymentId, cfSubscriptionId, planKey,
+      amount: amountPaise, currency, eventType: 'SUBSCRIPTION_PAYMENT_SUCCESS', body,
+    });
+  }
+
+  // Extend plan by 30 days
+  await pool.query(
+    `UPDATE users
+     SET plan_expires_at          = GREATEST(COALESCE(plan_expires_at, NOW()), NOW()) + INTERVAL '30 days',
+         plan_enrolled_at         = COALESCE(plan_enrolled_at, NOW()),
+         cashfree_subscription_id = COALESCE(cashfree_subscription_id, $2),
+         updated_at               = NOW()
+     WHERE id = $1`,
+    [userId, cfSubscriptionId]
+  );
+
+  // Ensure plan record is correct (handles re-activation after expiry)
+  if (planKey && ['starter', 'pro'].includes(planKey)) {
+    await _upgradePlanRecord(userId, planKey);
+    await pool.query(
+      `UPDATE onboarding_state
+       SET converted_to_paid_at = COALESCE(converted_to_paid_at, NOW()),
+           current_step         = 'converted'
+       WHERE user_id = $1`,
+      [userId]
+    );
+    emitEvent(userId, 'plan_upgraded', null, {
+      new_plan           : planKey,
+      razorpay_payment_id: '',
+      cashfree_payment_id: cfPaymentId || '',
+      amount_inr         : amountPaise ? (amountPaise / 100).toFixed(2) : '',
+      via                : 'cashfree_subscription',
+    });
+  }
+
+  logger.info(`[payments] ✓ Cashfree renewal — user ${userId} plan extended +30 days`);
+  return res.json({ ok: true, renewed: true });
+}
+
+async function _cfHandleFailure(body, res) {
+  const { userId } = await _cfParseIdentity(body);
+  const cfSubscriptionId = body.subscriptionId || null;
+
+  logger.warn(`[payments] Cashfree payment FAILED — subscription=${cfSubscriptionId} user=${userId}`);
+
+  if (userId) {
+    emitEvent(userId, 'subscription_payment_failed', null, {
+      cashfree_subscription_id: cfSubscriptionId || '',
+      gateway                 : 'cashfree',
+    });
+  }
+
+  return res.json({ ok: true, failed: true });
+}
+
+async function _cfHandleEnded(body, eventType, res) {
+  const { userId } = await _cfParseIdentity(body);
+  const cfSubscriptionId = body.subscriptionId || null;
+
+  logger.info(`[payments] Cashfree ${eventType} — subscription=${cfSubscriptionId} user=${userId}`);
+
+  if (userId) {
+    await pool.query(
+      `UPDATE users
+       SET cashfree_subscription_id = NULL,
+           updated_at               = NOW()
+       WHERE id = $1`,
+      [userId]
+    );
+
+    emitEvent(userId, 'subscription_cancelled', null, {
+      cashfree_subscription_id: cfSubscriptionId || '',
+      event_type              : eventType,
+      gateway                 : 'cashfree',
+    });
+  }
+
+  return res.json({ ok: true, ended: true });
+}
+
+async function _cfLogPayment({ userId, cfPaymentId, cfSubscriptionId, planKey, amount, currency, eventType, body }) {
+  try {
+    await pool.query(
+      `INSERT INTO payments
+         (user_id, cashfree_payment_id, cashfree_subscription_id,
+          plan, amount_paise, currency, status, notes,
+          razorpay_event, payment_gateway)
+       VALUES ($1, $2, $3, $4, $5, $6, 'captured', $7, $8, 'cashfree')
+       ON CONFLICT DO NOTHING`,
+      [
+        userId           || null,
+        cfPaymentId      || null,
+        cfSubscriptionId || null,
+        planKey,
+        amount           || null,
+        currency,
+        JSON.stringify({ tNote: body?.tNote, cycleNumber: body?.cycleNumber }),
+        eventType        || null,
+      ]
+    );
+  } catch (err) {
+    logger.error(`[payments] _cfLogPayment failed: ${err.message}`);
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: extract a clean payment_method string from a Razorpay payment entity.

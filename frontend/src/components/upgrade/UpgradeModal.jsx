@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../lib/api';
-import { savePurchaseIntent } from '../../lib/pixel';
+import { savePurchaseIntent }  from '../../lib/pixel';
 
 /**
  * UpgradeModal
@@ -55,9 +55,11 @@ const PLAN_FEATURES = {
 // ─────────────────────────────────────────────────────────────────────────
 
 export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClose }) {
-  const [upgradeData, setUpgradeData] = useState(null);
-  const [loading,     setLoading]     = useState(true);
-  const [region,      setRegion]      = useState('india'); // 'india' | 'international'
+  const [upgradeData,      setUpgradeData]      = useState(null);
+  const [loading,          setLoading]          = useState(true);
+  const [region,           setRegion]           = useState('india'); // 'india' | 'international'
+  const [cashfreeLoading,  setCashfreeLoading]  = useState(null);   // plan key while calling API
+  const [cashfreeError,    setCashfreeError]    = useState('');
 
   // Fetch live pricing + upgrade options
   useEffect(() => {
@@ -65,16 +67,38 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
       .then(res => setUpgradeData(res.data))
       .catch(() => {
         setUpgradeData({
-          upgrade_options: currentPlan === 'starter' ? ['pro'] : ['starter', 'pro'],
+          upgrade_options : currentPlan === 'starter' ? ['pro'] : ['starter', 'pro'],
+          cashfree_enabled: false,
           pricing: {
-            starter: { inr: 999,  usd: 15, inr_label: '₹999',  usd_label: '$15', video_limit: 10   },
-            pro    : { inr: 1999, usd: 29, inr_label: '₹1,999', usd_label: '$29', video_limit: 20   },
+            starter: { inr: 999,  usd: 15, inr_label: '₹999',  usd_label: '$15', video_limit: 10 },
+            pro    : { inr: 1999, usd: 29, inr_label: '₹1,999', usd_label: '$29', video_limit: 20 },
           },
           razorpay_links: { starter: null, pro: null },
         });
       })
       .finally(() => setLoading(false));
   }, [currentPlan]);
+
+  // Cashfree subscribe handler — called for international users
+  async function handleCashfreeSubscribe(plan) {
+    setCashfreeError('');
+    setCashfreeLoading(plan);
+    const currency = region === 'international' ? 'USD' : 'INR';
+    try {
+      const { data } = await api.post('/payments/cashfree-subscribe', { plan, currency });
+      savePurchaseIntent({
+        plan,
+        currency,
+        value: currency === 'USD'
+          ? (upgradeData?.pricing?.[plan]?.usd ?? (plan === 'starter' ? 15   : 29))
+          : (upgradeData?.pricing?.[plan]?.inr ?? (plan === 'starter' ? 999  : 1999)),
+      });
+      window.location.href = data.paymentUrl;
+    } catch (err) {
+      setCashfreeError(err.response?.data?.error || 'Something went wrong. Please try again.');
+      setCashfreeLoading(null);
+    }
+  }
 
   // Close on Escape key
   useEffect(() => {
@@ -166,6 +190,12 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
             </div>
           </div>
 
+          {cashfreeError && (
+            <div className="mb-3 px-4 py-2.5 bg-red-500/10 border border-red-500/20 rounded-lg">
+              <p className="text-xs text-red-400">{cashfreeError}</p>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center py-10">
               <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
@@ -179,6 +209,9 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
                   pricing={upgradeData?.pricing?.[plan]}
                   region={region}
                   razorpayLink={upgradeData?.razorpay_links?.[plan]}
+                  cashfreeEnabled={!!(upgradeData?.cashfree_enabled)}
+                  cashfreeLoading={cashfreeLoading === plan}
+                  onCashfreeSubscribe={() => handleCashfreeSubscribe(plan)}
                   isHighlighted={plan === requiredPlan}
                   features={PLAN_FEATURES[plan] ?? []}
                   singleCard={isSingleCard}
@@ -216,7 +249,7 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
 // PlanCard
 // ─────────────────────────────────────────────────────────────────────────
 
-function PlanCard({ plan, pricing, region, razorpayLink, isHighlighted, features, singleCard }) {
+function PlanCard({ plan, pricing, region, razorpayLink, cashfreeEnabled, cashfreeLoading, onCashfreeSubscribe, isHighlighted, features, singleCard }) {
   const isPro = plan === 'pro';
 
   const borderCls = isHighlighted
@@ -276,26 +309,44 @@ function PlanCard({ plan, pricing, region, razorpayLink, isHighlighted, features
         ))}
       </ul>
 
-      {/* CTA */}
-      <a
-        href={razorpayLink ?? '#'}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={() => {
-          // Save currency/value so PaymentSuccess fires the correct Purchase event
-          const isIndia = region === 'india';
-          savePurchaseIntent({
+      {/* CTA — India: static Razorpay link | International: Cashfree API call */}
+      {region === 'india' ? (
+        <a
+          href={razorpayLink ?? '#'}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => savePurchaseIntent({
             plan,
-            currency: isIndia ? 'INR' : 'USD',
-            value   : isIndia
-              ? (pricing?.inr ?? (plan === 'pro' ? 1999 : 999))
-              : (pricing?.usd ?? (plan === 'pro' ? 29   : 15)),
-          });
-        }}
-        className={`w-full text-center py-2.5 px-4 rounded-lg font-semibold text-sm transition-colors ${btnCls}`}
-      >
-        Upgrade to {capitalize(plan)}
-      </a>
+            currency: 'INR',
+            value   : pricing?.inr ?? (plan === 'pro' ? 1999 : 999),
+          })}
+          className={`w-full text-center py-2.5 px-4 rounded-lg font-semibold text-sm transition-colors ${btnCls}`}
+        >
+          Upgrade to {capitalize(plan)}
+        </a>
+      ) : cashfreeEnabled ? (
+        <button
+          onClick={onCashfreeSubscribe}
+          disabled={cashfreeLoading}
+          className={`w-full py-2.5 px-4 rounded-lg font-semibold text-sm transition-colors
+                      flex items-center justify-center gap-2
+                      disabled:opacity-60 disabled:cursor-not-allowed ${btnCls}`}
+        >
+          {cashfreeLoading ? (
+            <>
+              <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              Redirecting…
+            </>
+          ) : (
+            `Upgrade to ${capitalize(plan)} →`
+          )}
+        </button>
+      ) : (
+        <div className="w-full py-2.5 rounded-lg text-center text-xs text-gray-500
+                        bg-gray-900 border border-gray-700">
+          International payments coming soon
+        </div>
+      )}
     </div>
   );
 }
