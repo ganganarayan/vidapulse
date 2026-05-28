@@ -38,6 +38,10 @@ export default function WebhookSettings() {
   const [isActive,        setIsActive]        = useState(false);
   const [notes,           setNotes]           = useState('');
 
+  // Password reset webhook
+  const [passResetUrl,    setPassResetUrl]    = useState('');
+  const [savingPassReset, setSavingPassReset] = useState(false);
+
   // Razorpay payment page URLs
   const [rzpStarterUrl,   setRzpStarterUrl]   = useState('');
   const [rzpProUrl,       setRzpProUrl]       = useState('');
@@ -81,6 +85,7 @@ export default function WebhookSettings() {
       setApiToken(s.api_token           ?? '');
       setIsActive(s.is_active           ?? false);
       setNotes(s.notes                  ?? '');
+      setPassResetUrl(s.password_reset_webhook_url ?? '');
       setRzpStarterUrl(s.razorpay_starter_url ?? '');
       setRzpProUrl(s.razorpay_pro_url         ?? '');
       setHourlyCap(g.hourly_cap  ?? 25);
@@ -137,6 +142,24 @@ export default function WebhookSettings() {
       setSaveMsg('gov-err');
     } finally {
       setSavingGov(false);
+    }
+  }
+
+  // ── Save password reset webhook URL ───────────────────────────────────
+  async function handleSavePassReset(e) {
+    e.preventDefault();
+    setSavingPassReset(true);
+    setSaveMsg('');
+    try {
+      await api.patch('/admin/webhook-settings', {
+        password_reset_webhook_url: passResetUrl || null,
+      });
+      setSaveMsg('passreset-ok');
+      setTimeout(() => setSaveMsg(''), 3000);
+    } catch {
+      setSaveMsg('passreset-err');
+    } finally {
+      setSavingPassReset(false);
     }
   }
 
@@ -501,7 +524,53 @@ export default function WebhookSettings() {
           </Link>
         </section>
 
-        {/* ── Section 5: Razorpay Payment Links ─────────────────── */}
+        {/* ── Section 5: Password Reset Webhook ────────────────── */}
+        <section className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6">
+          <h2 className="text-sm font-semibold text-gray-300 mb-1">Password Reset Webhook</h2>
+          <p className="text-xs text-gray-500 mb-5">
+            Fired whenever a subscriber requests a password reset. Use a separate automation
+            here to send the reset email. Payload fields:{' '}
+            <code className="text-amber-500/80 text-[11px]">contact_name</code>,{' '}
+            <code className="text-amber-500/80 text-[11px]">contact_email</code>,{' '}
+            <code className="text-amber-500/80 text-[11px]">contact.event_type = pass_reset</code>,{' '}
+            <code className="text-amber-500/80 text-[11px]">contact.pass_reset_link</code>.
+            Uses the API token above if set.
+          </p>
+
+          <form onSubmit={handleSavePassReset} className="flex flex-col gap-4">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5">Webhook URL</label>
+              <input
+                type="text"
+                inputMode="url"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                value={passResetUrl}
+                onChange={e => setPassResetUrl(e.target.value)}
+                placeholder="https://login.vidapulse.in/api/automations/…/execute"
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5
+                           text-sm text-gray-100 placeholder-gray-600
+                           focus:outline-none focus:border-amber-500/60 transition-colors"
+              />
+            </div>
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="submit"
+                disabled={savingPassReset}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50
+                           text-sm font-semibold text-gray-900 rounded-lg transition-colors"
+              >
+                {savingPassReset ? 'Saving…' : 'Save'}
+              </button>
+              {saveMsg === 'passreset-ok'  && <span className="text-xs text-emerald-400">✓ Saved</span>}
+              {saveMsg === 'passreset-err' && <span className="text-xs text-red-400">Save failed</span>}
+            </div>
+          </form>
+        </section>
+
+        {/* ── Section 6: Razorpay Payment Links ─────────────────── */}
         <section className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6">
           <h2 className="text-sm font-semibold text-gray-300 mb-1">Razorpay Payment Links</h2>
           <p className="text-xs text-gray-500 mb-5">

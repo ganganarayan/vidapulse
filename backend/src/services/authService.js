@@ -20,9 +20,8 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const jwt    = require('jsonwebtoken');
 
-const { pool }               = require('../config/database');
-const { emitEvent }          = require('./behavioralEventService');
-const { fireContactWebhook } = require('./contactWebhookSender');
+const { pool }      = require('../config/database');
+const { emitEvent } = require('./behavioralEventService');
 const env    = require('../config/env');
 const logger = require('../config/logger');
 
@@ -235,12 +234,10 @@ async function forgotPassword(email) {
     [user.id, token]
   );
 
-  // Fire contact webhook — CRM automation sends the reset email.
-  // event_type = 'pass_reset', reset link sent as contact.pass_reset_link.
+  // Fire dedicated password-reset webhook (non-blocking, best-effort).
+  // Payload uses Divine Leads dot-key format so the automation can send the email.
   const resetUrl = `${env.APP_URL}/reset-password?token=${token}`;
-  fireContactWebhook(user.id, 'pass_reset', {
-    pass_reset_link: resetUrl,
-  });
+  _firePasswordResetWebhook(user, resetUrl);
 
   logger.info(`[authService] Password reset requested for ${normalizedEmail}`);
 }
@@ -436,6 +433,51 @@ async function findOrCreateOAuthUser(provider, providerProfile) {
     throw err;
   } finally {
     client.release();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Password reset webhook — dedicated endpoint, simple fire-and-forget.
+// Payload shape mirrors Divine Leads contact webhook format so the admin's
+// automation can send the reset email without extra mapping.
+// ─────────────────────────────────────────────────────────────────────────
+
+async function _firePasswordResetWebhook(user, resetUrl) {
+  try {
+    const { rows: [s] } = await pool.query(
+      `SELECT password_reset_webhook_url, api_token FROM webhook_settings LIMIT 1`
+    );
+    if (!s?.password_reset_webhook_url) return; // not configured — skip silently
+
+    const body = {
+      contact_name               : user.name  || '',
+      contact_email              : user.email || '',
+      'contact.event_type'       : 'pass_reset',
+      'contact.pass_reset_link'  : resetUrl,
+    };
+
+    let url = s.password_reset_webhook_url;
+    if (s.api_token) {
+      const sep = url.includes('?') ? '&' : '?';
+      url += `${sep}api_token=${encodeURIComponent(s.api_token)}`;
+    }
+
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(url, {
+        method : 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': 'VidaPulse-PasswordReset/1.0' },
+        body   : JSON.stringify(body),
+        signal : controller.signal,
+      });
+      logger.info(`[authService] Password reset webhook → ${res.status} for ${user.email}`);
+    } finally {
+      clearTimeout(tid);
+    }
+  } catch (err) {
+    // Best-effort — never let a webhook failure block the user
+    logger.warn(`[authService] Password reset webhook failed: ${err.message}`);
   }
 }
 
