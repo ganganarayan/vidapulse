@@ -248,11 +248,12 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
         {navItem('dropoff',     <DropoffIcon />, 'Drop-off Rate')}
         {navItem('watch_time',  <ClockIcon />,   'Watch Time')}
         {navItem('rewatches',   <RepeatIcon />,  'Re-watches')}
+        {navItem('domains',     <DomainIcon />,  'Domains')}
 
         <SidebarDivider label="Engagement" />
         {navItem('heatmap',     <HeatmapIcon />, 'Engagement Heatmap', !isPro,     'pro')}
         {navItem('stories',     <StoriesIcon />, 'Viewer Stories',     !isStarter, 'starter')}
-        {navItem('insights',    <SparklesIcon />,'Insights')}
+        {navItem('insights',    <SparklesIcon />,'Insights',           !isPro,     'pro')}
 
         <SidebarDivider label="Audience" />
         {navItem('geography',   <GlobeIcon />,   'Geography',     !isStarter, 'starter')}
@@ -396,3 +397,4 @@ function BrowserIcon()  { return I(<><circle cx="12" cy="12" r="10"/><line x1="2
 function UTMIcon()      { return I(<><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11A2.99 2.99 0 0 0 18 8a3 3 0 1 0 0-6 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81A3 3 0 0 0 6 9a3 3 0 1 0 0 6 3 3 0 0 0 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65a3 3 0 1 0 3-3z"/></>); }
 function EmbedIcon()    { return I(<><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></>); }
 function PlayerIcon()   { return I(<><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></>); }
+function DomainIcon()   { return I(<><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></>); }

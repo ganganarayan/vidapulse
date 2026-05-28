@@ -125,12 +125,12 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-50">
-                Unlock {featureLabel}
+                Unlock Pro Features
               </h2>
               <p className="text-sm text-gray-400 mt-0.5">
                 {feature === 'video_upload'
                   ? `You've reached the video limit on your ${capitalize(currentPlan)} plan.`
-                  : `${featureLabel} is available on the ${capitalize(requiredPlan)} plan and above.`
+                  : `Upgrade to unlock ${featureLabel} and all ${capitalize(requiredPlan)} plan features.`
                 }
               </p>
             </div>

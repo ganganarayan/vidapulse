@@ -14,6 +14,7 @@ import GeographySection            from './GeographySection';
 import BrowsersSection             from './BrowsersSection';
 import IndividualViewerSection     from './IndividualViewerSection';
 import TrafficSourcesSection       from './TrafficSourcesSection';
+import DomainsSection              from './DomainsSection';
 
 /**
  * VideoAnalyticsView
@@ -62,6 +63,7 @@ const VIEW_LABELS = {
   devices       : 'Devices',
   browsers      : 'Browsers',
   traffic       : 'Traffic Sources',
+  domains       : 'Domains',
   embed         : 'Share & Embed',
   player        : 'Player Settings',
 };
@@ -286,6 +288,7 @@ export default function VideoAnalyticsView({
         {activeView === 'devices'   && <DevicesSection         videoId={video?.id} />}
         {activeView === 'browsers'  && <BrowsersSection        videoId={video?.id} />}
         {activeView === 'traffic'   && <TrafficSourcesSection  videoId={video?.id} />}
+        {activeView === 'domains'   && <DomainsSection         videoId={video?.id} />}
 
         {/* ── Embed view ───────────────────────────────────────────── */}
         {activeView === 'embed' && (

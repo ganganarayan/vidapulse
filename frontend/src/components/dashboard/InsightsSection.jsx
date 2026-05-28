@@ -114,6 +114,8 @@ export default function InsightsSection({ videoId, insightStatus, userPlan }) {
   const primary   = insights?.find(i => i.is_primary) ?? null;
   const secondary = insights?.filter(i => !i.is_primary) ?? [];
 
+  const isPro = (PLAN_RANK[userPlan] ?? 0) >= PLAN_RANK['pro'];
+
   // ── Section header ──────────────────────────────────────────────────────
   return (
     <div>
@@ -127,42 +129,56 @@ export default function InsightsSection({ videoId, insightStatus, userPlan }) {
         )}
       </div>
 
-      {/* ── Loading ───────────────────────────────────────────────────── */}
-      {loading && <InsightsSkeleton />}
+      {/* ── Pro feature wall — non-pro users see blurred placeholder ───── */}
+      {!isPro ? (
+        <FeatureWall
+          feature="insights"
+          requiredPlan="pro"
+          currentPlan={userPlan}
+          minHeight="220px"
+        >
+          <InsightsSkeleton />
+        </FeatureWall>
+      ) : (
+        <>
+          {/* ── Loading ─────────────────────────────────────────────── */}
+          {loading && <InsightsSkeleton />}
 
-      {/* ── Waiting for data ──────────────────────────────────────────── */}
-      {!loading && (insightStatus === 'pending' || insightStatus === 'generating') && (
-        <InsightsPending />
-      )}
-
-      {/* ── No insights (complete but empty) ─────────────────────────── */}
-      {!loading && insightStatus === 'complete' && insights?.length === 0 && (
-        <InsightsEmpty />
-      )}
-
-      {/* ── Failed ───────────────────────────────────────────────────── */}
-      {!loading && insightStatus === 'failed' && (
-        <InsightsFailed onRetry={fetchInsights} />
-      )}
-
-      {/* ── Insights available ────────────────────────────────────────── */}
-      {!loading && insights && insights.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {primary && (
-            <PrimaryInsightCard
-              insight={primary}
-              userPlan={userPlan}
-              onDismiss={() => handleDismiss(primary.id)}
-            />
+          {/* ── Waiting for data ────────────────────────────────────── */}
+          {!loading && (insightStatus === 'pending' || insightStatus === 'generating') && (
+            <InsightsPending />
           )}
-          {secondary.length > 0 && (
-            <SecondaryInsightsList
-              insights={secondary}
-              userPlan={userPlan}
-              onDismiss={handleDismiss}
-            />
+
+          {/* ── No insights (complete but empty) ───────────────────── */}
+          {!loading && insightStatus === 'complete' && insights?.length === 0 && (
+            <InsightsEmpty />
           )}
-        </div>
+
+          {/* ── Failed ─────────────────────────────────────────────── */}
+          {!loading && insightStatus === 'failed' && (
+            <InsightsFailed onRetry={fetchInsights} />
+          )}
+
+          {/* ── Insights available ─────────────────────────────────── */}
+          {!loading && insights && insights.length > 0 && (
+            <div className="flex flex-col gap-3">
+              {primary && (
+                <PrimaryInsightCard
+                  insight={primary}
+                  userPlan={userPlan}
+                  onDismiss={() => handleDismiss(primary.id)}
+                />
+              )}
+              {secondary.length > 0 && (
+                <SecondaryInsightsList
+                  insights={secondary}
+                  userPlan={userPlan}
+                  onDismiss={handleDismiss}
+                />
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
