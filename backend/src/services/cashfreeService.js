@@ -252,33 +252,56 @@ async function cancelSubscription(subscriptionId) {
 // ─── Webhook signature verification ──────────────────────────────────────────
 
 /**
- * Verify a Cashfree subscription webhook signature.
+ * Verify a Cashfree webhook signature.
  *
- * Cashfree computes:
- *   data      = subscriptionId + txTime + referenceId + txMsg + amount
- *   signature = base64( HMAC-SHA256( data, CASHFREE_WEBHOOK_SECRET ) )
+ * Supports TWO formats automatically:
  *
- * The signature is sent as the 'signature' field in the webhook body.
- * Returns true if valid (or if CASHFREE_WEBHOOK_SECRET is not set).
+ * ── Format A: 2025-01-01 (new, header-based) ──────────────────────────────
+ *   Detected by presence of 'x-webhook-timestamp' header.
+ *   signature = base64( HMAC-SHA256( timestamp + rawBody, secret ) )
+ *   Sent in 'x-webhook-signature' header.
  *
- * @param {object} body  Parsed JSON webhook body
+ * ── Format B: Legacy subscription API (body-based) ────────────────────────
+ *   signature = base64( HMAC-SHA256( subscriptionId+txTime+referenceId+txMsg+amount, secret ) )
+ *   Sent as 'signature' field inside the JSON body.
+ *
+ * Returns true if valid, false if invalid, true if CASHFREE_WEBHOOK_SECRET not set.
+ *
+ * @param {object} body     Parsed JSON webhook body
+ * @param {object} headers  HTTP request headers (req.headers)
+ * @param {string} rawBody  Raw request body string (req.rawBody) — needed for Format A
  * @returns {boolean}
  */
-function verifyWebhookSignature(body) {
+function verifyWebhookSignature(body, headers, rawBody) {
   const secret = env.CASHFREE_WEBHOOK_SECRET;
   if (!secret) return true;  // verification disabled — accept all
 
-  const { subscriptionId = '', txTime = '', referenceId = '', txMsg = '', amount = '', signature } = body;
+  // ── Format A: 2025-01-01 header-based ────────────────────────────────────
+  const timestamp = headers?.['x-webhook-timestamp'];
+  const headerSig = headers?.['x-webhook-signature'];
+
+  if (timestamp && headerSig) {
+    const raw      = rawBody || JSON.stringify(body);
+    const data     = timestamp + raw;
+    const expected = crypto.createHmac('sha256', secret).update(data).digest('base64');
+    try {
+      const sigBuf = Buffer.from(headerSig, 'base64');
+      const expBuf = Buffer.from(expected,  'base64');
+      if (sigBuf.length !== expBuf.length) return false;
+      return crypto.timingSafeEqual(sigBuf, expBuf);
+    } catch {
+      return false;
+    }
+  }
+
+  // ── Format B: legacy body-based (older subscription API) ─────────────────
+  const { subscriptionId = '', txTime = '', referenceId = '',
+          txMsg = '', amount = '', signature } = body;
   if (!signature) return false;
 
   const data     = `${subscriptionId}${txTime}${referenceId}${txMsg}${amount}`;
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(data)
-    .digest('base64');
-
+  const expected = crypto.createHmac('sha256', secret).update(data).digest('base64');
   try {
-    // Both must be the same byte length for timingSafeEqual
     const sigBuf = Buffer.from(signature, 'base64');
     const expBuf = Buffer.from(expected,  'base64');
     if (sigBuf.length !== expBuf.length) return false;

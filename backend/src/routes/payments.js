@@ -360,19 +360,25 @@ router.post('/cashfree', async (req, res, next) => {
 
     // ── 1. Signature verification ──────────────────────────────────────────
     if (env.CASHFREE_WEBHOOK_SECRET) {
-      if (!cashfree.verifyWebhookSignature(body)) {
+      if (!cashfree.verifyWebhookSignature(body, req.headers, req.rawBody)) {
         logger.warn('[payments] Cashfree webhook signature mismatch — rejected');
         return res.status(400).json({ error: 'Invalid signature' });
       }
     }
 
-    const eventType = (body?.event || body?.type || '').toUpperCase();
+    // Normalise to a flat shape that works for both:
+    //   • Legacy Subscriptions API v2 body (flat fields)
+    //   • 2025-01-01 webhook format (nested body.data.subscription / body.data.payment)
+    const nb = _cfNormalizeBody(body);
 
-    logger.info(`[payments] Cashfree webhook — event=${eventType} subscription=${body?.subscriptionId}`);
+    const eventType = (nb.event || nb.type || '').toUpperCase();
+
+    logger.info(`[payments] Cashfree webhook — event=${eventType} subscription=${nb.subscriptionId}`);
 
     // ── 2. Route to handler ────────────────────────────────────────────────
     const ACTIVATE_EVENTS = [
       'SUBSCRIPTION_NEW',
+      'SUBSCRIPTION_ACTIVATED',            // 2025-01-01 format alias
       'SUBSCRIPTION_FIRST_CHARGE_SUCCESS',
       'PAYMENT_SUCCESS',                   // some Cashfree versions use this
     ];
@@ -389,16 +395,16 @@ router.post('/cashfree', async (req, res, next) => {
     ];
 
     if (ACTIVATE_EVENTS.includes(eventType)) {
-      return await _cfHandleActivation(body, eventType, res);
+      return await _cfHandleActivation(nb, eventType, res);
     }
     if (RENEWAL_EVENTS.includes(eventType)) {
-      return await _cfHandleRenewal(body, res);
+      return await _cfHandleRenewal(nb, res);
     }
     if (FAILURE_EVENTS.includes(eventType)) {
-      return await _cfHandleFailure(body, res);
+      return await _cfHandleFailure(nb, res);
     }
     if (ENDED_EVENTS.includes(eventType)) {
-      return await _cfHandleEnded(body, eventType, res);
+      return await _cfHandleEnded(nb, eventType, res);
     }
 
     logger.debug(`[payments] Cashfree: ignoring event "${eventType}"`);
@@ -409,6 +415,61 @@ router.post('/cashfree', async (req, res, next) => {
     next(err);
   }
 });
+
+// ─── Cashfree webhook helpers ─────────────────────────────────────────────────
+
+/**
+ * Normalise a Cashfree webhook body into a flat shape.
+ *
+ * Cashfree sends two different formats depending on the webhook version:
+ *
+ * ── Legacy Subscriptions API v2 (flat body) ──────────────────────────────────
+ *   body.subscriptionId  body.tNote  body.referenceId  body.amount
+ *   body.txTime  body.txMsg  body.customerEmail  body.event
+ *
+ * ── 2025-01-01 format (nested body.data) ──────────────────────────────────────
+ *   body.type
+ *   body.data.subscription.subscription_id
+ *   body.data.subscription.subscription_note  ← our tNote JSON
+ *   body.data.subscription.customer_details.customer_email
+ *   body.data.payment.cf_payment_id
+ *   body.data.payment.payment_amount
+ *   body.data.payment.payment_time
+ *
+ * Returns a flat object so all downstream handlers work without format checks.
+ */
+function _cfNormalizeBody(body) {
+  if (!body?.data?.subscription) {
+    // Legacy flat format — return as-is
+    return body ?? {};
+  }
+
+  // 2025-01-01 nested format
+  const sub = body.data.subscription;
+  const pay = body.data.payment ?? {};
+  const cust = sub.customer_details ?? {};
+
+  return {
+    // event identity
+    event          : body.type ?? null,
+    type           : body.type ?? null,
+    // subscription identity
+    subscriptionId : sub.subscription_id   ?? String(sub.cf_subscription_id ?? '') || null,
+    // our tNote JSON string
+    tNote          : sub.subscription_note ?? null,
+    // customer email fallback
+    customerEmail  : cust.customer_email   ?? sub.customer_email ?? null,
+    // payment fields (cf_payment_id → referenceId)
+    referenceId    : String(pay.cf_payment_id ?? ''),
+    authReferenceId: null,
+    amount         : pay.payment_amount    ?? 0,
+    txTime         : pay.payment_time      ?? '',
+    txMsg          : pay.payment_message   ?? '',
+    cycleNumber    : pay.cycle_number      ?? null,
+    // not present in new format
+    signature      : null,
+  };
+}
 
 // ─── Cashfree webhook handlers ────────────────────────────────────────────────
 
