@@ -355,6 +355,11 @@ router.post('/cashfree-subscribe', requireAuth, async (req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.post('/cashfree', async (req, res, next) => {
+  // Cashfree not yet configured — return 200 so their retry logic doesn't loop
+  if (!env.CASHFREE_APP_ID || !env.CASHFREE_SECRET_KEY) {
+    logger.debug('[payments] Cashfree webhook received but integration not configured — ignored');
+    return res.json({ ok: true, ignored: true });
+  }
   try {
     const body = req.body;
 
