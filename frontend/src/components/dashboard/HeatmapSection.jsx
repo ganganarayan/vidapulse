@@ -173,16 +173,16 @@ export default function HeatmapSection({ videoId, video, userPlan }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// RetentionChart — the main SVG visualisation
+// RetentionChart — clean amber line chart
 // ─────────────────────────────────────────────────────────────────────────
 
-const CHART_H  = 220;   // chart drawing height px
+const CHART_H  = 220;
 const Y_LABELS = [0, 25, 50, 75, 100];
 
 function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond, fake = false }) {
-  const svgRef      = useRef(null);
-  const [hoverX,    setHoverX]    = useState(null);  // 0..1 fraction
-  const [animated,  setAnimated]  = useState(false);
+  const svgRef     = useRef(null);
+  const [hoverX,   setHoverX]   = useState(null);
+  const [animated, setAnimated] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setAnimated(true), 60);
@@ -191,24 +191,22 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
 
   if (!buckets || buckets.length === 0) return null;
 
-  const W = 100; // viewBox width units
-  const H = 100; // viewBox height units
-  // PAD_L is 0: Y-axis labels live outside the SVG in a sibling div,
-  // so the SVG data fills the full width → hover position aligns exactly.
-  const PAD_L = 0;
-  const PAD_B = 8;  // bottom padding (for X labels)
-  const CHART_W = W - PAD_L;
-  const CHART_H_SVG = H - PAD_B;
+  const W           = 100;
+  const H           = 100;
+  const CHART_W     = W;
+  const CHART_H_SVG = H - 8;
 
-  // Map bucket index to SVG coordinates
-  const n = buckets.length;
-  const pts = buckets.map((b, i) => {
-    const x = n > 1 ? (i / (n - 1)) * CHART_W : 0;
-    const y = CHART_H_SVG - (b.pct / 100) * CHART_H_SVG;
-    return { x, y, pct: b.pct, second: b.second };
-  });
+  const n   = buckets.length;
+  const pts = buckets.map((b, i) => ({
+    x     : n > 1 ? (i / (n - 1)) * CHART_W : 0,
+    y     : CHART_H_SVG - (b.pct / 100) * CHART_H_SVG,
+    pct   : b.pct,
+    second: b.second,
+  }));
 
-  // Smooth cubic bezier path
+  const step    = Math.max(1, Math.floor(n / 120));
+  const sampled = pts.filter((_, i) => i % step === 0 || i === n - 1);
+
   function smoothPath(points) {
     if (points.length < 2) return '';
     let d = `M ${points[0].x} ${points[0].y}`;
@@ -221,67 +219,42 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
     return d;
   }
 
-  // Downsample for performance (max 120 points for path)
-  const step   = Math.max(1, Math.floor(n / 120));
-  const sampled = pts.filter((_, i) => i % step === 0 || i === n - 1);
-
   const linePath = smoothPath(sampled);
-  // Area fill: close to bottom
-  const areaPath = linePath
-    + ` L ${sampled[sampled.length - 1].x} ${CHART_H_SVG}`
-    + ` L 0 ${CHART_H_SVG} Z`;
+  const areaPath = `${linePath} L ${sampled[sampled.length - 1].x} ${CHART_H_SVG} L 0 ${CHART_H_SVG} Z`;
 
-  // Gradient stops derived from sampled points (offset = x as % of CHART_W)
-  const gradientStops = sampled.map((p) => ({
-    offset : `${(p.x / CHART_W * 100).toFixed(1)}%`,
-    color  : retentionColor(p.pct),
-    opacity: 0.55,
-  }));
+  const avgRetention = Math.round(buckets.reduce((s, b) => s + b.pct, 0) / buckets.length);
 
-  // Hover logic — relX is 0..1 fraction of the SVG element width.
-  // Since PAD_L=0, data spans the full SVG width, so bucket index maps directly.
   function handleMouseMove(e) {
     if (!svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
-    const relX = (e.clientX - rect.left) / rect.width;
-    setHoverX(Math.max(0, Math.min(1, relX)));
+    setHoverX(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
   }
 
-  // Find hover bucket
-  let hoverBucket = null;
-  let hoverSvgX   = null;
-  if (hoverX !== null && buckets.length > 0) {
-    const hIdx      = Math.round(hoverX * (buckets.length - 1));
-    const clampedIdx = Math.max(0, Math.min(buckets.length - 1, hIdx));
-    hoverBucket = buckets[clampedIdx];
-    hoverSvgX   = pts[clampedIdx]?.x;
+  let hoverBucket = null, hoverSvgX = null;
+  if (hoverX !== null) {
+    const ci    = Math.max(0, Math.min(buckets.length - 1, Math.round(hoverX * (buckets.length - 1))));
+    hoverBucket = buckets[ci];
+    hoverSvgX   = pts[ci]?.x;
   }
-
-  // Average retention
-  const avgRetention = buckets.length > 0
-    ? Math.round(buckets.reduce((s, b) => s + b.pct, 0) / buckets.length)
-    : 0;
 
   return (
     <div className="bg-gray-900/60 border border-gray-700/50 rounded-2xl overflow-hidden shadow-xl">
 
       {/* ── Stats row ─────────────────────────────────────────────────── */}
       <div className="flex items-center gap-6 px-5 py-4 border-b border-gray-800/60">
-        <StatPill label="Avg Retention"   value={`${avgRetention}%`}                            color="#10b981" />
+        <StatPill label="Avg Retention" value={`${avgRetention}%`} color="#10b981" />
         {totalViewers > 0 && (
-          <StatPill label="Total Viewers" value={totalViewers.toLocaleString()}                  color="#818cf8" />
+          <StatPill label="Total Viewers" value={totalViewers.toLocaleString()} color="#818cf8" />
         )}
         {dropOffSecond != null && durationSeconds > 0 && (
           <StatPill label="Peak Drop-off" value={formatTime(dropOffSecond)} color="#f87171" className="ml-auto" />
         )}
         {hoverBucket && (
           <div className="ml-auto text-right">
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider leading-none mb-1 font-mono">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider font-mono leading-none mb-1">
               {formatTime(hoverBucket.second)}
             </p>
-            <p className="text-base font-bold" style={{ color: retentionColor(hoverBucket.pct) }}>
-              {Math.round(hoverBucket.pct)}%
-            </p>
+            <p className="text-base font-bold text-amber-400">{Math.round(hoverBucket.pct)}%</p>
           </div>
         )}
       </div>
@@ -292,9 +265,7 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
           {/* Y-axis labels */}
           <div className="flex flex-col justify-between items-end pr-2 text-[9px] text-gray-500 font-mono"
                style={{ height: `${CHART_H}px`, minWidth: '28px' }}>
-            {[...Y_LABELS].reverse().map(v => (
-              <span key={v}>{v}%</span>
-            ))}
+            {[...Y_LABELS].reverse().map(v => <span key={v}>{v}%</span>)}
           </div>
 
           {/* Chart SVG */}
@@ -308,99 +279,53 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
               onMouseLeave={() => setHoverX(null)}
             >
               <defs>
-                {/* Vertical stroke gradient — green at top, amber mid, red at bottom */}
-                <linearGradient id="retentionVertStroke" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%"   stopColor="rgb(16,185,129)"  stopOpacity="1" />
-                  <stop offset="50%"  stopColor="rgb(234,179,8)"   stopOpacity="1" />
-                  <stop offset="100%" stopColor="rgb(239,68,68)"   stopOpacity="1" />
+                <linearGradient id="retAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%"   stopColor="#F59E0B" stopOpacity="0.12" />
+                  <stop offset="100%" stopColor="#F59E0B" stopOpacity="0"    />
                 </linearGradient>
-
-                {/* Area shape clip — each vertical column is clipped to sit inside the curve */}
-                <clipPath id="areaColorClip">
-                  <path d={areaPath} />
-                </clipPath>
-
-                {/* Animated draw-in clip */}
-                <clipPath id="retentionClip">
+                <clipPath id="retDrawClip">
                   <rect x="0" y="0" width={animated ? '100' : '0'} height="100"
                     style={{ transition: 'width 1.4s cubic-bezier(0.22,1,0.36,1)' }} />
                 </clipPath>
               </defs>
 
-              {/* Grid lines at 25 / 50 / 75 */}
-              {[25, 50, 75].map(pct => {
+              {/* Dashed grid lines */}
+              {[25, 50, 75, 100].map(pct => {
                 const y = CHART_H_SVG - (pct / 100) * CHART_H_SVG;
-                return (
-                  <line key={pct} x1="0" y1={y} x2={W} y2={y}
-                    stroke="rgba(55,65,81,0.5)" strokeWidth="0.4" />
-                );
+                return <line key={pct} x1="0" y1={y} x2={W} y2={y}
+                  stroke="#374151" strokeWidth="0.4" strokeDasharray="3 3" />;
               })}
 
-              {/* Colored vertical fill strips — each column uses the color at that x position */}
-              <g clipPath="url(#retentionClip)">
-                <g clipPath="url(#areaColorClip)">
-                  {sampled.map((p, i) => {
-                    const next = sampled[i + 1];
-                    const w = next
-                      ? (next.x - p.x + 0.3)
-                      : (CHART_W / sampled.length + 0.3);
-                    return (
-                      <rect
-                        key={i}
-                        x={p.x}
-                        y={0}
-                        width={w}
-                        height={CHART_H_SVG}
-                        fill={retentionColor(p.pct)}
-                        opacity={0.68}
-                      />
-                    );
-                  })}
-                </g>
-              </g>
+              {/* Subtle area fill */}
+              <path d={areaPath} fill="url(#retAreaGrad)" clipPath="url(#retDrawClip)" />
 
-              {/* Stroke line — vertical gradient so colour tracks Y-axis value */}
-              <path
-                d={linePath}
-                fill="none"
-                stroke="url(#retentionVertStroke)"
-                strokeWidth="0.9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                clipPath="url(#retentionClip)"
-              />
+              {/* Amber line */}
+              <path d={linePath} fill="none" stroke="#F59E0B" strokeWidth="1.5"
+                strokeLinecap="round" strokeLinejoin="round"
+                clipPath="url(#retDrawClip)" />
+
+              {/* Peak drop-off marker */}
+              {dropOffSecond != null && durationSeconds > 0 && (() => {
+                const doX = (dropOffSecond / durationSeconds) * CHART_W;
+                return <line x1={doX} y1={0} x2={doX} y2={CHART_H_SVG}
+                  stroke="rgba(248,113,113,0.5)" strokeWidth="0.6" strokeDasharray="1.5 1.5" />;
+              })()}
 
               {/* Hover crosshair */}
               {hoverSvgX != null && hoverBucket && (
                 <>
-                  <line
-                    x1={hoverSvgX} y1={0} x2={hoverSvgX} y2={CHART_H_SVG}
-                    stroke="rgba(255,255,255,0.18)" strokeWidth="0.5" strokeDasharray="2 2"
-                  />
-                  <circle
-                    cx={hoverSvgX}
+                  <line x1={hoverSvgX} y1={0} x2={hoverSvgX} y2={CHART_H_SVG}
+                    stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" strokeDasharray="2 2" />
+                  <circle cx={hoverSvgX}
                     cy={CHART_H_SVG - (hoverBucket.pct / 100) * CHART_H_SVG}
-                    r="1.2"
-                    fill={retentionColor(hoverBucket.pct)}
-                    stroke="rgba(255,255,255,0.7)"
-                    strokeWidth="0.4"
-                  />
+                    r="1.5" fill="#F59E0B" stroke="rgba(255,255,255,0.7)" strokeWidth="0.4" />
                 </>
               )}
-
-              {/* Drop-off marker */}
-              {dropOffSecond != null && durationSeconds > 0 && (() => {
-                const doX = (dropOffSecond / durationSeconds) * CHART_W;
-                return (
-                  <line x1={doX} y1={0} x2={doX} y2={CHART_H_SVG}
-                    stroke="rgba(248,113,113,0.5)" strokeWidth="0.6" strokeDasharray="1.5 1.5" />
-                );
-              })()}
             </svg>
           </div>
         </div>
 
-        {/* X-axis time labels — aligned with SVG data (no left offset since Y labels are in sibling div) */}
+        {/* X-axis time labels */}
         <div className="flex justify-between pl-7 mt-1 text-[9px] text-gray-500 font-mono">
           <span>0:00</span>
           {durationSeconds > 0 && [0.25, 0.5, 0.75].map(f => (
@@ -408,15 +333,6 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
           ))}
           <span>{formatTime(durationSeconds)}</span>
         </div>
-      </div>
-
-      {/* ── Color gradient legend ─────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-5 py-3 border-t border-gray-800/50">
-        <span className="text-[10px] text-gray-500 font-medium">Low retention</span>
-        <div className="flex-1 h-1.5 rounded-full" style={{
-          background: 'linear-gradient(to right, rgb(239,68,68), rgb(234,179,8), rgb(16,185,129))',
-        }} />
-        <span className="text-[10px] text-gray-500 font-medium">High retention</span>
       </div>
     </div>
   );
