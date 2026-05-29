@@ -242,9 +242,9 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
         {navItem('overview',    <GridIcon />,    'Overview')}
 
         <SidebarDivider label="Metrics" />
-        {navItem('plays',         <PlaysIcon />,    'Total Page Views')}
+        {navItem('total_views',   <PlaysIcon />,    'Total Page Views')}
         {navItem('unique_views',  <ViewersIcon />,  'Unique Page Views', !isStarter, 'starter')}
-        {navItem('total_viewers', <PlaysIcon />,    'Total Viewers')}
+        {navItem('plays',         <PlaysIcon />,    'Total Plays')}
         {navItem('viewers',       <ViewersIcon />,  'Unique Viewers')}
         {navItem('avg_watch',   <WatchIcon />,   'Avg. Watch %',   !isStarter, 'starter')}
         {navItem('play_rate',   <PlayRateIcon />,'Play Rate')}

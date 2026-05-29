@@ -32,11 +32,20 @@ const METRIC_REQUIRED_PLAN = {
 const PLAN_RANK = { free: 0, starter: 1, pro: 2, admin_lifetime: 3 };
 
 const METRIC_CONFIG = {
+  total_views: {
+    label: 'Total Page Views', yLabel: 'Sessions',
+    backendKey: 'total_views', accentColor: '#94a3b8',
+    desc: 'All sessions where the embedded player loaded — whether or not play was pressed.',
+    formula: 'Total Page Views = count of all embed page loads (always ≥ Unique Page Views)',
+    totalLabel: 'Total Page Views',
+    format: n => Math.round(n).toLocaleString(),
+    yTickFormat: n => compactNum(n),
+  },
   plays: {
     label: 'Total Plays', yLabel: 'Plays',
     backendKey: 'plays', accentColor: '#f59e0b',
     desc: 'How many times your video was played each day.',
-    formula: 'Total Plays = count of every play-button press in the selected period',
+    formula: 'Total Plays = count of sessions where play was pressed (always ≤ Total Page Views)',
     totalLabel: 'Total Plays',
     format: n => Math.round(n).toLocaleString(),
     yTickFormat: n => compactNum(n),
@@ -45,7 +54,7 @@ const METRIC_CONFIG = {
     label: 'Unique Viewers', yLabel: 'Viewers',
     backendKey: 'viewers', accentColor: '#818cf8',
     desc: 'Distinct visitors (by browser cookie) who pressed play at least once.',
-    formula: 'Unique Viewers = distinct browser cookies that pressed play (one per person)',
+    formula: 'Unique Viewers = distinct browser cookies that pressed play (always ≤ Unique Page Views)',
     totalLabel: 'Total Unique',
     format: n => Math.round(n).toLocaleString(),
     yTickFormat: n => compactNum(n),

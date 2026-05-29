@@ -48,7 +48,8 @@ const COMPLETE_DELAY = 2700;
 
 const VIEW_LABELS = {
   overview      : 'Overview',
-  plays         : 'Total Page Views',
+  total_views   : 'Total Page Views',
+  plays         : 'Total Plays',
   unique_views  : 'Unique Page Views',
   total_viewers : 'Total Viewers',
   viewers       : 'Unique Viewers',
@@ -72,7 +73,7 @@ const VIEW_LABELS = {
 
 // Metric views that map to the time-series chart
 const METRIC_VIEWS = new Set([
-  'plays', 'unique_views', 'total_viewers', 'viewers',
+  'total_views', 'plays', 'unique_views', 'total_viewers', 'viewers',
   'avg_watch', 'play_rate', 'completion', 'dropoff',
   'watch_time', 'rewatches',
 ]);

@@ -899,20 +899,15 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────
 
 const DAILY_METRICS = {
-  plays: `
+  // All sessions where the embed loaded (page loads, regardless of play)
+  total_views: `
     SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
-           COUNT(*) FILTER (WHERE play_count > 0) AS value
+           COUNT(*) AS value
     FROM   analytics_sessions
     WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
     GROUP  BY 1 ORDER BY 1`,
 
-  viewers: `
-    SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
-           COUNT(DISTINCT viewer_id) AS value
-    FROM   analytics_sessions
-    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
-    GROUP  BY 1 ORDER BY 1`,
-
+  // Distinct cookies that loaded the embed page (regardless of play)
   unique_views: `
     SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
            COUNT(DISTINCT viewer_id) AS value
@@ -920,9 +915,26 @@ const DAILY_METRICS = {
     WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
     GROUP  BY 1 ORDER BY 1`,
 
+  // Sessions where play was pressed (one count per session even if replayed)
+  plays: `
+    SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
+           COUNT(*) FILTER (WHERE play_count > 0) AS value
+    FROM   analytics_sessions
+    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
+    GROUP  BY 1 ORDER BY 1`,
+
+  // Alias for plays — kept for backward compat
   total_viewers: `
     SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
            COUNT(*) FILTER (WHERE play_count > 0) AS value
+    FROM   analytics_sessions
+    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
+    GROUP  BY 1 ORDER BY 1`,
+
+  // Distinct cookies that PRESSED PLAY at least once (not just loaded)
+  viewers: `
+    SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
+           COUNT(DISTINCT viewer_id) FILTER (WHERE play_count > 0) AS value
     FROM   analytics_sessions
     WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
     GROUP  BY 1 ORDER BY 1`,
