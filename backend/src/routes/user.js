@@ -389,7 +389,7 @@ router.get('/overview', requireAuth, async (req, res, next) => {
            COUNT(p.max_watch_pct) * 100.0 / NULLIF(MAX(total.n), 0),
            1
          ) AS viewers_pct
-       FROM   generate_series(0, 90, 10) AS g(pct)
+       FROM   generate_series(0, 99, 1) AS g(pct)
        LEFT   JOIN played p    ON p.max_watch_pct >= g.pct
        CROSS  JOIN (SELECT COUNT(*) AS n FROM played) AS total
        GROUP  BY g.pct
