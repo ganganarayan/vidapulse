@@ -69,24 +69,4 @@ module.exports = {
   RAZORPAY_PLAN_ID_STARTER: process.env.RAZORPAY_PLAN_ID_STARTER || null,
   RAZORPAY_PLAN_ID_PRO    : process.env.RAZORPAY_PLAN_ID_PRO     || null,
 
-  // ── Cashfree ──────────────────────────────────────────────────────────────
-  // Used for international (USD) and INR recurring subscriptions.
-  // Get App ID + Secret Key from Cashfree Dashboard → Developers → API Keys.
-  CASHFREE_APP_ID    : process.env.CASHFREE_APP_ID     || null,
-  CASHFREE_SECRET_KEY: process.env.CASHFREE_SECRET_KEY || null,
-
-  // Webhook signing secret — copy from Cashfree Dashboard → Developers → Webhooks
-  // after you add https://app.vidapulse.in/api/payments/cashfree as the webhook URL.
-  // If unset, incoming webhooks are accepted without signature verification.
-  CASHFREE_WEBHOOK_SECRET: process.env.CASHFREE_WEBHOOK_SECRET || null,
-
-  // 'sandbox' for testing, 'production' (default) for live payments.
-  CASHFREE_ENV: process.env.CASHFREE_ENV || 'production',
-
-  // Optional: pre-created Cashfree Plan IDs (if you created them manually
-  // in the dashboard). If set, these are used instead of auto-creating via API.
-  CASHFREE_PLAN_ID_STARTER_INR: process.env.CASHFREE_PLAN_ID_STARTER_INR || null,
-  CASHFREE_PLAN_ID_PRO_INR    : process.env.CASHFREE_PLAN_ID_PRO_INR     || null,
-  CASHFREE_PLAN_ID_STARTER_USD: process.env.CASHFREE_PLAN_ID_STARTER_USD || null,
-  CASHFREE_PLAN_ID_PRO_USD    : process.env.CASHFREE_PLAN_ID_PRO_USD     || null,
 };
