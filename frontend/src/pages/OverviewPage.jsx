@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { useAuth } from '../contexts/AuthContext';
@@ -149,23 +149,12 @@ export default function OverviewPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
                   {/* Engagement heatmap — Pro only */}
-                  <div className="lg:col-span-2 bg-gray-800/50 border border-gray-700/50 rounded-2xl p-5">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-sm font-bold text-gray-200">Engagement Heatmap</h2>
-                        {!isPro && (
-                          <span className="px-1.5 py-0.5 text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full uppercase tracking-wider">
-                            Pro
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs text-gray-500">Audience retention</span>
-                    </div>
+                  <div className="lg:col-span-2">
                     {isPro ? (
                       data.retention_curve && data.retention_curve.length > 0 ? (
-                        <RetentionChart data={data.retention_curve} />
+                        <RetentionChart data={data.retention_curve} totalViewers={data.unique_viewers ?? 0} />
                       ) : (
-                        <div className="flex items-center justify-center h-36 text-xs text-gray-400">
+                        <div className="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-5 flex items-center justify-center h-40 text-xs text-gray-400">
                           Not enough play data yet
                         </div>
                       )
@@ -310,49 +299,57 @@ function StatTile({ label, value, trend, icon, iconColor, iconBg, span2 }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// LockedHeatmap — Pro upgrade teaser shown to free/starter users
+// retentionColor — matches HeatmapSection exactly (green → amber → red)
+// ─────────────────────────────────────────────────────────────────────────
+
+function retentionColor(pct) {
+  const t = Math.max(0, Math.min(1, pct / 100));
+  const stops = [
+    [0.00, [239, 68,  68]],
+    [0.25, [251, 146, 60]],
+    [0.50, [234, 179,  8]],
+    [0.75, [ 52, 211,153]],
+    [1.00, [ 16, 185,129]],
+  ];
+  let lo = stops[0], hi = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (t >= stops[i][0] && t <= stops[i + 1][0]) { lo = stops[i]; hi = stops[i + 1]; break; }
+  }
+  const f = lo[0] === hi[0] ? 0 : (t - lo[0]) / (hi[0] - lo[0]);
+  const lerp = (a, b) => Math.round(a + f * (b - a));
+  return `rgb(${lerp(lo[1][0],hi[1][0])},${lerp(lo[1][1],hi[1][1])},${lerp(lo[1][2],hi[1][2])})`;
+}
+
+// Fake retention curve for the locked state teaser
+function generateFakeOvRetention() {
+  return Array.from({ length: 10 }, (_, i) => {
+    const t = i / 9;
+    return {
+      pct       : i * 10,
+      viewers_pct: Math.max(5, Math.round(100 * Math.exp(-2.2 * t) * 0.85 + 5)),
+    };
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// LockedHeatmap — same visual structure as RetentionChart, blurred + locked
 // ─────────────────────────────────────────────────────────────────────────
 
 function LockedHeatmap({ onUpgrade }) {
-  // Static fake retention curve so the blurred background looks real
-  const fakePts = [
-    { x: 40,  y: 20  },
-    { x: 100, y: 55  },
-    { x: 160, y: 75  },
-    { x: 220, y: 88  },
-    { x: 280, y: 100 },
-    { x: 340, y: 110 },
-    { x: 400, y: 118 },
-    { x: 460, y: 125 },
-    { x: 520, y: 130 },
-    { x: 572, y: 130 },
-  ];
-  const linePath = fakePts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
-  const areaPath = `${linePath} L572,150 L40,150 Z`;
-
+  const fakeData = generateFakeOvRetention();
   return (
-    <div className="relative h-36 rounded-xl overflow-hidden">
-      {/* Blurred fake chart in background */}
-      <svg viewBox="0 0 580 150" className="absolute inset-0 w-full h-full opacity-30 blur-sm" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="fakeGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor="#6366F1" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="#6366F1" stopOpacity="0"   />
-          </linearGradient>
-        </defs>
-        {[20, 60, 100, 140].map(y => (
-          <line key={y} x1="40" y1={y} x2="572" y2={y} stroke="#374151" strokeWidth="0.5" strokeDasharray="4 3" />
-        ))}
-        <path d={areaPath} fill="url(#fakeGrad)" />
-        <path d={linePath} fill="none" stroke="#6366F1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
+    <div className="relative">
+      {/* Blurred fake chart underneath */}
+      <div className="blur-[3px] opacity-50 pointer-events-none select-none">
+        <RetentionChart data={fakeData} totalViewers={148} _noHover />
+      </div>
 
       {/* Lock overlay */}
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3
-                      bg-gray-900/60 backdrop-blur-[2px]">
-        <div className="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/30
+                      bg-gray-950/50 backdrop-blur-[1px] rounded-2xl">
+        <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30
                         flex items-center justify-center">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
             className="text-indigo-400">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -360,8 +357,8 @@ function LockedHeatmap({ onUpgrade }) {
           </svg>
         </div>
         <div className="text-center">
-          <p className="text-sm font-semibold text-gray-200">Engagement Heatmap</p>
-          <p className="text-xs text-gray-400 mt-0.5">See exactly where viewers drop off</p>
+          <p className="text-sm font-semibold text-gray-100">Engagement Heatmap</p>
+          <p className="text-xs text-gray-400 mt-0.5">See exactly where viewers drop off · Pro feature</p>
         </div>
         <button
           onClick={onUpgrade}
@@ -376,75 +373,197 @@ function LockedHeatmap({ onUpgrade }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// RetentionChart — SVG audience-retention line chart
+// RetentionChart — matches HeatmapSection design exactly
+// Data: retention_curve [{pct: 0–90, viewers_pct: 0–100}]
+// X-axis: % of video progress (instead of timestamps)
 // ─────────────────────────────────────────────────────────────────────────
 
-function RetentionChart({ data }) {
-  const W = 560;
-  const H = 150;
-  const padL = 32;
-  const padR = 12;
-  const padT = 10;
-  const padB = 20;
-  const chartW = W - padL - padR;
-  const chartH = H - padT - padB;
+const CHART_H_OV = 200;
+const Y_LABELS_OV = [0, 25, 50, 75, 100];
 
-  const yScale = v  => padT + chartH * (1 - v / 100);
-  const xScale = p  => padL + chartW * (p / 100);
+function RetentionChart({ data, totalViewers = 0, _noHover = false }) {
+  const svgRef                  = useRef(null);
+  const [hoverX,   setHoverX]   = useState(null);
+  const [animated, setAnimated] = useState(false);
 
-  // Build path including extrapolated 100% endpoint
-  const pts = [...data];
-  if (pts[pts.length - 1]?.pct < 100) {
-    pts.push({ pct: 100, viewers_pct: pts[pts.length - 1].viewers_pct });
+  useEffect(() => {
+    const t = setTimeout(() => setAnimated(true), 60);
+    return () => clearTimeout(t);
+  }, []);
+
+  if (!data || data.length === 0) return null;
+
+  // Convert [{pct, viewers_pct}] → [{second: pct, pct: viewers_pct}]
+  const buckets = data.map(d => ({ second: d.pct, pct: d.viewers_pct ?? 0 }));
+
+  const W           = 100;
+  const H           = 100;
+  const CHART_W     = W;
+  const CHART_H_SVG = H - 8; // 8px bottom padding for x labels
+
+  const n   = buckets.length;
+  const pts = buckets.map((b, i) => {
+    const x = n > 1 ? (i / (n - 1)) * CHART_W : 0;
+    const y = CHART_H_SVG - (b.pct / 100) * CHART_H_SVG;
+    return { x, y, pct: b.pct, second: b.second };
+  });
+
+  function smoothPath(points) {
+    if (points.length < 2) return '';
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      const cpx  = (prev.x + curr.x) / 2;
+      d += ` C ${cpx} ${prev.y} ${cpx} ${curr.y} ${curr.x} ${curr.y}`;
+    }
+    return d;
   }
-  const pathPts = pts.map(d => ({ x: xScale(d.pct), y: yScale(d.viewers_pct) }));
-  const linePath = pathPts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  const areaPath = `${linePath} L${pathPts[pathPts.length - 1].x.toFixed(1)},${(padT + chartH).toFixed(1)} L${pathPts[0].x.toFixed(1)},${(padT + chartH).toFixed(1)} Z`;
 
-  const gridYs = [0, 25, 50, 75, 100];
+  const linePath = smoothPath(pts);
+  const areaPath = `${linePath} L ${pts[pts.length - 1].x} ${CHART_H_SVG} L 0 ${CHART_H_SVG} Z`;
+
+  const avgRetention = buckets.length > 0
+    ? Math.round(buckets.reduce((s, b) => s + b.pct, 0) / buckets.length)
+    : 0;
+
+  function handleMouseMove(e) {
+    if (_noHover || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const relX = (e.clientX - rect.left) / rect.width;
+    setHoverX(Math.max(0, Math.min(1, relX)));
+  }
+
+  let hoverBucket = null, hoverSvgX = null;
+  if (!_noHover && hoverX !== null) {
+    const ci    = Math.max(0, Math.min(buckets.length - 1, Math.round(hoverX * (buckets.length - 1))));
+    hoverBucket = buckets[ci];
+    hoverSvgX   = pts[ci]?.x;
+  }
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: '150px' }}>
-      <defs>
-        <linearGradient id="retGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor="#F59E0B" stopOpacity="0.25" />
-          <stop offset="100%" stopColor="#F59E0B" stopOpacity="0"    />
-        </linearGradient>
-      </defs>
+    <div className="bg-gray-900/60 border border-gray-700/50 rounded-2xl overflow-hidden shadow-xl">
 
-      {/* Horizontal grid lines + y-axis labels */}
-      {gridYs.map(v => (
-        <g key={v}>
-          <line
-            x1={padL} y1={yScale(v).toFixed(1)}
-            x2={W - padR} y2={yScale(v).toFixed(1)}
-            stroke="#374151" strokeWidth="0.5" strokeDasharray="4 3"
-          />
-          <text
-            x={padL - 5} y={yScale(v) + 3.5}
-            textAnchor="end" fontSize="9" fill="#9CA3AF" fontFamily="ui-monospace,monospace"
-          >
-            {v}%
-          </text>
-        </g>
-      ))}
+      {/* ── Stats row ─────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-6 px-5 py-4 border-b border-gray-800/60">
+        <div>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider leading-none mb-1">Engagement Heatmap</p>
+          <p className="text-xs font-semibold text-gray-400">Audience retention · last 30d</p>
+        </div>
+        <div className="ml-4">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider leading-none mb-1">Avg Retention</p>
+          <p className="text-base font-bold" style={{ color: '#10b981' }}>{avgRetention}%</p>
+        </div>
+        {totalViewers > 0 && (
+          <div>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider leading-none mb-1">Total Viewers</p>
+            <p className="text-base font-bold" style={{ color: '#818cf8' }}>{totalViewers.toLocaleString()}</p>
+          </div>
+        )}
+        {hoverBucket && (
+          <div className="ml-auto text-right">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider leading-none mb-1 font-mono">
+              {hoverBucket.second}% into video
+            </p>
+            <p className="text-base font-bold" style={{ color: retentionColor(hoverBucket.pct) }}>
+              {Math.round(hoverBucket.pct)}%
+            </p>
+          </div>
+        )}
+      </div>
 
-      {/* Area fill */}
-      <path d={areaPath} fill="url(#retGrad)" />
+      {/* ── SVG chart ─────────────────────────────────────────────────── */}
+      <div className="px-2 pt-3 pb-1 select-none">
+        <div className="flex">
+          {/* Y-axis labels */}
+          <div className="flex flex-col justify-between items-end pr-2 text-[9px] text-gray-500 font-mono"
+               style={{ height: `${CHART_H_OV}px`, minWidth: '28px' }}>
+            {[...Y_LABELS_OV].reverse().map(v => <span key={v}>{v}%</span>)}
+          </div>
 
-      {/* Retention line */}
-      <path
-        d={linePath}
-        fill="none"
-        stroke="#F59E0B"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+          {/* Chart SVG */}
+          <div className="flex-1 relative" style={{ height: `${CHART_H_OV}px` }}>
+            <svg
+              ref={svgRef}
+              viewBox={`0 0 100 ${H}`}
+              preserveAspectRatio="none"
+              className="absolute inset-0 w-full h-full cursor-crosshair"
+              onMouseMove={handleMouseMove}
+              onMouseLeave={() => !_noHover && setHoverX(null)}
+            >
+              <defs>
+                <linearGradient id="ovVertStroke" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%"   stopColor="rgb(16,185,129)"  stopOpacity="1" />
+                  <stop offset="50%"  stopColor="rgb(234,179,8)"   stopOpacity="1" />
+                  <stop offset="100%" stopColor="rgb(239,68,68)"   stopOpacity="1" />
+                </linearGradient>
+                <clipPath id="ovAreaClip"><path d={areaPath} /></clipPath>
+                <clipPath id="ovDrawClip">
+                  <rect x="0" y="0" width={animated ? '100' : '0'} height="100"
+                    style={{ transition: 'width 1.4s cubic-bezier(0.22,1,0.36,1)' }} />
+                </clipPath>
+              </defs>
 
-      {/* First point dot */}
-      <circle cx={pathPts[0].x} cy={pathPts[0].y} r="3" fill="#F59E0B" />
-    </svg>
+              {/* Grid lines */}
+              {[25, 50, 75].map(pct => {
+                const y = CHART_H_SVG - (pct / 100) * CHART_H_SVG;
+                return <line key={pct} x1="0" y1={y} x2={W} y2={y}
+                         stroke="rgba(55,65,81,0.5)" strokeWidth="0.4" />;
+              })}
+
+              {/* Colored vertical fill strips clipped to curve area */}
+              <g clipPath="url(#ovDrawClip)">
+                <g clipPath="url(#ovAreaClip)">
+                  {pts.map((p, i) => {
+                    const next = pts[i + 1];
+                    const w    = next ? (next.x - p.x + 0.5) : (CHART_W / pts.length + 0.5);
+                    return (
+                      <rect key={i} x={p.x} y={0} width={w} height={CHART_H_SVG}
+                        fill={retentionColor(p.pct)} opacity={0.68} />
+                    );
+                  })}
+                </g>
+              </g>
+
+              {/* Stroke line */}
+              <path d={linePath} fill="none" stroke="url(#ovVertStroke)"
+                strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round"
+                clipPath="url(#ovDrawClip)" />
+
+              {/* Hover crosshair */}
+              {hoverSvgX != null && hoverBucket && (
+                <>
+                  <line x1={hoverSvgX} y1={0} x2={hoverSvgX} y2={CHART_H_SVG}
+                    stroke="rgba(255,255,255,0.18)" strokeWidth="0.5" strokeDasharray="2 2" />
+                  <circle cx={hoverSvgX}
+                    cy={CHART_H_SVG - (hoverBucket.pct / 100) * CHART_H_SVG}
+                    r="1.2" fill={retentionColor(hoverBucket.pct)}
+                    stroke="rgba(255,255,255,0.7)" strokeWidth="0.4" />
+                </>
+              )}
+            </svg>
+          </div>
+        </div>
+
+        {/* X-axis: % of video progress */}
+        <div className="flex justify-between pl-7 mt-1 text-[9px] text-gray-500 font-mono">
+          <span>0%</span>
+          <span>25%</span>
+          <span>50%</span>
+          <span>75%</span>
+          <span>100%</span>
+        </div>
+      </div>
+
+      {/* ── Color legend ──────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 px-5 py-3 border-t border-gray-800/50">
+        <span className="text-[10px] text-gray-500 font-medium">Low retention</span>
+        <div className="flex-1 h-1.5 rounded-full" style={{
+          background: 'linear-gradient(to right, rgb(239,68,68), rgb(234,179,8), rgb(16,185,129))',
+        }} />
+        <span className="text-[10px] text-gray-500 font-medium">High retention</span>
+      </div>
+    </div>
   );
 }
 
