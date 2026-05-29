@@ -55,9 +55,11 @@ const PLAN_FEATURES = {
 // ─────────────────────────────────────────────────────────────────────────
 
 export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClose }) {
-  const [upgradeData,      setUpgradeData]      = useState(null);
-  const [loading,          setLoading]          = useState(true);
-  const [region,           setRegion]           = useState('india'); // 'india' | 'international'
+  const [upgradeData,  setUpgradeData]  = useState(null);
+  const [loading,      setLoading]      = useState(true);
+  const [subscribing,  setSubscribing]  = useState(null); // plan key being subscribed
+  const [subError,     setSubError]     = useState('');
+  const [region,       setRegion]       = useState('india'); // 'india' | 'international'
 
   // Fetch live pricing + upgrade options
   useEffect(() => {
@@ -70,11 +72,28 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
             starter: { inr: 999,  usd: 15, inr_label: '₹999',  usd_label: '$15', video_limit: 10 },
             pro    : { inr: 1999, usd: 29, inr_label: '₹1,999', usd_label: '$29', video_limit: 20 },
           },
-          razorpay_links: { starter: null, pro: null },
         });
       })
       .finally(() => setLoading(false));
   }, [currentPlan]);
+
+  // Create Razorpay subscription on-the-fly and redirect
+  async function handleSubscribe(plan) {
+    setSubError('');
+    setSubscribing(plan);
+    try {
+      const { data } = await api.post('/payments/subscribe', { plan });
+      savePurchaseIntent({
+        plan,
+        currency: 'INR',
+        value   : plan === 'starter' ? 999 : 1999,
+      });
+      window.location.href = data.paymentUrl;
+    } catch (err) {
+      setSubError(err.response?.data?.error || 'Something went wrong. Please try again.');
+      setSubscribing(null);
+    }
+  }
 
   // Close on Escape key
   useEffect(() => {
@@ -166,6 +185,12 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
             </div>
           </div>
 
+          {subError && (
+            <div className="mb-3 px-4 py-2.5 bg-red-500/10 border border-red-500/20 rounded-lg">
+              <p className="text-xs text-red-400">{subError}</p>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center py-10">
               <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
@@ -178,10 +203,11 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
                   plan={plan}
                   pricing={upgradeData?.pricing?.[plan]}
                   region={region}
-                  razorpayLink={upgradeData?.razorpay_links?.[plan]}
                   isHighlighted={plan === requiredPlan}
                   features={PLAN_FEATURES[plan] ?? []}
                   singleCard={isSingleCard}
+                  subscribing={subscribing === plan}
+                  onSubscribe={() => handleSubscribe(plan)}
                 />
               ))}
             </div>
@@ -216,7 +242,7 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
 // PlanCard
 // ─────────────────────────────────────────────────────────────────────────
 
-function PlanCard({ plan, pricing, region, razorpayLink, isHighlighted, features, singleCard }) {
+function PlanCard({ plan, pricing, region, isHighlighted, features, singleCard, subscribing, onSubscribe }) {
   const isPro = plan === 'pro';
 
   const borderCls = isHighlighted
@@ -276,29 +302,23 @@ function PlanCard({ plan, pricing, region, razorpayLink, isHighlighted, features
         ))}
       </ul>
 
-      {/* CTA — Razorpay handles both Indian and international cards */}
-      {razorpayLink ? (
-        <a
-          href={razorpayLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => savePurchaseIntent({
-            plan,
-            currency: region === 'india' ? 'INR' : 'USD',
-            value   : region === 'india'
-              ? (pricing?.inr ?? (plan === 'pro' ? 1999 : 999))
-              : (pricing?.usd ?? (plan === 'pro' ? 29   : 15)),
-          })}
-          className={`w-full text-center py-2.5 px-4 rounded-lg font-semibold text-sm transition-colors ${btnCls}`}
-        >
-          Upgrade to {capitalize(plan)}
-        </a>
-      ) : (
-        <div className="w-full py-2.5 rounded-lg text-center text-xs text-gray-500
-                        bg-gray-900 border border-gray-700">
-          Payment link coming soon
-        </div>
-      )}
+      {/* CTA */}
+      <button
+        onClick={onSubscribe}
+        disabled={!!subscribing}
+        className={`w-full py-2.5 px-4 rounded-lg font-semibold text-sm transition-colors
+                    flex items-center justify-center gap-2
+                    disabled:opacity-60 disabled:cursor-not-allowed ${btnCls}`}
+      >
+        {subscribing ? (
+          <>
+            <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            Redirecting…
+          </>
+        ) : (
+          `Upgrade to ${capitalize(plan)} →`
+        )}
+      </button>
     </div>
   );
 }
