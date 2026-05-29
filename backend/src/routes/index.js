@@ -117,9 +117,7 @@ router.get('/upgrade', requireAuth, async (req, res, next) => {
         starter: settings.razorpay_starter_url || null,
         pro    : settings.razorpay_pro_url     || null,
       },
-      // Cashfree: dynamic subscription API available for both INR and USD
-      // Frontend calls POST /api/payments/cashfree-subscribe when this is true
-      cashfree_enabled: !!(env.CASHFREE_APP_ID && env.CASHFREE_SECRET_KEY),
+      razorpay_enabled: !!(env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET),
     });
   } catch (err) {
     next(err);
