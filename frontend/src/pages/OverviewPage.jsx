@@ -2,11 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { useAuth } from '../contexts/AuthContext';
+import { useUpgrade } from '../contexts/UpgradeContext';
 import api from '../lib/api';
 
+const PLAN_RANK = { free: 0, starter: 1, pro: 2, admin_lifetime: 3 };
+
 export default function OverviewPage() {
-  const { user }   = useAuth();
-  const navigate   = useNavigate();
+  const { user }        = useAuth();
+  const { showUpgrade } = useUpgrade();
+  const navigate        = useNavigate();
   const [data,        setData]        = useState(null);
   const [loading,     setLoading]     = useState(true);
   const [promoVideos, setPromoVideos] = useState([]);
@@ -53,6 +57,7 @@ export default function OverviewPage() {
   }
 
   const hasData = data && data.total_videos > 0;
+  const isPro   = (PLAN_RANK[user?.plan] ?? 0) >= PLAN_RANK.pro;
 
   return (
     <AppLayout>
@@ -143,18 +148,29 @@ export default function OverviewPage() {
                 {/* ── Heatmap + Geography row ──────────────────────── */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-                  {/* Engagement heatmap */}
+                  {/* Engagement heatmap — Pro only */}
                   <div className="lg:col-span-2 bg-gray-800/50 border border-gray-700/50 rounded-2xl p-5">
                     <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-sm font-bold text-gray-200">Engagement Heatmap</h2>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-sm font-bold text-gray-200">Engagement Heatmap</h2>
+                        {!isPro && (
+                          <span className="px-1.5 py-0.5 text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full uppercase tracking-wider">
+                            Pro
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs text-gray-500">Audience retention</span>
                     </div>
-                    {data.retention_curve && data.retention_curve.length > 0 ? (
-                      <RetentionChart data={data.retention_curve} />
+                    {isPro ? (
+                      data.retention_curve && data.retention_curve.length > 0 ? (
+                        <RetentionChart data={data.retention_curve} />
+                      ) : (
+                        <div className="flex items-center justify-center h-36 text-xs text-gray-400">
+                          Not enough play data yet
+                        </div>
+                      )
                     ) : (
-                      <div className="flex items-center justify-center h-36 text-xs text-gray-400">
-                        Not enough play data yet
-                      </div>
+                      <LockedHeatmap onUpgrade={() => showUpgrade('pro')} />
                     )}
                   </div>
 
@@ -288,6 +304,72 @@ function StatTile({ label, value, trend, icon, iconColor, iconBg, span2 }) {
           <span className="text-[11px] text-gray-400">—</span>
         )}
         <span className="text-[10px] text-gray-400 ml-0.5">vs prev 30d</span>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// LockedHeatmap — Pro upgrade teaser shown to free/starter users
+// ─────────────────────────────────────────────────────────────────────────
+
+function LockedHeatmap({ onUpgrade }) {
+  // Static fake retention curve so the blurred background looks real
+  const fakePts = [
+    { x: 40,  y: 20  },
+    { x: 100, y: 55  },
+    { x: 160, y: 75  },
+    { x: 220, y: 88  },
+    { x: 280, y: 100 },
+    { x: 340, y: 110 },
+    { x: 400, y: 118 },
+    { x: 460, y: 125 },
+    { x: 520, y: 130 },
+    { x: 572, y: 130 },
+  ];
+  const linePath = fakePts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+  const areaPath = `${linePath} L572,150 L40,150 Z`;
+
+  return (
+    <div className="relative h-36 rounded-xl overflow-hidden">
+      {/* Blurred fake chart in background */}
+      <svg viewBox="0 0 580 150" className="absolute inset-0 w-full h-full opacity-30 blur-sm" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="fakeGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#6366F1" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="#6366F1" stopOpacity="0"   />
+          </linearGradient>
+        </defs>
+        {[20, 60, 100, 140].map(y => (
+          <line key={y} x1="40" y1={y} x2="572" y2={y} stroke="#374151" strokeWidth="0.5" strokeDasharray="4 3" />
+        ))}
+        <path d={areaPath} fill="url(#fakeGrad)" />
+        <path d={linePath} fill="none" stroke="#6366F1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+
+      {/* Lock overlay */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3
+                      bg-gray-900/60 backdrop-blur-[2px]">
+        <div className="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/30
+                        flex items-center justify-center">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            className="text-indigo-400">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-gray-200">Engagement Heatmap</p>
+          <p className="text-xs text-gray-400 mt-0.5">See exactly where viewers drop off</p>
+        </div>
+        <button
+          onClick={onUpgrade}
+          className="px-4 py-1.5 bg-indigo-500 hover:bg-indigo-400 text-white
+                     text-xs font-semibold rounded-lg transition-colors"
+        >
+          Upgrade to Pro →
+        </button>
       </div>
     </div>
   );
