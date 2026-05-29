@@ -156,7 +156,7 @@ export default function Register() {
             {/* Phone (optional) */}
             <div>
               <label className="block text-xs text-gray-400 mb-1.5 font-medium">
-                Phone number <span className="text-gray-600">(optional)</span>
+                Phone number <span className="text-gray-400">(optional)</span>
               </label>
               <input
                 type="tel"

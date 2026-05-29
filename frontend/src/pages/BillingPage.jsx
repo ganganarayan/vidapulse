@@ -189,7 +189,7 @@ export default function BillingPage() {
 
           {/* Fine print */}
           {!loading && !error && payments.length > 0 && (
-            <p className="mt-4 text-xs text-gray-600 text-center">
+            <p className="mt-4 text-xs text-gray-400 text-center">
               All payments are processed by Razorpay · Invoices may take a few minutes to generate
             </p>
           )}
@@ -273,7 +273,7 @@ function PaymentRow({ payment }) {
 
 function PaymentMethodBadge({ method }) {
   if (!method || method === 'unknown') {
-    return <span className="text-xs text-gray-600">—</span>;
+    return <span className="text-xs text-gray-400">—</span>;
   }
 
   const configs = {

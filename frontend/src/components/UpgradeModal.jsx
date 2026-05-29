@@ -171,7 +171,7 @@ export default function UpgradeModal() {
           <p className="text-xs text-gray-500 font-medium">
             Your card will be charged every month until you cancel.
           </p>
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-gray-400">
             Payments processed securely by Razorpay · Plan activates within minutes of payment
           </p>
           <p className="text-xs text-gray-500">
@@ -275,7 +275,7 @@ function PlanCard({
           )}
         </button>
       ) : (
-        <div className="w-full py-2.5 rounded-lg text-center text-xs text-gray-600
+        <div className="w-full py-2.5 rounded-lg text-center text-xs text-gray-400
                         bg-gray-800 border border-gray-700/50">
           Not available for your plan
         </div>

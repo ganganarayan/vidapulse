@@ -209,17 +209,17 @@ export default function UpgradePage() {
           {/* Fine print */}
           {!loading && !error && (
             <div className="mt-8 text-center">
-              <p className="text-xs text-gray-600">
+              <p className="text-xs text-gray-400">
                 Payments are processed securely by Razorpay.
                 Your plan activates automatically within minutes of payment.
               </p>
-              <p className="text-xs text-gray-600 mt-1">
+              <p className="text-xs text-gray-400 mt-1">
                 Questions?{' '}
                 <button onClick={() => navigate('/help')} className="text-amber-500/80 hover:text-amber-400 transition-colors">
                   Contact support
                 </button>
               </p>
-              <p className="text-xs text-gray-600 mt-1">
+              <p className="text-xs text-gray-400 mt-1">
                 Need more than 20 videos?{' '}
                 <a href="mailto:support@vidapulse.in" className="text-amber-400 hover:text-amber-300 transition-colors">
                   Contact support@vidapulse.in
@@ -298,7 +298,7 @@ function PlanCard({
         </div>
       ) : canUpgrade ? (
         noLink ? (
-          <div className="w-full py-2 rounded-lg text-center text-xs text-gray-600
+          <div className="w-full py-2 rounded-lg text-center text-xs text-gray-400
                           bg-gray-800 border border-gray-700/50 cursor-not-allowed">
             Payment link coming soon
           </div>
@@ -311,7 +311,7 @@ function PlanCard({
           </button>
         )
       ) : (
-        <div className="w-full py-2 rounded-lg text-center text-xs text-gray-600
+        <div className="w-full py-2 rounded-lg text-center text-xs text-gray-400
                         bg-gray-800 border border-gray-700/50 cursor-default">
           {PLAN_ORDER[planKey] < PLAN_ORDER['free'] ? 'Lower plan' : 'Not available'}
         </div>

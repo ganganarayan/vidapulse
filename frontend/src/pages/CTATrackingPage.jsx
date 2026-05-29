@@ -168,7 +168,7 @@ export default function CTATrackingPage() {
                     </div>
                     <div>
                       <label className="block text-[11px] font-semibold text-gray-400 mb-1">
-                        Page name <span className="text-gray-600">(optional)</span>
+                        Page name <span className="text-gray-400">(optional)</span>
                       </label>
                       <input
                         type="text"
@@ -292,7 +292,7 @@ export default function CTATrackingPage() {
                                        bg-pink-500/15 text-pink-300 border border-pink-500/25">cta click</span>{' '}
                       events with button name and page name — exportable as CSV.
                       Enable the <strong className="text-gray-400">CTA Click</strong> alert for real-time notifications.
-                      <span className="ml-1 text-gray-600">
+                      <span className="ml-1 text-gray-400">
                         Deleting a link does not remove its past events from the Events log.
                       </span>
                     </p>

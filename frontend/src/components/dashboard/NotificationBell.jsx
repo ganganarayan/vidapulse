@@ -173,14 +173,14 @@ function NotificationRow({ notification, onClick }) {
                          ${isUnread ? 'text-gray-100 font-medium' : 'text-gray-400'}`}>
             {notification.headline}
           </p>
-          <p className="text-xs text-gray-600 mt-0.5">
+          <p className="text-xs text-gray-400 mt-0.5">
             {formatRelativeTime(notification.created_at)}
           </p>
         </div>
 
         {/* Arrow */}
         {notification.video_id && (
-          <ArrowIcon className="flex-shrink-0 mt-1 text-gray-600" />
+          <ArrowIcon className="flex-shrink-0 mt-1 text-gray-400" />
         )}
       </button>
     </li>
@@ -196,11 +196,11 @@ function EmptyState() {
     <div className="px-4 py-10 text-center">
       <div className="flex justify-center mb-3">
         <div className="w-10 h-10 rounded-lg bg-gray-700/50 flex items-center justify-center">
-          <BellIcon className="text-gray-600" />
+          <BellIcon className="text-gray-400" />
         </div>
       </div>
       <p className="text-sm text-gray-500">No notifications yet.</p>
-      <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+      <p className="text-xs text-gray-400 mt-1 leading-relaxed">
         Insights and milestones will appear here as your videos get views.
       </p>
     </div>

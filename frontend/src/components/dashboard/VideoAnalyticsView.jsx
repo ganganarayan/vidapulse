@@ -209,7 +209,7 @@ export default function VideoAnalyticsView({
       <div className="flex-shrink-0 border-b border-gray-800 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm">
           <span className="text-gray-400">{video?.title ? video.title.slice(0, 32) + (video.title.length > 32 ? '…' : '') : 'Video'}</span>
-          <span className="text-gray-600">/</span>
+          <span className="text-gray-400">/</span>
           <span className="font-semibold text-gray-200">{viewLabel}</span>
         </div>
         <div className="flex items-center gap-1">
@@ -332,7 +332,7 @@ export default function VideoAnalyticsView({
               </h1>
               <p className="text-sm text-gray-400 mt-1.5 flex items-center gap-2">
                 <span>{PLATFORM_LABELS[video?.source_type] ?? 'Video'}</span>
-                <span className="text-gray-600">·</span>
+                <span className="text-gray-400">·</span>
                 <span>
                   Added {video?.created_at
                     ? new Date(video.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -473,7 +473,7 @@ function MetricCard({ label, value, format, visible, accent, className = '', onC
       </p>
       <p className="text-3xl font-bold text-gray-50 tabular-nums">
         {isNull
-          ? <span className="text-gray-600">—</span>
+          ? <span className="text-gray-400">—</span>
           : format(counted)
         }
       </p>

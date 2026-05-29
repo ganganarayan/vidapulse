@@ -89,7 +89,7 @@ export default function FeatureGate({ required = 'pro', feature = '', children }
         </button>
 
         {/* Plan reminder */}
-        <p className="mt-4 text-xs text-gray-600">
+        <p className="mt-4 text-xs text-gray-400">
           You are on the <span className="text-gray-400 font-medium capitalize">{user?.plan_display_name ?? user?.plan ?? 'Free'}</span> plan
         </p>
 

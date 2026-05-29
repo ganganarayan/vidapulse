@@ -146,7 +146,7 @@ export default function AdminHelpPage() {
 
                     {/* Section header controls */}
                     <div className="flex items-center gap-2 mb-3">
-                      <span className="text-[11px] text-gray-600 font-mono w-5 text-center select-none">
+                      <span className="text-[11px] text-gray-400 font-mono w-5 text-center select-none">
                         {i + 1}
                       </span>
                       <input

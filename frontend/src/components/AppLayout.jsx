@@ -22,7 +22,7 @@ export default function AppLayout({ children }) {
         <ExpiryReminderBanner />
         {children}
         <div className="flex-shrink-0 border-t border-gray-800/60 px-6 py-2 text-center">
-          <p className="text-[11px] text-gray-600">
+          <p className="text-[11px] text-gray-400">
             Need help?{' '}
             <a href="mailto:support@vidapulse.in"
                className="text-gray-500 hover:text-gray-400 transition-colors">

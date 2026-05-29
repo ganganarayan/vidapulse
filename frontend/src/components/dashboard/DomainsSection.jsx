@@ -80,7 +80,7 @@ export default function DomainsSection({ videoId }) {
             <div className="px-5 py-7 text-center">
               <p className="text-2xl mb-2">🌐</p>
               <p className="text-sm text-gray-400 font-medium mb-1">No embed data yet</p>
-              <p className="text-xs text-gray-600 max-w-xs mx-auto">
+              <p className="text-xs text-gray-400 max-w-xs mx-auto">
                 Once your video is embedded on a page and played, you'll see which domains drive the most views.
               </p>
             </div>

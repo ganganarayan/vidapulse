@@ -253,7 +253,7 @@ export default function WebhookSettings() {
             {/* Notification Webhook URL */}
             <div>
               <label className="block text-xs text-gray-400 mb-1.5">
-                Failure Notification URL <span className="text-gray-600">(optional — different automation)</span>
+                Failure Notification URL <span className="text-gray-400">(optional — different automation)</span>
               </label>
               <input
                 type="text"
@@ -269,7 +269,7 @@ export default function WebhookSettings() {
                            text-sm text-gray-100 placeholder-gray-600
                            focus:outline-none focus:border-red-500/60 transition-colors"
               />
-              <p className="text-xs text-gray-600 mt-1">
+              <p className="text-xs text-gray-400 mt-1">
                 Fired immediately on any webhook failure. Sends <code className="text-red-400/80 text-[10px]">event_type=webhook_failure_alert</code>{' '}
                 with error details — triggers WhatsApp/email in your CRM.
               </p>
@@ -291,12 +291,12 @@ export default function WebhookSettings() {
                 <button
                   type="button"
                   onClick={() => setShowSecret(s => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-400"
                 >
                   {showSecret ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
               </div>
-              <p className="text-xs text-gray-600 mt-1">
+              <p className="text-xs text-gray-400 mt-1">
                 Sent as <code className="text-amber-600 text-[10px]">X-VidaPulse-Signature</code> header with each request.
               </p>
             </div>
@@ -317,12 +317,12 @@ export default function WebhookSettings() {
                 <button
                   type="button"
                   onClick={() => setShowApiToken(s => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-400"
                 >
                   {showApiToken ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
               </div>
-              <p className="text-xs text-gray-600 mt-1">
+              <p className="text-xs text-gray-400 mt-1">
                 Appended as <code className="text-amber-600 text-[10px]">?api_token=…</code> to every contact webhook request.
               </p>
             </div>
@@ -369,7 +369,7 @@ export default function WebhookSettings() {
 
           {/* Last test status */}
           {lastTested && (
-            <p className="text-xs text-gray-600 mt-5 border-t border-gray-700/50 pt-4">
+            <p className="text-xs text-gray-400 mt-5 border-t border-gray-700/50 pt-4">
               Last tested: {lastTested}
               {' '}·{' '}
               <span className={testStatus === 'success' ? 'text-emerald-400' : 'text-red-400'}>
@@ -447,7 +447,7 @@ export default function WebhookSettings() {
           </div>
 
           {nextFireAt && (
-            <p className="text-xs text-gray-600 mb-5">
+            <p className="text-xs text-gray-400 mb-5">
               Next queued event: <span className="text-gray-400">{new Date(nextFireAt).toLocaleString()}</span>
             </p>
           )}
@@ -457,7 +457,7 @@ export default function WebhookSettings() {
             {/* Hourly cap */}
             <div>
               <label className="block text-xs text-gray-400 mb-1.5">
-                Hourly cap <span className="text-gray-600">(insight dispatch only)</span>
+                Hourly cap <span className="text-gray-400">(insight dispatch only)</span>
               </label>
               <input
                 type="number"
@@ -469,7 +469,7 @@ export default function WebhookSettings() {
                            text-sm text-gray-100 tabular-nums
                            focus:outline-none focus:border-amber-500/60 transition-colors"
               />
-              <p className="text-xs text-gray-600 mt-1">
+              <p className="text-xs text-gray-400 mt-1">
                 Dispatch worker stops after this many fires per hour. Default: 25.
               </p>
             </div>
@@ -578,7 +578,7 @@ export default function WebhookSettings() {
             clicks "Upgrade", VidaPulse appends their name, email and ID as query params
             so Razorpay pre-fills the form and the webhook can auto-upgrade their plan.
           </p>
-          <p className="text-xs text-gray-600 mb-5">
+          <p className="text-xs text-gray-400 mb-5">
             Razorpay webhook URL to configure:{' '}
             <code className="text-amber-500/80 text-[11px] select-all">
               https://app.vidapulse.in/api/payments/razorpay
@@ -593,7 +593,7 @@ export default function WebhookSettings() {
             <div>
               <label className="block text-xs font-medium mb-1.5">
                 <span className="text-amber-300">Starter plan</span>
-                <span className="text-gray-600 ml-1.5 font-normal">— payment page URL</span>
+                <span className="text-gray-400 ml-1.5 font-normal">— payment page URL</span>
               </label>
               <input
                 type="text"
@@ -615,7 +615,7 @@ export default function WebhookSettings() {
             <div>
               <label className="block text-xs font-medium mb-1.5">
                 <span className="text-indigo-300">Pro plan</span>
-                <span className="text-gray-600 ml-1.5 font-normal">— payment page URL</span>
+                <span className="text-gray-400 ml-1.5 font-normal">— payment page URL</span>
               </label>
               <input
                 type="text"
@@ -633,7 +633,7 @@ export default function WebhookSettings() {
               />
             </div>
 
-            <p className="text-xs text-gray-600">
+            <p className="text-xs text-gray-400">
               VidaPulse appends <code className="text-[10px] text-gray-400">?name=…&amp;email=…&amp;notes[user_id]=…&amp;notes[plan]=…</code> when redirecting.
               Make sure your Razorpay page has a <strong className="text-gray-400">notes</strong> field or the webhook will upgrade based on notes alone.
             </p>
@@ -823,7 +823,7 @@ function StatTile({ label, value, accent }) {
   };
   return (
     <div className="bg-gray-900/50 border border-gray-700/50 rounded-lg px-3 py-3">
-      <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">{label}</p>
       <p className={`text-xl font-bold tabular-nums ${colors[accent] ?? colors.gray}`}>
         {value}
       </p>

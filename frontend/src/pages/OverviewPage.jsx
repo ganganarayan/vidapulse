@@ -152,7 +152,7 @@ export default function OverviewPage() {
                     {data.retention_curve && data.retention_curve.length > 0 ? (
                       <RetentionChart data={data.retention_curve} />
                     ) : (
-                      <div className="flex items-center justify-center h-36 text-xs text-gray-600">
+                      <div className="flex items-center justify-center h-36 text-xs text-gray-400">
                         Not enough play data yet
                       </div>
                     )}
@@ -164,7 +164,7 @@ export default function OverviewPage() {
                     {data.top_countries && data.top_countries.length > 0 ? (
                       <GeoList countries={data.top_countries} />
                     ) : (
-                      <div className="flex items-center justify-center h-36 text-xs text-gray-600">
+                      <div className="flex items-center justify-center h-36 text-xs text-gray-400">
                         No location data yet
                       </div>
                     )}
@@ -285,9 +285,9 @@ function StatTile({ label, value, trend, icon, iconColor, iconBg, span2 }) {
           <span className="text-[11px] font-semibold text-gray-500">0%</span>
         )}
         {trend === null && (
-          <span className="text-[11px] text-gray-600">—</span>
+          <span className="text-[11px] text-gray-400">—</span>
         )}
-        <span className="text-[10px] text-gray-600 ml-0.5">vs prev 30d</span>
+        <span className="text-[10px] text-gray-400 ml-0.5">vs prev 30d</span>
       </div>
     </div>
   );
@@ -340,7 +340,7 @@ function RetentionChart({ data }) {
           />
           <text
             x={padL - 5} y={yScale(v) + 3.5}
-            textAnchor="end" fontSize="9" fill="#4B5563" fontFamily="ui-monospace,monospace"
+            textAnchor="end" fontSize="9" fill="#9CA3AF" fontFamily="ui-monospace,monospace"
           >
             {v}%
           </text>
@@ -498,7 +498,7 @@ function TopVideoRow({ rank, video, onClick }) {
                  rounded-xl px-4 py-3 hover:border-gray-600 hover:bg-gray-800/70
                  transition-colors text-left"
     >
-      <span className="text-[11px] font-bold text-gray-600 w-4 text-center flex-shrink-0">{rank}</span>
+      <span className="text-[11px] font-bold text-gray-400 w-4 text-center flex-shrink-0">{rank}</span>
 
       <div className="w-14 h-9 rounded-lg bg-gray-700 flex-shrink-0 overflow-hidden flex items-center justify-center">
         {video.thumbnail_url
@@ -683,7 +683,7 @@ function VideoThumbIcon() {
 function ChevronRightIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600 flex-shrink-0">
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 flex-shrink-0">
       <polyline points="9 18 15 12 9 6"/>
     </svg>
   );

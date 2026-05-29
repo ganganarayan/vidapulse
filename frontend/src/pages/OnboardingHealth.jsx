@@ -90,7 +90,7 @@ export default function OnboardingHealth() {
                               ${idx > 0 ? 'border-t border-gray-700/40' : ''}`}
                 >
                   {/* Step number */}
-                  <span className="w-5 text-right text-xs text-gray-600 flex-shrink-0">
+                  <span className="w-5 text-right text-xs text-gray-400 flex-shrink-0">
                     {idx + 1}
                   </span>
 
@@ -123,7 +123,7 @@ export default function OnboardingHealth() {
 
             {/* Average limit hits */}
             <div className="border-t border-gray-700/40 px-5 py-3 flex items-center gap-2">
-              <span className="text-xs text-gray-600">Avg limit-hit count per user who hit it:</span>
+              <span className="text-xs text-gray-400">Avg limit-hit count per user who hit it:</span>
               <span className="text-xs font-semibold text-orange-400 tabular-nums">
                 {Number(funnel.avg_limit_hits ?? 0).toFixed(1)}
               </span>
@@ -163,7 +163,7 @@ export default function OnboardingHealth() {
             <SectionHeader title="Users by Plan" />
             <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl overflow-hidden">
               {plan_breakdown.length === 0 ? (
-                <p className="px-4 py-4 text-sm text-gray-600">No data yet.</p>
+                <p className="px-4 py-4 text-sm text-gray-400">No data yet.</p>
               ) : (
                 plan_breakdown.map((row, idx) => {
                   const planPct = Math.round((row.user_count / total) * 100);
@@ -183,7 +183,7 @@ export default function OnboardingHealth() {
                         {row.plan.replace('_', ' ')}
                       </span>
                       <div className="flex items-center gap-3">
-                        <span className="text-xs text-gray-600">{planPct}%</span>
+                        <span className="text-xs text-gray-400">{planPct}%</span>
                         <span className="tabular-nums text-gray-200 w-8 text-right">
                           {row.user_count.toLocaleString()}
                         </span>
@@ -201,7 +201,7 @@ export default function OnboardingHealth() {
           <SectionHeader title="Recent Activity" subtitle="Last 25 users, sorted by latest action" />
           <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl overflow-hidden">
             {recent_users.length === 0 ? (
-              <p className="px-5 py-6 text-sm text-gray-600 text-center">No users yet.</p>
+              <p className="px-5 py-6 text-sm text-gray-400 text-center">No users yet.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -239,7 +239,7 @@ export default function OnboardingHealth() {
                           )}
                         </td>
                         <td className="px-4 py-2.5 text-right tabular-nums">
-                          <span className={u.limit_hit_count > 0 ? 'text-orange-400 font-medium' : 'text-gray-600'}>
+                          <span className={u.limit_hit_count > 0 ? 'text-orange-400 font-medium' : 'text-gray-400'}>
                             {u.limit_hit_count}
                           </span>
                         </td>
@@ -315,7 +315,7 @@ function SectionHeader({ title, subtitle }) {
   return (
     <div className="mb-3">
       <h2 className="text-sm font-semibold text-gray-300">{title}</h2>
-      {subtitle && <p className="text-xs text-gray-600 mt-0.5">{subtitle}</p>}
+      {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
     </div>
   );
 }

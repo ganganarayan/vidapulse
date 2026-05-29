@@ -234,7 +234,7 @@ function VideoList({ videos, setVideos, user, promoVideos = [] }) {
           )}
           <div className="py-8 border border-dashed border-gray-700/60 rounded-xl text-center">
             <p className="text-sm text-gray-400 mb-1">Ready to track your own videos?</p>
-            <p className="text-xs text-gray-600">Click "Add video" above to paste a video URL and get started.</p>
+            <p className="text-xs text-gray-400">Click "Add video" above to paste a video URL and get started.</p>
           </div>
         </div>
       ) : null}
@@ -300,9 +300,9 @@ function VideoCard({ video, onClick, onTitleUpdate }) {
             <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
               <span>{sourceLabel}</span>
               {/* Views & Viewers shown as stat columns on sm+; show inline on xs only */}
-              <span className="sm:hidden text-gray-600">·</span>
+              <span className="sm:hidden text-gray-400">·</span>
               <span className="sm:hidden">{totalViewers} plays</span>
-              <span className="sm:hidden text-gray-600">·</span>
+              <span className="sm:hidden text-gray-400">·</span>
               <span className="sm:hidden">{uniqueViewers} viewers</span>
             </p>
           </button>
@@ -394,9 +394,9 @@ function PromoVideoCard({ video, onClick }) {
           <p className="font-semibold text-gray-100 truncate">{video.title}</p>
           <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
             <span>{sourceLabel}</span>
-            <span className="sm:hidden text-gray-600">·</span>
+            <span className="sm:hidden text-gray-400">·</span>
             <span className="sm:hidden">{totalViewers} plays</span>
-            <span className="sm:hidden text-gray-600">·</span>
+            <span className="sm:hidden text-gray-400">·</span>
             <span className="sm:hidden">{uniqueViewers} viewers</span>
           </p>
         </button>

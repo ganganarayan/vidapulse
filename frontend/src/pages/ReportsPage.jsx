@@ -329,7 +329,7 @@ export default function ReportsPage() {
                   >
                     Select all
                   </button>
-                  <span className="text-gray-600 text-[11px]">·</span>
+                  <span className="text-gray-400 text-[11px]">·</span>
                   <button
                     onClick={() => setSelectedMetrics(new Set())}
                     className="text-[11px] text-gray-500 hover:text-gray-300 font-medium transition-colors"
@@ -572,7 +572,7 @@ function RawExportRow({ label, desc, rowLimit, state, latestReport, onGenerate, 
                       transition-colors border
                       ${state === 'ready'
                         ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/30 text-emerald-300'
-                        : 'bg-gray-800/40 border-gray-700/40 text-gray-600 cursor-not-allowed'
+                        : 'bg-gray-800/40 border-gray-700/40 text-gray-400 cursor-not-allowed'
                       }`}
         >
           <DownloadIcon />

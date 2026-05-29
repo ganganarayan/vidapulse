@@ -154,7 +154,7 @@ export default function HeatmapSection({ videoId, video, userPlan }) {
     return (
       <div className="bg-gray-800/30 border border-gray-700/40 border-dashed rounded-xl px-5 py-8 text-center">
         <p className="text-sm text-gray-500">No heatmap data yet.</p>
-        <p className="text-xs text-gray-600 mt-1">Chart fills in as viewers watch.</p>
+        <p className="text-xs text-gray-400 mt-1">Chart fills in as viewers watch.</p>
       </div>
     );
   }
