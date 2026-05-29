@@ -36,6 +36,7 @@ import AdminRevenue       from './pages/AdminRevenue';
 import UpgradePage       from './pages/UpgradePage';
 import PaymentSuccess    from './pages/PaymentSuccess';
 import BillingPage       from './pages/BillingPage';
+import AudiencePage     from './pages/AudiencePage';
 
 /**
  * ProtectedRoute
@@ -173,6 +174,16 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <AccountSettings />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ── Audience (all authenticated users) ────────────────── */}
+          <Route
+            path="/audience"
+            element={
+              <ProtectedRoute>
+                <AudiencePage />
               </ProtectedRoute>
             }
           />

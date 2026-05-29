@@ -363,8 +363,8 @@ router.get('/overview', requireAuth, async (req, res, next) => {
        FROM   videos v
        LEFT JOIN LATERAL (
          SELECT
-           COUNT(*)                                                  AS total_plays,
-           COUNT(DISTINCT viewer_id)                                 AS unique_viewers,
+           COUNT(*) FILTER (WHERE play_count > 0)                   AS total_plays,
+           COUNT(DISTINCT viewer_id) FILTER (WHERE play_count > 0)  AS unique_viewers,
            ROUND(
              (AVG(max_watch_pct) FILTER (WHERE play_count > 0))::numeric, 1
            )                                                         AS avg_watch_pct
@@ -527,6 +527,104 @@ router.put('/alert-prefs', requireAuth, planGate('alerts'), async (req, res, nex
     );
     const merged = { ...ALERT_DEFAULTS, ...safe };
     return res.json({ ok: true, prefs: merged });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// GET /api/user/audience
+//
+// Unified audience overview across all of the user's active videos.
+//
+// Returns:
+//   stats.unique_viewers  — distinct viewers (any session)
+//   stats.countries       — distinct non-null country_codes
+//   stats.device_types    — distinct device types (excluding 'unknown')
+//   viewers               — most-recent session per viewer, sorted by last_seen DESC
+//                           (empty array for free plan users — gated flag set true)
+//   gated                 — true when viewer list is gated behind Starter upgrade
+//
+// Plan gate: stats are visible to all plans.
+//            Viewer list is Starter+ only.
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get('/audience', requireAuth, async (req, res, next) => {
+  try {
+    const isPaid = ['starter', 'pro', 'admin_lifetime'].includes(req.user.plan);
+
+    // Aggregate stats (all plans)
+    const { rows: [stats] } = await pool.query(
+      `SELECT
+         COUNT(DISTINCT s.viewer_id)                                                AS unique_viewers,
+         COUNT(DISTINCT s.country_code) FILTER (WHERE s.country_code IS NOT NULL)  AS countries,
+         COUNT(DISTINCT s.device_type)
+           FILTER (WHERE s.device_type IS NOT NULL
+                     AND  s.device_type <> 'unknown')                              AS device_types
+       FROM analytics_sessions s
+       JOIN videos v ON s.video_id = v.id
+       WHERE v.user_id = $1 AND v.is_active = TRUE`,
+      [req.user.id]
+    );
+
+    const statResult = {
+      unique_viewers: parseInt(stats.unique_viewers, 10) || 0,
+      countries     : parseInt(stats.countries,      10) || 0,
+      device_types  : parseInt(stats.device_types,   10) || 0,
+    };
+
+    // Free plan — return stats only, viewer list gated
+    if (!isPaid) {
+      return res.json({ stats: statResult, viewers: [], gated: true });
+    }
+
+    // Recent viewers: most recent session per unique viewer (Starter+)
+    const { rows: viewerRows } = await pool.query(
+      `SELECT
+         sub.viewer_id,
+         sub.cookie_id,
+         sub.country_name,
+         sub.country_code,
+         sub.device_type,
+         sub.video_title,
+         sub.video_id,
+         sub.watch_seconds,
+         sub.last_seen
+       FROM (
+         SELECT DISTINCT ON (s.viewer_id)
+           s.viewer_id,
+           vr.cookie_id,
+           s.country_name,
+           s.country_code,
+           s.device_type,
+           v.title               AS video_title,
+           v.id                  AS video_id,
+           s.total_watch_seconds AS watch_seconds,
+           s.started_at          AS last_seen
+         FROM analytics_sessions s
+         JOIN viewers vr ON vr.id = s.viewer_id
+         JOIN videos   v ON v.id  = s.video_id
+         WHERE v.user_id = $1 AND v.is_active = TRUE
+         ORDER BY s.viewer_id, s.started_at DESC
+       ) sub
+       ORDER BY sub.last_seen DESC
+       LIMIT 100`,
+      [req.user.id]
+    );
+
+    const viewers = viewerRows.map((row, idx) => ({
+      viewer_id   : row.viewer_id,
+      short_id    : (row.cookie_id ?? row.viewer_id).slice(0, 8).toUpperCase(),
+      country_name: row.country_name ?? null,
+      country_code: row.country_code ?? null,
+      device_type : row.device_type  ?? 'unknown',
+      video_title : row.video_title,
+      video_id    : row.video_id,
+      watch_seconds: parseFloat(row.watch_seconds) || 0,
+      last_seen   : row.last_seen,
+    }));
+
+    return res.json({ stats: statResult, viewers, gated: false });
   } catch (err) {
     next(err);
   }

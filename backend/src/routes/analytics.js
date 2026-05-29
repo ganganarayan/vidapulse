@@ -543,11 +543,13 @@ router.post('/ping', async (req, res) => {
              SELECT COUNT(DISTINCT viewer_id)
              FROM   analytics_sessions
              WHERE  video_id = $1
+               AND  play_count > 0
            ),
            avg_watch_pct = (
              SELECT COALESCE(AVG(max_watch_pct)::numeric(5,2), 0)
              FROM   analytics_sessions
              WHERE  video_id = $1
+               AND  play_count > 0
            ),
            updated_at = NOW()
          WHERE id = $1
@@ -569,10 +571,10 @@ router.post('/ping', async (req, res) => {
            $1,
            CURRENT_DATE,
            SUM(CASE WHEN play_count > 0 THEN 1 ELSE 0 END),
-           COUNT(DISTINCT viewer_id),
-           COALESCE(SUM(total_watch_seconds), 0)::BIGINT,
-           COALESCE(AVG(max_watch_pct)::numeric(5,2), 0),
-           SUM(CASE WHEN reached_end THEN 1 ELSE 0 END),
+           COUNT(DISTINCT viewer_id) FILTER (WHERE play_count > 0),
+           COALESCE(SUM(total_watch_seconds) FILTER (WHERE play_count > 0), 0)::BIGINT,
+           COALESCE(AVG(max_watch_pct) FILTER (WHERE play_count > 0)::numeric(5,2), 0),
+           SUM(CASE WHEN reached_end AND play_count > 0 THEN 1 ELSE 0 END),
            CASE WHEN COUNT(*) > 0
              THEN ROUND(
                SUM(CASE WHEN play_count > 0 THEN 1.0 ELSE 0 END)

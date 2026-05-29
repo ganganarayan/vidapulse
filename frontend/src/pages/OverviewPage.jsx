@@ -101,10 +101,10 @@ export default function OverviewPage() {
             {data && data.total_videos > 0 && (
               <>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  <StatCard label="Total Views"    value={(data.total_views    ?? 0).toLocaleString()} icon={<PlaysCardIcon />} />
-                  <StatCard label="Unique Views"   value={(data.unique_views   ?? 0).toLocaleString()} icon={<ViewersCardIcon />} />
-                  <StatCard label="Total Viewers"  value={(data.total_viewers  ?? 0).toLocaleString()} icon={<WatchCardIcon />} />
-                  <StatCard label="Unique Viewers" value={(data.unique_viewers ?? 0).toLocaleString()} icon={<VideoCardIcon />} />
+                  <StatCard label="Total Plays"     value={(data.total_viewers  ?? 0).toLocaleString()} icon={<PlaysCardIcon />} />
+                  <StatCard label="Unique Viewers" value={(data.unique_viewers ?? 0).toLocaleString()} icon={<ViewersCardIcon />} />
+                  <StatCard label="Player Loads"   value={(data.total_views    ?? 0).toLocaleString()} icon={<WatchCardIcon />} />
+                  <StatCard label="Unique Visitors" value={(data.unique_views  ?? 0).toLocaleString()} icon={<VideoCardIcon />} />
                 </div>
 
                 {/* Watch time highlight */}
@@ -235,17 +235,17 @@ function OverviewPromoRow({ video, onClick }) {
           <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
             <span>{sourceLabel}</span>
             <span className="sm:hidden text-gray-600">·</span>
-            <span className="sm:hidden">{totalViews} views</span>
+            <span className="sm:hidden">{totalViewers} plays</span>
           </p>
         </button>
 
         {/* Metric columns */}
         <div className="hidden sm:flex items-center gap-5 flex-shrink-0">
-          <OvStatCol label="Total Views"    value={totalViews}   />
-          <OvStatCol label="Unique Views"   value={uniqueViews}  />
+          <OvStatCol label="Total Plays"     value={totalViewers}  />
+          <OvStatCol label="Unique Viewers"  value={uniqueViewers} />
           <div className="hidden lg:block w-px h-8 bg-gray-700" />
-          <OvStatCol label="Total Viewers"  value={totalViewers}  className="hidden lg:block" />
-          <OvStatCol label="Unique Viewers" value={uniqueViewers} className="hidden lg:block" />
+          <OvStatCol label="Player Loads"    value={totalViews}    className="hidden lg:block" />
+          <OvStatCol label="Unique Visitors" value={uniqueViews}   className="hidden lg:block" />
         </div>
 
         {/* Featured star */}
@@ -321,7 +321,7 @@ function TopVideoRow({ rank, video, onClick }) {
       </div>
 
       <div className="flex items-center gap-5 flex-shrink-0">
-        <MiniStat label="Views"          value={(video.total_plays    ?? 0).toLocaleString()} />
+        <MiniStat label="Plays"          value={(video.total_plays    ?? 0).toLocaleString()} />
         <MiniStat label="Unique Viewers" value={(video.unique_viewers ?? 0).toLocaleString()} />
         <MiniStat label="Avg Watch"      value={`${parseFloat(video.avg_watch_pct ?? 0).toFixed(0)}%`} />
       </div>

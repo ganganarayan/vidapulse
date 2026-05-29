@@ -301,19 +301,19 @@ function VideoCard({ video, onClick, onTitleUpdate }) {
               <span>{sourceLabel}</span>
               {/* Views & Viewers shown as stat columns on sm+; show inline on xs only */}
               <span className="sm:hidden text-gray-600">·</span>
-              <span className="sm:hidden">{totalViews} views</span>
+              <span className="sm:hidden">{totalViewers} plays</span>
               <span className="sm:hidden text-gray-600">·</span>
-              <span className="sm:hidden">{uniqueViewers} unique viewers</span>
+              <span className="sm:hidden">{uniqueViewers} viewers</span>
             </p>
           </button>
 
           {/* Metric columns */}
           <div className="hidden sm:flex items-center gap-5 flex-shrink-0">
-            <StatCol label="Total Views"    value={totalViews}   />
-            <StatCol label="Unique Views"   value={uniqueViews}  />
+            <StatCol label="Total Plays"     value={totalViewers}  />
+            <StatCol label="Unique Viewers"  value={uniqueViewers} />
             <div className="hidden lg:block w-px h-8 bg-gray-700" />
-            <StatCol label="Total Viewers"  value={totalViewers}  className="hidden lg:block" />
-            <StatCol label="Unique Viewers" value={uniqueViewers} className="hidden lg:block" />
+            <StatCol label="Player Loads"    value={totalViews}    className="hidden lg:block" />
+            <StatCol label="Unique Visitors" value={uniqueViews}   className="hidden lg:block" />
           </div>
 
           {/* Action icons */}
@@ -395,19 +395,19 @@ function PromoVideoCard({ video, onClick }) {
           <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
             <span>{sourceLabel}</span>
             <span className="sm:hidden text-gray-600">·</span>
-            <span className="sm:hidden">{totalViews} views</span>
+            <span className="sm:hidden">{totalViewers} plays</span>
             <span className="sm:hidden text-gray-600">·</span>
-            <span className="sm:hidden">{uniqueViewers} unique viewers</span>
+            <span className="sm:hidden">{uniqueViewers} viewers</span>
           </p>
         </button>
 
         {/* Metric columns */}
         <div className="hidden sm:flex items-center gap-5 flex-shrink-0">
-          <StatCol label="Total Views"    value={totalViews}   />
-          <StatCol label="Unique Views"   value={uniqueViews}  />
+          <StatCol label="Total Plays"     value={totalViewers}  />
+          <StatCol label="Unique Viewers"  value={uniqueViewers} />
           <div className="hidden lg:block w-px h-8 bg-gray-700" />
-          <StatCol label="Total Viewers"  value={totalViewers}  className="hidden lg:block" />
-          <StatCol label="Unique Viewers" value={uniqueViewers} className="hidden lg:block" />
+          <StatCol label="Player Loads"    value={totalViews}    className="hidden lg:block" />
+          <StatCol label="Unique Visitors" value={uniqueViews}   className="hidden lg:block" />
         </div>
 
         {/* Featured indicator (replaces action icons) */}

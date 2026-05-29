@@ -420,7 +420,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
     }
 
     // Attach extra session-aggregate stats (non-fatal if sessions table is empty)
-    let extraStats = { play_rate_pct: 0, completed_views: 0, total_watch_seconds_sum: 0 };
+    let extraStats = { play_rate_pct: 0, completed_views: 0, total_watch_seconds_sum: 0, unique_viewers_who_played: 0 };
     try {
       const { rows: [stats] } = await pool.query(
         `SELECT
@@ -429,9 +429,11 @@ router.get('/:id', requireAuth, async (req, res, next) => {
                COUNT(CASE WHEN play_count > 0 THEN 1 END)::numeric
                / NULLIF(COUNT(*), 0) * 100, 1
              ), 0
-           )::float                            AS play_rate_pct,
-           COUNT(CASE WHEN reached_end THEN 1 END)::int AS completed_views,
-           COALESCE(SUM(total_watch_seconds), 0)::bigint AS total_watch_seconds_sum
+           )::float                                                              AS play_rate_pct,
+           COUNT(CASE WHEN reached_end AND play_count > 0 THEN 1 END)::int      AS completed_views,
+           COALESCE(SUM(total_watch_seconds) FILTER (WHERE play_count > 0), 0)::bigint
+                                                                                AS total_watch_seconds_sum,
+           COUNT(DISTINCT viewer_id) FILTER (WHERE play_count > 0)::int         AS unique_viewers_who_played
          FROM analytics_sessions
          WHERE video_id = $1`,
         [video.id]
@@ -441,7 +443,10 @@ router.get('/:id', requireAuth, async (req, res, next) => {
       logger.warn(`[videos] extra stats query failed for ${video.id}: ${err.message}`);
     }
 
-    return res.json({ video: { ...video, ...extraStats, is_promo: video.is_promo ?? false } });
+    // unique_viewers_who_played is a live-computed value that overrides the cached
+    // videos.unique_viewers (which may lag or have been computed without the play filter).
+    const { unique_viewers_who_played, ...coreStats } = extraStats;
+    return res.json({ video: { ...video, ...coreStats, unique_viewers: Number(unique_viewers_who_played) || 0, is_promo: video.is_promo ?? false } });
   } catch (err) {
     next(err);
   }
@@ -899,20 +904,15 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────
 
 const DAILY_METRICS = {
-  plays: `
+  // All sessions where the embed loaded (page loads, regardless of play)
+  total_views: `
     SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
-           COUNT(*) FILTER (WHERE play_count > 0) AS value
+           COUNT(*) AS value
     FROM   analytics_sessions
     WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
     GROUP  BY 1 ORDER BY 1`,
 
-  viewers: `
-    SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
-           COUNT(DISTINCT viewer_id) AS value
-    FROM   analytics_sessions
-    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
-    GROUP  BY 1 ORDER BY 1`,
-
+  // Distinct cookies that loaded the embed page (regardless of play)
   unique_views: `
     SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
            COUNT(DISTINCT viewer_id) AS value
@@ -920,9 +920,39 @@ const DAILY_METRICS = {
     WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
     GROUP  BY 1 ORDER BY 1`,
 
+  // Sessions where play was pressed (one count per session even if replayed)
+  plays: `
+    SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
+           COUNT(*) FILTER (WHERE play_count > 0) AS value
+    FROM   analytics_sessions
+    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
+    GROUP  BY 1 ORDER BY 1`,
+
+  // Alias for plays — kept for backward compat
   total_viewers: `
     SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
            COUNT(*) FILTER (WHERE play_count > 0) AS value
+    FROM   analytics_sessions
+    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
+    GROUP  BY 1 ORDER BY 1`,
+
+  // Distinct cookies that PRESSED PLAY at least once (not just loaded)
+  viewers: `
+    SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
+           COUNT(DISTINCT viewer_id) FILTER (WHERE play_count > 0) AS value
+    FROM   analytics_sessions
+    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
+    GROUP  BY 1 ORDER BY 1`,
+
+  // Play rate = play sessions / total sessions × 100 (per day)
+  play_rate: `
+    SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
+           CASE WHEN COUNT(*) > 0
+             THEN ROUND(
+               COUNT(*) FILTER (WHERE play_count > 0)::numeric
+               / COUNT(*) * 100, 1)
+             ELSE 0
+           END AS value
     FROM   analytics_sessions
     WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
     GROUP  BY 1 ORDER BY 1`,
@@ -936,7 +966,7 @@ const DAILY_METRICS = {
 
   completions: `
     SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
-           COUNT(*) FILTER (WHERE reached_end = TRUE) AS value
+           COUNT(*) FILTER (WHERE reached_end = TRUE AND play_count > 0) AS value
     FROM   analytics_sessions
     WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
     GROUP  BY 1 ORDER BY 1`,
@@ -945,7 +975,7 @@ const DAILY_METRICS = {
     SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
            COALESCE(SUM(total_watch_seconds), 0) AS value
     FROM   analytics_sessions
-    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
+    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3 AND play_count > 0
     GROUP  BY 1 ORDER BY 1`,
 };
 
@@ -974,8 +1004,8 @@ router.get('/:id/analytics/daily', requireAuth, async (req, res, next) => {
 
     const data = rows.map(r => ({ date: r.date, value: parseFloat(r.value) || 0 }));
 
-    // avg_watch should report the period average, not the sum across days
-    const isAvgMetric = metric === 'avg_watch';
+    // avg_watch and play_rate should report the period average, not the sum across days
+    const isAvgMetric = metric === 'avg_watch' || metric === 'play_rate';
     const total = data.length === 0 ? 0 : isAvgMetric
       ? data.reduce((s, r) => s + r.value, 0) / data.length
       : data.reduce((s, r) => s + r.value, 0);
@@ -1133,9 +1163,14 @@ router.get('/:id/cta-analytics', requireAuth, planGate('heatmap'), async (req, r
 router.get('/:id/retention', requireAuth, async (req, res, next) => {
   try {
     const { rows: [video] } = await pool.query(
-      `SELECT id, duration_seconds, unique_viewers
-       FROM   videos
-       WHERE  id = $1 AND user_id = $2 AND is_active = TRUE`,
+      `SELECT v.id,
+              v.duration_seconds,
+              (SELECT COUNT(DISTINCT s.viewer_id)
+               FROM   analytics_sessions s
+               WHERE  s.video_id   = v.id
+                 AND  s.play_count > 0) AS unique_viewers
+       FROM   videos v
+       WHERE  v.id = $1 AND v.user_id = $2 AND v.is_active = TRUE`,
       [req.params.id, req.user.id]
     );
     if (!video) return res.status(404).json({ error: 'Video not found' });
@@ -1149,7 +1184,7 @@ router.get('/:id/retention', requireAuth, async (req, res, next) => {
     );
 
     if (heatmap.length === 0) {
-      return res.json({ data: [], duration_seconds: video.duration_seconds, total_viewers: video.unique_viewers });
+      return res.json({ data: [], duration_seconds: video.duration_seconds, total_viewers: Number(video.unique_viewers) || 0 });
     }
 
     // Max viewers at any second = the peak (usually the very first second)
@@ -1165,7 +1200,7 @@ router.get('/:id/retention', requireAuth, async (req, res, next) => {
       durationSeconds = Math.max(...heatmap.map(r => r.second_bucket)) + 5;
     }
 
-    return res.json({ data, duration_seconds: durationSeconds, total_viewers: video.unique_viewers });
+    return res.json({ data, duration_seconds: durationSeconds, total_viewers: Number(video.unique_viewers) || 0 });
   } catch (err) {
     next(err);
   }
