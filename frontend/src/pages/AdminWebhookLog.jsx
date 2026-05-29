@@ -480,6 +480,7 @@ function LogRow({ row, onRefresh }) {
                 </p>
                 <div className="space-y-2 text-xs">
                   <DetailRow label="Sent at"    value={sentDate ? sentDate.toLocaleString('en-GB') : '—'} />
+                  <DetailRow label="Method"     value="POST" mono />
                   <DetailRow label="URL"        value={row.url_sent_to || '—'} mono />
                   <DetailRow label="Event"      value={row.event_key} mono />
                   <div className="border-t border-gray-700/50 pt-2 mt-2">
