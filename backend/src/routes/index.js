@@ -62,9 +62,9 @@ router.get('/promotion-videos', requireAuth, async (req, res, next) => {
 
 // ── GET /api/upgrade ──────────────────────────────────────────────────────
 // Called when the user visits the Upgrade page.
-// Emits upgrade_page_visited behavioral event (non-blocking).
 // Returns current plan, video stats, upgrade options, and Razorpay base URLs
 // (stored in webhook_settings so the admin can update them without redeploy).
+// NOTE: intentionally does NOT fire a webhook — page visits are not billable events.
 router.get('/upgrade', requireAuth, async (req, res, next) => {
   try {
     const db = require('../config/database').pool;
@@ -94,12 +94,6 @@ router.get('/upgrade', requireAuth, async (req, res, next) => {
     } else {
       upgrade_options = []; // pro / admin_lifetime — already at top
     }
-
-    emitEvent(req.user.id, 'upgrade_page_visited', null, {
-      current_plan       : plan,
-      videos_count       : parseInt(stats.video_count, 10),
-      total_plays_to_date: parseInt(stats.total_plays_to_date, 10),
-    });
 
     const env = require('../config/env');
 
