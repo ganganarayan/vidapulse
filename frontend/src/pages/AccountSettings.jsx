@@ -194,7 +194,7 @@ function EditableNameRow({ user, updateUser, onToast }) {
           <span className="text-sm text-gray-200 font-medium">{user?.name ?? '—'}</span>
           <button
             onClick={() => setEditing(true)}
-            className="p-1 rounded text-gray-600 hover:text-gray-300 transition-colors"
+            className="p-1 rounded text-gray-400 hover:text-gray-300 transition-colors"
             title="Edit name"
           >
             <PencilIcon />

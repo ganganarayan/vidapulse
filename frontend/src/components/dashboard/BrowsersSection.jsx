@@ -104,7 +104,7 @@ export default function BrowsersSection({ videoId, userPlan }) {
           data.length === 0 ? (
             <div className="py-14 text-center">
               <p className="text-sm text-gray-500">No browser data yet.</p>
-              <p className="text-xs text-gray-600 mt-1">
+              <p className="text-xs text-gray-400 mt-1">
                 Data appears once viewers start watching.
               </p>
             </div>

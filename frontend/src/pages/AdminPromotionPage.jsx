@@ -195,7 +195,7 @@ export default function AdminPromotionPage() {
             </button>
             <span className="text-amber-500 text-xl font-bold select-none">{'▶︎'}</span>
             <span className="text-white font-semibold">VidaPulse</span>
-            <span className="text-gray-600 mx-1">/</span>
+            <span className="text-gray-400 mx-1">/</span>
             <span className="text-gray-300">Promotion Videos</span>
           </div>
           <button
@@ -281,10 +281,10 @@ export default function AdminPromotionPage() {
         ) : promos.length === 0 ? (
           <div className="text-center py-20">
             <div className="w-14 h-14 rounded-2xl bg-gray-800 border border-gray-700 flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl text-gray-600">{'▶︎'}</span>
+              <span className="text-2xl text-gray-400">{'▶︎'}</span>
             </div>
             <p className="text-gray-400 text-sm">No promotion videos yet.</p>
-            <p className="text-gray-600 text-xs mt-1">Click "Add video" to get started.</p>
+            <p className="text-gray-400 text-xs mt-1">Click "Add video" to get started.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
@@ -343,7 +343,7 @@ function PromotionVideoRow({ promo, index, total, onVisibilityChange, onMove, on
             <button
               onClick={() => onMove(index, -1)}
               disabled={index === 0}
-              className="p-0.5 text-gray-600 hover:text-gray-300 disabled:opacity-20 transition-colors"
+              className="p-0.5 text-gray-400 hover:text-gray-300 disabled:opacity-20 transition-colors"
               title="Move up"
             >
               <ChevronUpIcon />
@@ -351,7 +351,7 @@ function PromotionVideoRow({ promo, index, total, onVisibilityChange, onMove, on
             <button
               onClick={() => onMove(index, 1)}
               disabled={index === total - 1}
-              className="p-0.5 text-gray-600 hover:text-gray-300 disabled:opacity-20 transition-colors"
+              className="p-0.5 text-gray-400 hover:text-gray-300 disabled:opacity-20 transition-colors"
               title="Move down"
             >
               <ChevronDownIcon />
@@ -378,11 +378,11 @@ function PromotionVideoRow({ promo, index, total, onVisibilityChange, onMove, on
               <span>{sourceLabel}</span>
               {promo.hidden_count > 0 && (
                 <>
-                  <span className="text-gray-600">·</span>
+                  <span className="text-gray-400">·</span>
                   <span className="text-amber-500/70">{promo.hidden_count} hidden</span>
                 </>
               )}
-              <span className="sm:hidden text-gray-600">·</span>
+              <span className="sm:hidden text-gray-400">·</span>
               <span className="sm:hidden">{totalViews} views</span>
             </p>
           </div>
@@ -419,7 +419,7 @@ function PromotionVideoRow({ promo, index, total, onVisibilityChange, onMove, on
             <button
               onClick={() => onDelete(promo.id)}
               title="Delete promotion video"
-              className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             >
               <TrashIcon />
             </button>

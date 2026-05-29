@@ -253,7 +253,7 @@ function ProcessingScreen({ video, videoId, onVideoUpdate, onComplete }) {
                   <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
                     {isDone   && <CheckCircleIcon className="text-emerald-400" />}
                     {isActive && <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />}
-                    {isPending && <DotIcon className="text-gray-600" />}
+                    {isPending && <DotIcon className="text-gray-400" />}
                   </div>
                   <span
                     className={`text-sm transition-colors duration-300
@@ -277,7 +277,7 @@ function ProcessingScreen({ video, videoId, onVideoUpdate, onComplete }) {
           </div>
 
           {animDone && !backendDone && (
-            <p className="text-center text-xs text-gray-600 mt-4 animate-pulse">
+            <p className="text-center text-xs text-gray-400 mt-4 animate-pulse">
               Still processing — this can take a moment…
             </p>
           )}

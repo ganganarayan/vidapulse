@@ -116,7 +116,7 @@ function ViewerRow({ session, index }) {
         ) : (
           /* No segments = didn't watch (page load only) */
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-[9px] text-gray-600">—</span>
+            <span className="text-[9px] text-gray-400">—</span>
           </div>
         )}
       </div>
@@ -247,7 +247,7 @@ function ProViewerContent({ status, data, onRetry }) {
     return (
       <div className="bg-gray-800/30 border border-gray-700/40 border-dashed rounded-xl px-5 py-8 text-center">
         <p className="text-sm text-gray-500">No viewer data yet.</p>
-        <p className="text-xs text-gray-600 mt-1">Individual sessions appear as viewers watch.</p>
+        <p className="text-xs text-gray-400 mt-1">Individual sessions appear as viewers watch.</p>
       </div>
     );
   }
@@ -256,20 +256,20 @@ function ProViewerContent({ status, data, onRetry }) {
     <div className="bg-gray-900/50 border border-gray-700/50 rounded-2xl overflow-hidden">
       {/* Column headers */}
       <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-800/60">
-        <span className="text-[10px] text-gray-600 uppercase tracking-wider font-medium"
+        <span className="text-[10px] text-gray-400 uppercase tracking-wider font-medium"
               style={{ minWidth: '68px' }}>Viewer</span>
         <div className="flex-1 flex items-center gap-2">
           {/* Timeline intensity legend */}
           <div className="flex items-center gap-1">
             <span className="w-3 h-1.5 rounded-full bg-emerald-500 inline-block" />
-            <span className="text-[9px] text-gray-600">1st watch</span>
+            <span className="text-[9px] text-gray-400">1st watch</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="w-3 h-1.5 rounded-full bg-amber-400 inline-block" />
-            <span className="text-[9px] text-gray-600">replay</span>
+            <span className="text-[9px] text-gray-400">replay</span>
           </div>
         </div>
-        <span className="text-[10px] text-gray-600 uppercase tracking-wider font-medium flex-shrink-0"
+        <span className="text-[10px] text-gray-400 uppercase tracking-wider font-medium flex-shrink-0"
               style={{ minWidth: '60px', textAlign: 'right' }}>Watched</span>
       </div>
 
@@ -283,7 +283,7 @@ function ProViewerContent({ status, data, onRetry }) {
 
       {/* Footer */}
       <div className="px-4 py-2.5 border-t border-gray-800/60 flex items-center gap-2">
-        <span className="text-[10px] text-gray-600">
+        <span className="text-[10px] text-gray-400">
           Intensity:
         </span>
         {[['1×','#10b981'], ['2×','#fbbf24'], ['3×+','#f87171']].map(([label, color]) => (
@@ -306,9 +306,9 @@ function FakeViewerGrid() {
   return (
     <div className="bg-gray-900/50 border border-gray-700/50 rounded-2xl overflow-hidden">
       <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-800/60">
-        <span className="text-[10px] text-gray-600 uppercase tracking-wider font-medium" style={{ minWidth: '68px' }}>Viewer</span>
-        <span className="flex-1 text-[10px] text-gray-600 uppercase tracking-wider font-medium">Timeline</span>
-        <span className="text-[10px] text-gray-600 uppercase tracking-wider font-medium flex-shrink-0" style={{ minWidth: '60px', textAlign: 'right' }}>Watched</span>
+        <span className="text-[10px] text-gray-400 uppercase tracking-wider font-medium" style={{ minWidth: '68px' }}>Viewer</span>
+        <span className="flex-1 text-[10px] text-gray-400 uppercase tracking-wider font-medium">Timeline</span>
+        <span className="text-[10px] text-gray-400 uppercase tracking-wider font-medium flex-shrink-0" style={{ minWidth: '60px', textAlign: 'right' }}>Watched</span>
       </div>
       <div className="px-4 py-1 overflow-y-auto" style={{ maxHeight: '420px' }}>
         {sessions.map((s, i) => <ViewerRow key={s.id} session={s} index={i} />)}

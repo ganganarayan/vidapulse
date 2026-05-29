@@ -318,48 +318,108 @@ router.put('/preferences', requireAuth, async (req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────
 // GET /api/user/overview
 //
-// Aggregate stats across all of the authenticated user's active videos.
-// Four engagement metrics computed from analytics_sessions:
-//   total_views    — all page/session loads (including non-players)
-//   unique_views   — distinct viewers (any visit)
-//   total_viewers  — sessions where the video was actually played
-//   unique_viewers — distinct viewers who played
-// Used by the Overview dashboard page.
+// Aggregate stats for the authenticated user's active videos.
+// Returns last-30-day metrics with trend vs the previous 30-day window,
+// an aggregate audience-retention curve, top countries, and top videos.
 // ─────────────────────────────────────────────────────────────────────────
 
 router.get('/overview', requireAuth, async (req, res, next) => {
   try {
-    // Total active video count
+    const uid = req.user.id;
+
+    // ── 1. Video count ───────────────────────────────────────────────────
     const { rows: [vidRow] } = await pool.query(
-      `SELECT COUNT(*) AS total_videos
-       FROM   videos
-       WHERE  user_id = $1 AND is_active = TRUE`,
-      [req.user.id]
+      `SELECT COUNT(*) AS total_videos FROM videos WHERE user_id = $1 AND is_active = TRUE`,
+      [uid]
     );
 
-    // Session-level engagement aggregates across all of the user's active videos
-    const { rows: [agg] } = await pool.query(
+    // ── 2. Current period: last 30 days ──────────────────────────────────
+    const { rows: [curr] } = await pool.query(
       `SELECT
-         COUNT(s.id)                                                       AS total_views,
-         COUNT(DISTINCT s.viewer_id)                                       AS unique_views,
-         COUNT(s.id)    FILTER (WHERE s.play_count > 0)                   AS total_viewers,
-         COUNT(DISTINCT s.viewer_id) FILTER (WHERE s.play_count > 0)      AS unique_viewers,
-         COALESCE(SUM(s.total_watch_seconds), 0)                           AS total_watch_seconds
+         COUNT(*)  FILTER (WHERE s.play_count > 0)                                          AS total_plays,
+         COUNT(DISTINCT s.viewer_id) FILTER (WHERE s.play_count > 0)                       AS unique_viewers,
+         ROUND(COUNT(*) FILTER (WHERE s.play_count > 0) * 100.0 / NULLIF(COUNT(*), 0), 1) AS play_rate_pct,
+         ROUND(AVG(s.total_watch_seconds) FILTER (WHERE s.play_count > 0), 0)              AS avg_watch_seconds,
+         ROUND(AVG(s.max_watch_pct)       FILTER (WHERE s.play_count > 0)::numeric, 1)     AS avg_watch_pct,
+         COALESCE(SUM(s.total_watch_seconds) FILTER (WHERE s.play_count > 0), 0)           AS total_watch_seconds
        FROM   analytics_sessions s
        JOIN   videos v ON s.video_id = v.id
-       WHERE  v.user_id = $1 AND v.is_active = TRUE`,
-      [req.user.id]
+       WHERE  v.user_id   = $1
+         AND  v.is_active = TRUE
+         AND  s.started_at >= NOW() - INTERVAL '30 days'`,
+      [uid]
     );
 
-    // Top 5 videos by play sessions (most engaged)
+    // ── 3. Previous period: 30–60 days ago (for trend) ───────────────────
+    const { rows: [prev] } = await pool.query(
+      `SELECT
+         COUNT(*)  FILTER (WHERE s.play_count > 0)                                          AS total_plays,
+         COUNT(DISTINCT s.viewer_id) FILTER (WHERE s.play_count > 0)                       AS unique_viewers,
+         ROUND(COUNT(*) FILTER (WHERE s.play_count > 0) * 100.0 / NULLIF(COUNT(*), 0), 1) AS play_rate_pct,
+         ROUND(AVG(s.total_watch_seconds) FILTER (WHERE s.play_count > 0), 0)              AS avg_watch_seconds,
+         ROUND(AVG(s.max_watch_pct)       FILTER (WHERE s.play_count > 0)::numeric, 1)     AS avg_watch_pct
+       FROM   analytics_sessions s
+       JOIN   videos v ON s.video_id = v.id
+       WHERE  v.user_id   = $1
+         AND  v.is_active = TRUE
+         AND  s.started_at >= NOW() - INTERVAL '60 days'
+         AND  s.started_at <  NOW() - INTERVAL '30 days'`,
+      [uid]
+    );
+
+    // Compute % trend (null if no previous data)
+    function trend(c, p) {
+      const cv = parseFloat(c) || 0;
+      const pv = parseFloat(p) || 0;
+      if (pv === 0) return null;
+      return Math.round(((cv - pv) / pv) * 1000) / 10; // 1 decimal
+    }
+
+    // ── 4. Aggregate retention curve (all-time, play sessions only) ───────
+    const { rows: retentionRows } = await pool.query(
+      `WITH played AS (
+         SELECT s.max_watch_pct
+         FROM   analytics_sessions s
+         JOIN   videos v ON s.video_id = v.id
+         WHERE  v.user_id = $1 AND v.is_active = TRUE AND s.play_count > 0
+       )
+       SELECT
+         g.pct,
+         ROUND(
+           COUNT(p.max_watch_pct) * 100.0 / NULLIF(MAX(total.n), 0),
+           1
+         ) AS viewers_pct
+       FROM   generate_series(0, 90, 10) AS g(pct)
+       LEFT   JOIN played p    ON p.max_watch_pct >= g.pct
+       CROSS  JOIN (SELECT COUNT(*) AS n FROM played) AS total
+       GROUP  BY g.pct
+       ORDER  BY g.pct`,
+      [uid]
+    );
+
+    // ── 5. Top countries (play sessions only) ────────────────────────────
+    const { rows: countryRows } = await pool.query(
+      `SELECT
+         COALESCE(s.country_code, '??') AS country,
+         COUNT(DISTINCT s.viewer_id)    AS count
+       FROM   analytics_sessions s
+       JOIN   videos v ON s.video_id = v.id
+       WHERE  v.user_id = $1 AND v.is_active = TRUE AND s.play_count > 0
+       GROUP  BY s.country_code
+       ORDER  BY count DESC
+       LIMIT  5`,
+      [uid]
+    );
+
+    // ── 6. Top 5 videos by plays ──────────────────────────────────────────
     const { rows: topVideos } = await pool.query(
       `SELECT v.id,
               v.title,
               v.thumbnail_url,
               v.source_type,
-              COALESCE(vstats.total_plays, 0)         AS total_plays,
-              COALESCE(vstats.unique_viewers, 0)       AS unique_viewers,
-              COALESCE(vstats.avg_watch_pct, 0)        AS avg_watch_pct
+              COALESCE(vstats.total_plays,    0) AS total_plays,
+              COALESCE(vstats.unique_viewers, 0) AS unique_viewers,
+              COALESCE(vstats.avg_watch_pct,  0) AS avg_watch_pct
        FROM   videos v
        LEFT JOIN LATERAL (
          SELECT
@@ -374,17 +434,35 @@ router.get('/overview', requireAuth, async (req, res, next) => {
        WHERE  v.user_id = $1 AND v.is_active = TRUE
        ORDER  BY vstats.total_plays DESC NULLS LAST
        LIMIT  5`,
-      [req.user.id]
+      [uid]
     );
 
     return res.json({
-      total_videos        : parseInt(vidRow.total_videos,    10),
-      total_views         : parseInt(agg.total_views,        10),
-      unique_views        : parseInt(agg.unique_views,       10),
-      total_viewers       : parseInt(agg.total_viewers,      10),
-      unique_viewers      : parseInt(agg.unique_viewers,     10),
-      total_watch_seconds : parseFloat(agg.total_watch_seconds),
-      top_videos          : topVideos,
+      total_videos        : parseInt(vidRow.total_videos, 10),
+      // Last-30-day tile values
+      total_plays         : parseInt(curr.total_plays,       10) || 0,
+      unique_viewers      : parseInt(curr.unique_viewers,    10) || 0,
+      play_rate_pct       : parseFloat(curr.play_rate_pct)       || 0,
+      avg_watch_seconds   : parseInt(curr.avg_watch_seconds, 10) || 0,
+      avg_watch_pct       : parseFloat(curr.avg_watch_pct)       || 0,
+      total_watch_seconds : parseFloat(curr.total_watch_seconds) || 0,
+      // Trends vs previous 30d (null = insufficient history)
+      trends: {
+        total_plays       : trend(curr.total_plays,       prev.total_plays),
+        unique_viewers    : trend(curr.unique_viewers,    prev.unique_viewers),
+        play_rate_pct     : trend(curr.play_rate_pct,     prev.play_rate_pct),
+        avg_watch_seconds : trend(curr.avg_watch_seconds, prev.avg_watch_seconds),
+        avg_watch_pct     : trend(curr.avg_watch_pct,     prev.avg_watch_pct),
+      },
+      retention_curve : retentionRows.map(r => ({
+        pct        : parseInt(r.pct, 10),
+        viewers_pct: parseFloat(r.viewers_pct) || 0,
+      })),
+      top_countries   : countryRows.map(r => ({
+        country: r.country,
+        count  : parseInt(r.count, 10),
+      })),
+      top_videos      : topVideos,
     });
   } catch (err) {
     next(err);

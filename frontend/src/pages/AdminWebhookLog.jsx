@@ -364,7 +364,7 @@ function LogRow({ row, onRefresh }) {
             {sentDate ? (
               <>
                 <div>{sentDate.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'2-digit' })}</div>
-                <div className="text-gray-600">{sentDate.toLocaleTimeString('en-GB')}</div>
+                <div className="text-gray-400">{sentDate.toLocaleTimeString('en-GB')}</div>
               </>
             ) : '—'}
           </div>
@@ -404,7 +404,7 @@ function LogRow({ row, onRefresh }) {
         <td className="px-4 py-3 align-top">
           <div className="flex flex-col gap-0.5">
             {respDate && (
-              <span className="text-gray-600 text-[11px] tabular-nums">
+              <span className="text-gray-400 text-[11px] tabular-nums">
                 {respDate.toLocaleTimeString('en-GB')}
               </span>
             )}
@@ -483,7 +483,7 @@ function LogRow({ row, onRefresh }) {
                   <DetailRow label="URL"        value={row.url_sent_to || '—'} mono />
                   <DetailRow label="Event"      value={row.event_key} mono />
                   <div className="border-t border-gray-700/50 pt-2 mt-2">
-                    <p className="text-gray-600 text-[10px] uppercase tracking-wider mb-1.5">Params sent</p>
+                    <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1.5">Params sent</p>
                     {Object.entries(params).map(([k, v]) => (
                       <DetailRow key={k} label={k} value={String(v)} mono small />
                     ))}
@@ -502,7 +502,7 @@ function LogRow({ row, onRefresh }) {
                   <DetailRow label="Status"      value={row.status} />
                   {row.error_message && (
                     <div className="mt-2">
-                      <p className="text-gray-600 text-[10px] uppercase tracking-wider mb-1">Error</p>
+                      <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Error</p>
                       <p className="text-red-400 text-xs font-mono break-all leading-relaxed">
                         {row.error_message}
                       </p>
@@ -510,7 +510,7 @@ function LogRow({ row, onRefresh }) {
                   )}
                   {row.response_body && (
                     <div className="mt-2">
-                      <p className="text-gray-600 text-[10px] uppercase tracking-wider mb-1">Body</p>
+                      <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Body</p>
                       <p className="text-gray-400 text-xs font-mono break-all leading-relaxed max-h-24 overflow-y-auto">
                         {row.response_body}
                       </p>
@@ -538,7 +538,7 @@ function StatusBadge({ status, code, errorMsg }) {
     : status === 'queued'
       ? 'text-amber-400'
       : status === 'discarded'
-        ? 'text-gray-600'
+        ? 'text-gray-400'
         : 'text-red-400';
   const icon  = status === 'sent' ? '✓' : status === 'queued' ? '⏸' : status === 'discarded' ? '—' : '✕';
 
@@ -554,7 +554,7 @@ function StatusBadge({ status, code, errorMsg }) {
         {icon} {status}
       </span>
       {code != null && code > 0 && (
-        <span className="text-[10px] text-gray-600 tabular-nums">HTTP {code}</span>
+        <span className="text-[10px] text-gray-400 tabular-nums">HTTP {code}</span>
       )}
       {networkLabel && (
         <span className="text-[10px] text-orange-400 font-medium">{networkLabel}</span>
@@ -594,7 +594,7 @@ function PlanBadge({ plan }) {
 function DetailRow({ label, value, mono = false, small = false }) {
   return (
     <div className="flex gap-2">
-      <span className={`text-gray-600 flex-shrink-0 ${small ? 'text-[10px] w-28' : 'w-24'}`}>
+      <span className={`text-gray-400 flex-shrink-0 ${small ? 'text-[10px] w-28' : 'w-24'}`}>
         {label}
       </span>
       <span className={`text-gray-300 break-all ${mono ? 'font-mono text-[11px]' : ''}`}>

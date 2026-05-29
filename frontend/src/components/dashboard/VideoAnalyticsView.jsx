@@ -209,7 +209,7 @@ export default function VideoAnalyticsView({
       <div className="flex-shrink-0 border-b border-gray-800 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm">
           <span className="text-gray-400">{video?.title ? video.title.slice(0, 32) + (video.title.length > 32 ? '…' : '') : 'Video'}</span>
-          <span className="text-gray-600">/</span>
+          <span className="text-gray-400">/</span>
           <span className="font-semibold text-gray-200">{viewLabel}</span>
         </div>
         <div className="flex items-center gap-1">
@@ -332,7 +332,7 @@ export default function VideoAnalyticsView({
               </h1>
               <p className="text-sm text-gray-400 mt-1.5 flex items-center gap-2">
                 <span>{PLATFORM_LABELS[video?.source_type] ?? 'Video'}</span>
-                <span className="text-gray-600">·</span>
+                <span className="text-gray-400">·</span>
                 <span>
                   Added {video?.created_at
                     ? new Date(video.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -343,18 +343,18 @@ export default function VideoAnalyticsView({
 
             {/* Metric cards grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
-              <MetricCard label="Total Plays"        value={plays}          format={n => n.toLocaleString()}                              visible={stage >= 3} accent="amber"   onClick={() => onViewChange('plays')} userPlan={user?.plan} />
-              <MetricCard label="Unique Viewers"     value={viewers}        format={n => n.toLocaleString()}                              visible={stage >= 4} accent="indigo"  onClick={() => onViewChange('viewers')} userPlan={user?.plan} />
-              <MetricCard label="Avg. Watch"         value={hasPlays ? avgWatch : null}   format={n => `${n.toFixed(0)}%`}              visible={stage >= 5} accent="emerald" className="col-span-2 sm:col-span-1" onClick={() => onViewChange('avg_watch')} requiredPlan={CARD_REQUIRED_PLAN.avg_watch} userPlan={user?.plan} />
-              <MetricCard label="Completion Rate"    value={completionRate} format={n => `${n.toFixed(0)}%`}                             visible={stage >= 5} accent="teal"    onClick={() => onViewChange('completion')} requiredPlan={CARD_REQUIRED_PLAN.completion} userPlan={user?.plan} />
-              <MetricCard label="Play Rate"          value={hasPlays ? playRatePct : null} format={n => `${n.toFixed(0)}%`}             visible={stage >= 5} accent="violet"  onClick={() => onViewChange('play_rate')} userPlan={user?.plan} />
-              <MetricCard label="Drop-off Rate"      value={dropoffRate}    format={n => `${n.toFixed(0)}%`}                             visible={stage >= 5} accent="rose"    onClick={() => onViewChange('dropoff')} requiredPlan={CARD_REQUIRED_PLAN.dropoff} userPlan={user?.plan} />
-              <MetricCard label="Total Watch Time"   value={hasPlays ? totalWatchMins : null} format={n => n >= 60 ? `${(n/60).toFixed(1)} hr` : `${n} min`} visible={stage >= 5} accent="sky" onClick={() => onViewChange('watch_time')} requiredPlan={CARD_REQUIRED_PLAN.watch_time} userPlan={user?.plan} />
-              <MetricCard label="Avg. Duration/View" value={avgWatchSecs}   format={n => fmtSeconds(n)}                                  visible={stage >= 5} accent="orange"  onClick={() => onViewChange('avg_watch')} requiredPlan={CARD_REQUIRED_PLAN.avg_watch} userPlan={user?.plan} />
-              <MetricCard label="Avg. Watch/Viewer"  value={avgWatchPerViewer} format={n => fmtSeconds(n)}                               visible={stage >= 5} accent="purple"  className="col-span-2 sm:col-span-1" onClick={() => onViewChange('avg_watch')} requiredPlan={CARD_REQUIRED_PLAN.avg_watch} userPlan={user?.plan} />
-              <MetricCard label="Completions"        value={hasPlays ? completedViews : null} format={n => n.toLocaleString()}           visible={stage >= 5} accent="pink"    onClick={() => onViewChange('completion')} requiredPlan={CARD_REQUIRED_PLAN.completion} userPlan={user?.plan} />
-              <MetricCard label="Re-watches"         value={replayCount}    format={n => n.toLocaleString()}                              visible={stage >= 5} accent="yellow"  onClick={() => onViewChange('rewatches')} requiredPlan={CARD_REQUIRED_PLAN.rewatches} userPlan={user?.plan} />
-              <MetricCard label="Replay Rate"        value={replayRate}     format={n => `${n.toFixed(0)}%`}                             visible={stage >= 5} accent="amber"   className="col-span-2 sm:col-span-1" onClick={() => onViewChange('rewatches')} requiredPlan={CARD_REQUIRED_PLAN.rewatches} userPlan={user?.plan} />
+              <MetricCard label="Total Plays"        value={plays}          format={n => n.toLocaleString()}                              visible={stage >= 3} accent="amber"   onClick={() => onViewChange('plays')} userPlan={user?.plan} subtitle="times this video was played" />
+              <MetricCard label="Unique Viewers"     value={viewers}        format={n => n.toLocaleString()}                              visible={stage >= 4} accent="indigo"  onClick={() => onViewChange('viewers')} userPlan={user?.plan} subtitle="individual viewers" />
+              <MetricCard label="Avg. Watch"         value={hasPlays ? avgWatch : null}   format={n => `${n.toFixed(0)}%`}              visible={stage >= 5} accent="emerald" className="col-span-2 sm:col-span-1" onClick={() => onViewChange('avg_watch')} requiredPlan={CARD_REQUIRED_PLAN.avg_watch} userPlan={user?.plan} subtitle="of video watched on average" />
+              <MetricCard label="Completion Rate"    value={completionRate} format={n => `${n.toFixed(0)}%`}                             visible={stage >= 5} accent="teal"    onClick={() => onViewChange('completion')} requiredPlan={CARD_REQUIRED_PLAN.completion} userPlan={user?.plan} subtitle="viewers watched to completion" />
+              <MetricCard label="Play Rate"          value={hasPlays ? playRatePct : null} format={n => `${n.toFixed(0)}%`}             visible={stage >= 5} accent="violet"  onClick={() => onViewChange('play_rate')} userPlan={user?.plan} subtitle="of page loads result in play" />
+              <MetricCard label="Drop-off Rate"      value={dropoffRate}    format={n => `${n.toFixed(0)}%`}                             visible={stage >= 5} accent="rose"    onClick={() => onViewChange('dropoff')} requiredPlan={CARD_REQUIRED_PLAN.dropoff} userPlan={user?.plan} subtitle="leave in the first 30 seconds" />
+              <MetricCard label="Total Watch Time"   value={hasPlays ? totalWatchMins : null} format={n => n >= 60 ? `${(n/60).toFixed(1)} hr` : `${n} min`} visible={stage >= 5} accent="sky" onClick={() => onViewChange('watch_time')} requiredPlan={CARD_REQUIRED_PLAN.watch_time} userPlan={user?.plan} subtitle="total watch time across all plays" />
+              <MetricCard label="Avg. Duration/View" value={avgWatchSecs}   format={n => fmtSeconds(n)}                                  visible={stage >= 5} accent="orange"  onClick={() => onViewChange('avg_watch')} requiredPlan={CARD_REQUIRED_PLAN.avg_watch} userPlan={user?.plan} subtitle="average time per viewing session" />
+              <MetricCard label="Avg. Watch/Viewer"  value={avgWatchPerViewer} format={n => fmtSeconds(n)}                               visible={stage >= 5} accent="purple"  className="col-span-2 sm:col-span-1" onClick={() => onViewChange('avg_watch')} requiredPlan={CARD_REQUIRED_PLAN.avg_watch} userPlan={user?.plan} subtitle="average watch time per viewer" />
+              <MetricCard label="Completions"        value={hasPlays ? completedViews : null} format={n => n.toLocaleString()}           visible={stage >= 5} accent="pink"    onClick={() => onViewChange('completion')} requiredPlan={CARD_REQUIRED_PLAN.completion} userPlan={user?.plan} subtitle="views watched all the way through" />
+              <MetricCard label="Re-watches"         value={replayCount}    format={n => n.toLocaleString()}                              visible={stage >= 5} accent="yellow"  onClick={() => onViewChange('rewatches')} requiredPlan={CARD_REQUIRED_PLAN.rewatches} userPlan={user?.plan} subtitle="times viewers replayed this video" />
+              <MetricCard label="Replay Rate"        value={replayRate}     format={n => `${n.toFixed(0)}%`}                             visible={stage >= 5} accent="amber"   className="col-span-2 sm:col-span-1" onClick={() => onViewChange('rewatches')} requiredPlan={CARD_REQUIRED_PLAN.rewatches} userPlan={user?.plan} subtitle="of viewers replayed the video" />
             </div>
 
             {/* Judgment text */}
@@ -431,7 +431,7 @@ export default function VideoAnalyticsView({
 // MetricCard — stat card with count-up + click navigation
 // ─────────────────────────────────────────────────────────────────────────
 
-function MetricCard({ label, value, format, visible, accent, className = '', onClick, requiredPlan, userPlan }) {
+function MetricCard({ label, value, format, visible, accent, className = '', onClick, requiredPlan, userPlan, subtitle }) {
   const numericValue = typeof value === 'number' ? value : 0;
   const counted      = useCountUp(numericValue, 900, visible && value !== null);
   const isNull       = value === null;
@@ -473,12 +473,15 @@ function MetricCard({ label, value, format, visible, accent, className = '', onC
       </p>
       <p className="text-3xl font-bold text-gray-50 tabular-nums">
         {isNull
-          ? <span className="text-gray-600">—</span>
+          ? <span className="text-gray-400">—</span>
           : format(counted)
         }
       </p>
-      <p className="text-[10px] text-gray-500 mt-1.5 group-hover:text-gray-300 transition-colors">
-        {locked ? `Upgrade to ${requiredPlan} →` : 'View details →'}
+      <p className="text-[10px] mt-1.5 leading-snug">
+        {locked
+          ? <span className="text-amber-400 font-medium">Upgrade to {requiredPlan} →</span>
+          : <span className="text-gray-400">{subtitle ?? 'View details →'}</span>
+        }
       </p>
     </button>
   );

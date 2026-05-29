@@ -156,8 +156,8 @@ function UtmPanel({ videoId, panel }) {
         data.length === 0 || !hasMeaningfulData ? (
           <div className="px-5 pb-5 pt-1">
             <div className="flex items-center gap-2 py-3 border border-dashed border-gray-700/50 rounded-lg px-4">
-              <span className="text-gray-600 text-sm">—</span>
-              <span className="text-xs text-gray-600">
+              <span className="text-gray-400 text-sm">—</span>
+              <span className="text-xs text-gray-400">
                 {panel.key.startsWith('utm') ? 'No UTM parameters tracked yet' : 'No data yet'}
               </span>
             </div>
@@ -264,7 +264,7 @@ function CtaAnalyticsSection({ videoId }) {
       <div className="bg-gray-800/30 border border-gray-700/40 border-dashed rounded-xl px-5 py-7 text-center">
         <p className="text-2xl mb-2">🔗</p>
         <p className="text-sm text-gray-400 font-medium mb-1">No CTA clicks yet</p>
-        <p className="text-xs text-gray-600">
+        <p className="text-xs text-gray-400">
           Create tracking links in the <strong className="text-gray-400">Share & Embed</strong> tab and share them.
           Each click records the viewer's device, browser, and location.
         </p>
@@ -317,7 +317,7 @@ function CtaAnalyticsSection({ videoId }) {
                 </div>
               );
             }) : (
-              <p className="text-xs text-gray-600">—</p>
+              <p className="text-xs text-gray-400">—</p>
             )}
           </div>
         ))}

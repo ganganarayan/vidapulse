@@ -338,7 +338,7 @@ function PromoModal({ targetUser, onClose }) {
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-700 flex justify-between items-center flex-shrink-0">
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-gray-400">
             Toggle off to hide a featured video for this user only.
           </p>
           <button
@@ -654,7 +654,7 @@ export default function AdminUsers() {
             </button>
             <span className="text-amber-500 text-xl font-bold select-none">{'▶︎'}</span>
             <span className="text-white font-semibold">VidaPulse</span>
-            <span className="text-gray-600 mx-1">/</span>
+            <span className="text-gray-400 mx-1">/</span>
             <span className="text-gray-300">User Accounts</span>
           </div>
         </div>

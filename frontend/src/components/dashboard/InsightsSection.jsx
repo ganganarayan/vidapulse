@@ -215,7 +215,7 @@ function PrimaryInsightCard({ insight, userPlan, onDismiss }) {
           </div>
           <button
             onClick={onDismiss}
-            className="text-gray-600 hover:text-gray-400 transition-colors p-1 rounded-md hover:bg-gray-700/50 flex-shrink-0"
+            className="text-gray-400 hover:text-gray-400 transition-colors p-1 rounded-md hover:bg-gray-700/50 flex-shrink-0"
             aria-label="Dismiss insight"
           >
             <CloseIcon />

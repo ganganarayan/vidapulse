@@ -178,7 +178,7 @@ function StatCard({ label, value, icon }) {
     <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-5">
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{label}</span>
-        <span className="text-gray-600">{icon}</span>
+        <span className="text-gray-400">{icon}</span>
       </div>
       <p className="text-2xl font-bold text-gray-50 tabular-nums">{value}</p>
     </div>
@@ -219,7 +219,7 @@ function ViewerTable({ viewers, search }) {
               <tr key={v.viewer_id} className="hover:bg-gray-800/40 transition-colors">
                 {/* Viewer ID */}
                 <td className="px-4 py-3 font-mono text-xs text-gray-400 whitespace-nowrap">
-                  <span className="text-gray-600 text-[10px] mr-0.5">#</span>
+                  <span className="text-gray-400 text-[10px] mr-0.5">#</span>
                   <span className="text-gray-300">{v.short_id}</span>
                 </td>
                 {/* Country */}
@@ -230,7 +230,7 @@ function ViewerTable({ viewers, search }) {
                       {v.country_name}
                     </span>
                   ) : (
-                    <span className="text-xs text-gray-600">—</span>
+                    <span className="text-xs text-gray-400">—</span>
                   )}
                 </td>
                 {/* Device */}
@@ -327,7 +327,7 @@ function GatedTablePrompt({ onUpgrade, plan }) {
           >
             Upgrade to Starter →
           </button>
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-gray-400">
             You are on the <span className="text-gray-400 capitalize">{plan ?? 'Free'}</span> plan
           </p>
         </div>

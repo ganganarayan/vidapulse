@@ -123,7 +123,7 @@ export default function PaymentSuccess() {
             <p className="text-sm text-gray-400 mb-1">
               Payment received. Waiting for confirmation from Razorpay.
             </p>
-            <p className="text-xs text-gray-600">{seconds}s</p>
+            <p className="text-xs text-gray-400">{seconds}s</p>
           </>
         )}
 
@@ -186,7 +186,7 @@ export default function PaymentSuccess() {
                 Go to Dashboard
               </button>
             </div>
-            <p className="mt-4 text-xs text-gray-600">
+            <p className="mt-4 text-xs text-gray-400">
               If your plan hasn't activated in 10 minutes, please{' '}
               <button
                 onClick={() => navigate('/help')}
