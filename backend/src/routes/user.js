@@ -363,8 +363,8 @@ router.get('/overview', requireAuth, async (req, res, next) => {
        FROM   videos v
        LEFT JOIN LATERAL (
          SELECT
-           COUNT(*)                                                  AS total_plays,
-           COUNT(DISTINCT viewer_id)                                 AS unique_viewers,
+           COUNT(*) FILTER (WHERE play_count > 0)                   AS total_plays,
+           COUNT(DISTINCT viewer_id) FILTER (WHERE play_count > 0)  AS unique_viewers,
            ROUND(
              (AVG(max_watch_pct) FILTER (WHERE play_count > 0))::numeric, 1
            )                                                         AS avg_watch_pct
