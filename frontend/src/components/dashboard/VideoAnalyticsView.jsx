@@ -48,8 +48,8 @@ const COMPLETE_DELAY = 2700;
 
 const VIEW_LABELS = {
   overview      : 'Overview',
-  plays         : 'Total Views',
-  unique_views  : 'Unique Views',
+  plays         : 'Total Page Views',
+  unique_views  : 'Unique Page Views',
   total_viewers : 'Total Viewers',
   viewers       : 'Unique Viewers',
   avg_watch     : 'Avg. Watch %',

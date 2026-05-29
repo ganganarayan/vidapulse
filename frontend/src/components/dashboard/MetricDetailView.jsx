@@ -51,10 +51,10 @@ const METRIC_CONFIG = {
     yTickFormat: n => compactNum(n),
   },
   unique_views: {
-    label: 'Unique Views', yLabel: 'Visitors',
+    label: 'Unique Page Views', yLabel: 'Visitors',
     backendKey: 'unique_views', accentColor: '#a78bfa',
     desc: 'Distinct page sessions that loaded the embed — whether or not play was pressed.',
-    formula: 'Unique Views = distinct sessions that loaded the embed page (impressions)',
+    formula: 'Unique Page Views = distinct sessions that loaded the embed page (impressions)',
     totalLabel: 'Total Unique',
     format: n => Math.round(n).toLocaleString(),
     yTickFormat: n => compactNum(n),
@@ -80,7 +80,7 @@ const METRIC_CONFIG = {
   play_rate: {
     label: 'Play Rate', yLabel: 'Plays',
     backendKey: 'plays', accentColor: '#c084fc',
-    desc: 'Daily plays — compare with Unique Views to gauge what fraction of visitors actually pressed play.',
+    desc: 'Daily plays — compare with Unique Page Views to gauge what fraction of visitors actually pressed play.',
     formula: 'Play Rate = Total Plays ÷ Unique Page Visitors × 100',
     totalLabel: 'Total Plays',
     format: n => Math.round(n).toLocaleString(),
