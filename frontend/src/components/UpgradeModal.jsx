@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useUpgrade }  from '../contexts/UpgradeContext';
-import { useAuth }     from '../contexts/AuthContext';
-import api             from '../lib/api';
+import { useUpgrade }        from '../contexts/UpgradeContext';
+import { useAuth }           from '../contexts/AuthContext';
+import api                   from '../lib/api';
+import { savePurchaseIntent } from '../lib/pixel';
 
 /**
  * UpgradeModal
@@ -28,7 +29,7 @@ const PLAN_FEATURES = {
     'Priority email support',
   ],
   pro: [
-    'Unlimited videos',
+    '20 videos',
     'All Starter features',
     'Engagement heatmap (full)',
     'CTA tracking & conversion',
@@ -67,6 +68,12 @@ export default function UpgradeModal() {
     setLoading(plan);
     try {
       const { data } = await api.post('/payments/subscribe', { plan });
+      // Save purchase intent (INR only — this modal has no currency toggle)
+      savePurchaseIntent({
+        plan,
+        currency: 'INR',
+        value   : plan === 'starter' ? 999 : 1999,
+      });
       // Redirect to Razorpay hosted payment page (full page navigation)
       window.location.href = data.paymentUrl;
     } catch (err) {
@@ -175,6 +182,12 @@ export default function UpgradeModal() {
           </p>
           <p className="text-xs text-gray-600">
             Payments processed securely by Razorpay · Plan activates within minutes of payment
+          </p>
+          <p className="text-xs text-gray-500">
+            Need more than 20 videos?{' '}
+            <a href="mailto:support@vidapulse.in" className="text-amber-400 hover:text-amber-300 transition-colors">
+              Contact support@vidapulse.in
+            </a>
           </p>
         </div>
 

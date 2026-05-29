@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import AppLayout from '../components/AppLayout';
+import { savePurchaseIntent } from '../lib/pixel';
 
 /**
  * UpgradePage — /upgrade
@@ -25,10 +26,11 @@ export default function UpgradePage() {
   const { user }    = useAuth();
   const navigate    = useNavigate();
 
-  const [upgradeData, setUpgradeData] = useState(null);
-  const [loading,     setLoading]     = useState(true);
-  const [error,       setError]       = useState('');
-  const [region,      setRegion]      = useState('india'); // 'india' | 'international'
+  const [upgradeData,     setUpgradeData]     = useState(null);
+  const [loading,         setLoading]         = useState(true);
+  const [error,           setError]           = useState('');
+  const [region,          setRegion]          = useState('india'); // 'india' | 'international'
+  const [cashfreeLoading, setCashfreeLoading] = useState(null);   // plan key while calling API
 
   const load = useCallback(async () => {
     try {
@@ -64,13 +66,37 @@ export default function UpgradePage() {
     }
   }
 
+  // INR path — static Razorpay payment link (India toggle)
   function handleUpgrade(plan) {
     if (!upgradeData) return;
     const baseUrl = upgradeData.razorpay_links?.[plan];
     if (!baseUrl) return;
     const url = buildRazorpayUrl(baseUrl, plan);
-    // Open in same tab — Razorpay handles the full payment flow
+    savePurchaseIntent({
+      plan,
+      currency: 'INR',
+      value   : upgradeData.pricing?.[plan]?.inr ?? (plan === 'starter' ? 999 : 1999),
+    });
     window.location.href = url;
+  }
+
+  // USD path — Cashfree dynamic subscription (International toggle)
+  async function handleCashfreeUpgrade(plan) {
+    if (!upgradeData) return;
+    setCashfreeLoading(plan);
+    setError('');
+    try {
+      const { data } = await api.post('/payments/cashfree-subscribe', { plan, currency: 'USD' });
+      savePurchaseIntent({
+        plan,
+        currency: 'USD',
+        value   : upgradeData.pricing?.[plan]?.usd ?? (plan === 'starter' ? 15 : 29),
+      });
+      window.location.href = data.paymentUrl;
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not start payment. Please try again.');
+      setCashfreeLoading(null);
+    }
   }
 
   const currentPlan = user?.plan ?? 'free';
@@ -149,14 +175,14 @@ export default function UpgradePage() {
 
               {/* Starter plan */}
               <PlanCard
-                planKey     = "starter"
-                name        = "Starter"
-                tagline     = "For creators growing their audience"
-                price       = {region === 'india'
+                planKey          = "starter"
+                name             = "Starter"
+                tagline          = "For creators growing their audience"
+                price            = {region === 'india'
                   ? (upgradeData?.pricing?.starter?.inr_label ?? '₹999')
                   : (upgradeData?.pricing?.starter?.usd_label ?? '$15')}
-                priceSuffix = "/ month"
-                features    = {[
+                priceSuffix      = "/ month"
+                features         = {[
                   '10 videos',
                   'Full analytics dashboard',
                   'Viewer stories',
@@ -164,24 +190,28 @@ export default function UpgradePage() {
                   'Traffic sources & geography',
                   'Priority email support',
                 ]}
-                current     = {currentPlan === 'starter'}
-                canUpgrade  = {upgradeOptions.includes('starter')}
-                onUpgrade   = {() => handleUpgrade('starter')}
-                noLink      = {!upgradeData?.razorpay_links?.starter}
-                accent      = "amber"
+                current          = {currentPlan === 'starter'}
+                canUpgrade       = {upgradeOptions.includes('starter')}
+                onUpgrade        = {() => handleUpgrade('starter')}
+                noLink           = {region === 'india' && !upgradeData?.razorpay_links?.starter}
+                region           = {region}
+                cashfreeEnabled  = {!!(upgradeData?.cashfree_enabled)}
+                cashfreeLoading  = {cashfreeLoading === 'starter'}
+                onCashfreeUpgrade= {() => handleCashfreeUpgrade('starter')}
+                accent           = "amber"
               />
 
               {/* Pro plan */}
               <PlanCard
-                planKey     = "pro"
-                name        = "Pro"
-                tagline     = "For any serious business, B2B or B2C, to scale through video marketing"
-                price       = {region === 'india'
+                planKey          = "pro"
+                name             = "Pro"
+                tagline          = "For any serious business, B2B or B2C, to scale through video marketing"
+                price            = {region === 'india'
                   ? (upgradeData?.pricing?.pro?.inr_label ?? '₹1,999')
                   : (upgradeData?.pricing?.pro?.usd_label ?? '$29')}
-                priceSuffix = "/ month"
-                features    = {[
-                  'Unlimited videos',
+                priceSuffix      = "/ month"
+                features         = {[
+                  '20 videos',
                   'All Starter features',
                   'Engagement heatmap (full)',
                   'CTA tracking & conversion',
@@ -189,12 +219,16 @@ export default function UpgradePage() {
                   'Custom player branding',
                   'Dedicated support',
                 ]}
-                current     = {currentPlan === 'pro' || currentPlan === 'admin_lifetime'}
-                canUpgrade  = {upgradeOptions.includes('pro')}
-                onUpgrade   = {() => handleUpgrade('pro')}
-                noLink      = {!upgradeData?.razorpay_links?.pro}
-                accent      = "indigo"
-                recommended = {currentPlan === 'free' || currentPlan === 'starter'}
+                current          = {currentPlan === 'pro' || currentPlan === 'admin_lifetime'}
+                canUpgrade       = {upgradeOptions.includes('pro')}
+                onUpgrade        = {() => handleUpgrade('pro')}
+                noLink           = {region === 'india' && !upgradeData?.razorpay_links?.pro}
+                region           = {region}
+                cashfreeEnabled  = {!!(upgradeData?.cashfree_enabled)}
+                cashfreeLoading  = {cashfreeLoading === 'pro'}
+                onCashfreeUpgrade= {() => handleCashfreeUpgrade('pro')}
+                accent           = "indigo"
+                recommended      = {currentPlan === 'free' || currentPlan === 'starter'}
               />
 
             </div>
@@ -213,6 +247,12 @@ export default function UpgradePage() {
                   Contact support
                 </button>
               </p>
+              <p className="text-xs text-gray-600 mt-1">
+                Need more than 20 videos?{' '}
+                <a href="mailto:support@vidapulse.in" className="text-amber-400 hover:text-amber-300 transition-colors">
+                  Contact support@vidapulse.in
+                </a>
+              </p>
             </div>
           )}
 
@@ -226,7 +266,9 @@ export default function UpgradePage() {
 
 function PlanCard({
   planKey, name, tagline, price, priceSuffix, features,
-  current, canUpgrade, onUpgrade, noLink, accent, recommended,
+  current, canUpgrade, onUpgrade, noLink,
+  region, cashfreeEnabled, cashfreeLoading, onCashfreeUpgrade,
+  accent, recommended,
 }) {
   const accentConfig = {
     gray  : { border: 'border-gray-700/50',  badge: 'bg-gray-700/60 text-gray-300',        btn: 'bg-gray-700 text-gray-300' },
@@ -279,23 +321,51 @@ function PlanCard({
 
       {/* CTA */}
       {current ? (
-        <div className={`w-full py-2 rounded-lg text-center text-xs font-medium
-                         bg-gray-700/50 text-gray-500 border border-gray-700/50`}>
+        <div className="w-full py-2 rounded-lg text-center text-xs font-medium
+                        bg-gray-700/50 text-gray-500 border border-gray-700/50">
           Your current plan
         </div>
       ) : canUpgrade ? (
-        noLink ? (
-          <div className="w-full py-2 rounded-lg text-center text-xs text-gray-600
-                          bg-gray-800 border border-gray-700/50 cursor-not-allowed">
-            Payment link coming soon
-          </div>
+        region === 'international' ? (
+          // International $ → Cashfree subscription
+          cashfreeEnabled ? (
+            <button
+              onClick={onCashfreeUpgrade}
+              disabled={cashfreeLoading}
+              className={`w-full py-2 rounded-lg text-sm transition-colors
+                          flex items-center justify-center gap-2
+                          disabled:opacity-60 disabled:cursor-not-allowed ${cfg.btn}`}
+            >
+              {cashfreeLoading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  Redirecting…
+                </>
+              ) : (
+                `Upgrade to ${name} →`
+              )}
+            </button>
+          ) : (
+            <div className="w-full py-2 rounded-lg text-center text-xs text-gray-600
+                            bg-gray-800 border border-gray-700/50 cursor-not-allowed">
+              International payments coming soon
+            </div>
+          )
         ) : (
-          <button
-            onClick={onUpgrade}
-            className={`w-full py-2 rounded-lg text-sm transition-colors ${cfg.btn}`}
-          >
-            Upgrade to {name} →
-          </button>
+          // India ₹ → Razorpay payment link
+          noLink ? (
+            <div className="w-full py-2 rounded-lg text-center text-xs text-gray-600
+                            bg-gray-800 border border-gray-700/50 cursor-not-allowed">
+              Payment link coming soon
+            </div>
+          ) : (
+            <button
+              onClick={onUpgrade}
+              className={`w-full py-2 rounded-lg text-sm transition-colors ${cfg.btn}`}
+            >
+              Upgrade to {name} →
+            </button>
+          )
         )
       ) : (
         <div className="w-full py-2 rounded-lg text-center text-xs text-gray-600

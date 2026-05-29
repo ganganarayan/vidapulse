@@ -1,5 +1,6 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { initPixel, pixelPageView } from './lib/pixel';
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider }         from './contexts/ToastContext';
@@ -95,6 +96,22 @@ function VersionWatcher() {
   return null;
 }
 
+/**
+ * PixelTracker — fires a Meta Pixel PageView on every route change.
+ * Must be rendered inside <BrowserRouter> so useLocation() works.
+ */
+function PixelTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    pixelPageView();
+  }, [location.pathname]);
+  return null;
+}
+
+// Initialise Meta Pixel once when the module is first loaded.
+// No-op when VITE_META_PIXEL_ID is blank.
+initPixel();
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -108,6 +125,7 @@ export default function App() {
           UpgradeModal renders nothing when upgradeTarget is null.
         */}
         <VersionWatcher />
+        <PixelTracker />
         <ImpersonationBanner />
         <UpgradeModal />
         <Routes>
