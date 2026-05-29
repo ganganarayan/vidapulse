@@ -939,6 +939,19 @@ const DAILY_METRICS = {
     WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
     GROUP  BY 1 ORDER BY 1`,
 
+  // Play rate = play sessions / total sessions × 100 (per day)
+  play_rate: `
+    SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
+           CASE WHEN COUNT(*) > 0
+             THEN ROUND(
+               COUNT(*) FILTER (WHERE play_count > 0)::numeric
+               / COUNT(*) * 100, 1)
+             ELSE 0
+           END AS value
+    FROM   analytics_sessions
+    WHERE  video_id = $1 AND started_at BETWEEN $2 AND $3
+    GROUP  BY 1 ORDER BY 1`,
+
   avg_watch: `
     SELECT DATE_TRUNC('day', started_at AT TIME ZONE 'UTC')::date AS date,
            ROUND(AVG(max_watch_pct)::numeric, 1) AS value
@@ -986,8 +999,8 @@ router.get('/:id/analytics/daily', requireAuth, async (req, res, next) => {
 
     const data = rows.map(r => ({ date: r.date, value: parseFloat(r.value) || 0 }));
 
-    // avg_watch should report the period average, not the sum across days
-    const isAvgMetric = metric === 'avg_watch';
+    // avg_watch and play_rate should report the period average, not the sum across days
+    const isAvgMetric = metric === 'avg_watch' || metric === 'play_rate';
     const total = data.length === 0 ? 0 : isAvgMetric
       ? data.reduce((s, r) => s + r.value, 0) / data.length
       : data.reduce((s, r) => s + r.value, 0);
