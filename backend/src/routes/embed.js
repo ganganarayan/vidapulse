@@ -115,59 +115,475 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
   let extraStyles = '';
 
   // ── YouTube ─────────────────────────────────────────────────────────
+  // controls:0 removes all native YouTube UI (title bar, control bar,
+  // YouTube logo in bar, "Watch on YouTube" text).
+  // We render our own identical custom overlay instead.
+  // The only remaining YouTube branding is the tiny hover watermark in
+  // the bottom-right corner — unavoidable per YouTube's ToS.
   if (source_type === 'youtube') {
     const ytId = extractYouTubeId(videoUrl);
-    playerHtml = `<div id="yt-wrap" style="position:relative;width:100%;height:100%">
-      <div id="yt-player"></div>
-    </div>`;
+    const hasBar = showSeekBar || showSpeed || showFullscreen || showVolumeControl;
+
+    // ── Control HTML (mirrors native video section) ──────────────────
+    const volHtml = showVolumeControl
+      ? `<button class="vp-btn" id="vp-vol-btn" title="Mute">
+           <svg id="vp-vol-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+         </button>
+         <input type="range" id="vp-vol" min="0" max="100" value="100">` : '';
+    const skHtml = showSeekBar
+      ? `<span id="vp-cur">0:00</span>
+         <input type="range" id="vp-seek" min="0" max="1000" value="0">
+         <span id="vp-rem">-0:00</span>` : '';
+    const spSel = showSpeed
+      ? `<select id="vp-speed">
+           <option value="0.25">0.25×</option><option value="0.5">0.5×</option>
+           <option value="1" selected>1×</option>
+           <option value="1.25">1.25×</option><option value="1.5">1.5×</option>
+           <option value="2">2×</option>
+         </select>` : '';
+    const fsBtn = showFullscreen
+      ? `<button class="vp-btn" id="vp-fs" title="Fullscreen">
+           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+         </button>` : '';
+    const leftGroup  = (volHtml || skHtml) ? `<div id="vp-left">${volHtml}${skHtml}</div>` : '';
+    const rightGroup = (spSel || fsBtn)    ? `<div id="vp-right">${spSel}${fsBtn}</div>`   : '';
+
+    const skipBackBtn = showRewindFwd
+      ? `<button id="vp-rwd" class="vp-skip-btn" title="Rewind 10s">
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.99"/></svg><span>10</span>
+         </button>` : '';
+    const skipFwdBtn = showRewindFwd
+      ? `<button id="vp-fwd" class="vp-skip-btn" title="Forward 10s">
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3.99"/></svg><span>10</span>
+         </button>` : '';
+    const mutePlayHtml = showPlayPause
+      ? `<button id="vp-mute-c" title="Unmute">
+           <svg id="vp-mute-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+             <line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>
+           </svg>
+         </button>
+         <button id="vp-play-c" title="Play">
+           <svg id="vp-play-icon" width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+         </button>` : '';
+    const ytCenterHtml = (showPlayPause || showRewindFwd)
+      ? `<div id="vp-center">${skipBackBtn}${mutePlayHtml}${skipFwdBtn}</div>` : '';
+    const ytResumeHtml = resumePlay
+      ? `<div id="vp-resume" style="display:none;bottom:8px">
+           <button id="vp-res-start">&#x21BA; Start Over</button>
+           <button id="vp-res-cont">&#x25B6; Resume</button>
+         </div>` : '';
+
+    playerHtml = `
+      <div id="yt-wrap" style="position:relative;width:100%;height:100%">
+        <div id="yt-player" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none"></div>
+        ${ytCenterHtml}
+        ${ytResumeHtml}
+        ${hasBar ? `<div id="vp-bar">${leftGroup}${rightGroup}</div>` : ''}
+      </div>`;
+
+    // ── Same CSS as native video section ─────────────────────────────
+    extraStyles = `
+      #vp-resume{
+        position:absolute;left:0;right:0;
+        display:flex;justify-content:center;align-items:center;gap:10px;
+        padding:0 12px;z-index:10;
+      }
+      #vp-resume button{
+        background:rgba(22,22,22,0.88);
+        border:1px solid rgba(255,255,255,0.18);
+        color:#fff;font-size:12px;font-family:sans-serif;
+        padding:7px 20px;border-radius:7px;cursor:pointer;
+        backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+        transition:background .15s,transform .1s;
+        white-space:nowrap;touch-action:manipulation;
+      }
+      #vp-resume button:hover{background:rgba(52,52,52,0.95);}
+      #vp-resume button:active{transform:scale(.97);}
+      #vp-res-cont{border-color:rgba(245,158,11,0.45);}
+      #vp-res-cont:hover{background:rgba(245,158,11,0.18);}
+      .vp-skip-btn{
+        display:flex;flex-direction:column;align-items:center;justify-content:center;
+        gap:3px;width:42px;height:42px;border-radius:50%;
+        background:rgba(0,0,0,.42);border:none;color:#fff;cursor:pointer;
+        transition:background .15s,transform .15s;touch-action:manipulation;
+      }
+      .vp-skip-btn:hover{background:rgba(0,0,0,.68);transform:scale(1.1);}
+      .vp-skip-btn:active{transform:scale(.9);}
+      .vp-skip-btn span{font-size:9px;font-family:sans-serif;font-weight:700;line-height:1;}
+      #vp-center{
+        position:absolute;inset:0;
+        display:flex;align-items:center;justify-content:center;gap:18px;
+        opacity:0;transition:opacity .25s;pointer-events:none;
+      }
+      #player-wrap.vp-paused #vp-center,
+      #player-wrap.vp-active #vp-center{opacity:1;pointer-events:auto;}
+      #vp-play-c{
+        width:70px;height:70px;border-radius:50%;
+        background:rgba(245,158,11,.92);border:none;color:#fff;cursor:pointer;
+        display:flex;align-items:center;justify-content:center;
+        box-shadow:0 4px 24px rgba(0,0,0,.5);
+        transition:transform .15s,background .15s;
+        padding-left:4px;touch-action:manipulation;
+      }
+      #vp-play-c.vp-pause-mode{padding-left:0;}
+      #vp-play-c:hover{background:rgba(245,158,11,1);transform:scale(1.08);}
+      #vp-play-c:active{transform:scale(.96);}
+      #vp-mute-c{
+        width:46px;height:46px;border-radius:50%;
+        background:rgba(0,0,0,.55);border:2px solid rgba(255,255,255,.35);
+        color:#fff;cursor:pointer;
+        display:flex;align-items:center;justify-content:center;
+        transition:background .15s,transform .15s;touch-action:manipulation;
+      }
+      #vp-mute-c:hover{background:rgba(0,0,0,.75);transform:scale(1.08);}
+      #vp-mute-c.vp-unmuted{border-color:rgba(245,158,11,.6);color:#f59e0b;}
+      #vp-bar{
+        position:absolute;bottom:0;left:0;right:0;
+        padding:10px 12px 12px;
+        background:linear-gradient(transparent,rgba(0,0,0,.85));
+        display:flex;align-items:center;gap:8px;
+        opacity:0;transition:opacity .25s;pointer-events:none;
+      }
+      #player-wrap.vp-paused #vp-bar,
+      #player-wrap.vp-active #vp-bar{opacity:1;pointer-events:auto;}
+      #vp-left{display:flex;align-items:center;gap:6px;flex:1;min-width:0;}
+      #vp-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+      .vp-btn{background:none;border:none;color:#fff;cursor:pointer;
+        padding:4px;display:flex;align-items:center;flex-shrink:0;
+        touch-action:manipulation;}
+      .vp-btn:hover{color:#f59e0b;}
+      #vp-vol{
+        width:56px;-webkit-appearance:none;appearance:none;
+        height:4px;border-radius:2px;flex-shrink:0;
+        background:linear-gradient(to right,#f59e0b var(--vol,100%),rgba(255,255,255,.25) var(--vol,100%));
+        cursor:pointer;outline:none;
+      }
+      #vp-vol::-webkit-slider-thumb{
+        -webkit-appearance:none;width:11px;height:11px;
+        border-radius:50%;background:#f59e0b;cursor:pointer;
+        box-shadow:0 1px 4px rgba(0,0,0,.5);
+      }
+      #vp-vol::-moz-range-thumb{
+        width:11px;height:11px;border-radius:50%;
+        background:#f59e0b;cursor:pointer;border:none;
+      }
+      #vp-cur,#vp-rem{
+        color:rgba(255,255,255,.8);font-size:11px;white-space:nowrap;
+        flex-shrink:0;font-family:sans-serif;
+      }
+      #vp-rem{color:rgba(255,255,255,.55);}
+      #vp-seek{
+        flex:1;-webkit-appearance:none;appearance:none;
+        height:4px;border-radius:2px;
+        background:linear-gradient(to right,#f59e0b var(--pct,0%),rgba(255,255,255,.25) var(--pct,0%));
+        cursor:pointer;outline:none;min-width:40px;
+      }
+      #vp-seek::-webkit-slider-thumb{
+        -webkit-appearance:none;width:13px;height:13px;
+        border-radius:50%;background:#f59e0b;cursor:pointer;
+        box-shadow:0 1px 4px rgba(0,0,0,.5);
+      }
+      #vp-seek::-moz-range-thumb{
+        width:13px;height:13px;border-radius:50%;
+        background:#f59e0b;cursor:pointer;border:none;
+      }
+      #vp-speed{
+        background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.2);
+        color:#fff;font-size:11px;padding:3px 5px;border-radius:4px;
+        cursor:pointer;flex-shrink:0;
+      }
+    `;
+
     extraScript = `
       var tag=document.createElement('script');
       tag.src='https://www.youtube.com/iframe_api';
       document.head.appendChild(tag);
 
-      var player;
+      var player, ytDur=0;
+
       function onYouTubeIframeAPIReady(){
         player=new YT.Player('yt-player',{
           videoId:${JSON.stringify(ytId)},
           width:'100%',height:'100%',
-          playerVars:{rel:0,modestbranding:1,controls:${anyControls ? 1 : 0}},
+          playerVars:{
+            controls:0,         /* hide all native YouTube UI */
+            rel:0,              /* no related videos from other channels */
+            iv_load_policy:3,   /* no annotations */
+            modestbranding:1,   /* legacy — no-op in newer YT but harmless */
+            playsinline:1,      /* inline play on iOS */
+            disablekb:1,        /* we handle keyboard */
+            fs:0,               /* we handle fullscreen */
+            origin:window.location.origin
+          },
           events:{
             onReady:function(){
+              ytDur=player.getDuration()||0;
+              if(ytDur>0)dur=ytDur;
               sess();
-              var _d=player.getDuration()||0;if(_d>0)dur=_d;
+              /* Fine-grained seek bar update (4×/s) */
               setInterval(function(){
-                if(player.getPlayerState&&player.getPlayerState()===YT.PlayerState.PLAYING){
-                  var d=player.getDuration()||0;
+                if(!player||typeof player.getPlayerState!=='function')return;
+                if(player.getPlayerState()===YT.PlayerState.PLAYING){
                   var c=player.getCurrentTime()||0;
-                  if(d>0&&on){
-                    dur=d;
-                    maxP=Math.max(maxP,c/d*100);
-                    secs+=c-t0;
-                    ivs.push([t0,c]);
-                    t0=c;
-                    ping('heartbeat');
-                  }
+                  var d=player.getDuration()||ytDur;
+                  if(d>0){ytDur=d;dur=d;curPos=c;_ytUpdateSeek(c,d);}
+                }
+              },250);
+              /* 15-second analytics heartbeat */
+              setInterval(function(){
+                if(!player||typeof player.getPlayerState!=='function')return;
+                if(player.getPlayerState()===YT.PlayerState.PLAYING&&on){
+                  var c=player.getCurrentTime()||0;
+                  var d=player.getDuration()||ytDur;
+                  if(d>0){maxP=Math.max(maxP,c/d*100);}
+                  secs+=c-t0;ivs.push([t0,c]);t0=c;
+                  ping('heartbeat');
+                  if(RESUME)savePos(c);
                 }
               },15000);
+              attachYTControls();
             },
             onStateChange:function(e){
               var S=YT.PlayerState;
               var c=player.getCurrentTime()||0;
-              var d=player.getDuration()||0;
+              var d=player.getDuration()||ytDur;
+              if(d>0){ytDur=d;dur=d;}
+              var pw=document.getElementById('player-wrap');
               if(e.data===S.PLAYING){
-                if(!on){on=true;t0=c;ping('play');}
+                if(!on){on=true;t0=c;curPos=c;ping('play');}
+                pw&&pw.classList.remove('vp-paused');
+                _ytSetUI(true);_ytSyncPlay();
               }
               if(e.data===S.PAUSED){
                 if(on){on=false;secs+=c-t0;ivs.push([t0,c]);
                   maxP=d>0?Math.max(maxP,c/d*100):maxP;ping('pause');}
+                curPos=c;
+                pw&&pw.classList.add('vp-paused');pw&&pw.classList.add('vp-active');
+                _ytSyncPlay();
               }
               if(e.data===S.ENDED){
                 if(on){on=false;secs+=d-t0;ivs.push([t0,d]);}
-                maxP=100;_ended=true;ping('end');
+                maxP=100;_ended=true;curPos=d;ping('end');
+                pw&&pw.classList.add('vp-paused');_ytSyncPlay();
               }
             }
           }
         });
+      }
+
+      /* ── UI show/hide ─────────────────────────────────────────── */
+      var _ytHideT=null;
+      function _ytSetUI(show){
+        var pw=document.getElementById('player-wrap');
+        clearTimeout(_ytHideT);
+        if(show){
+          pw&&pw.classList.add('vp-active');
+          if(player&&player.getPlayerState()===YT.PlayerState.PLAYING){
+            _ytHideT=setTimeout(function(){pw&&pw.classList.remove('vp-active');},3000);
+          }
+        } else {pw&&pw.classList.remove('vp-active');}
+      }
+
+      /* ── Helpers ──────────────────────────────────────────────── */
+      function _ytFmt(s){s=Math.floor(s||0);var m=Math.floor(s/60);return m+':'+('0'+(s%60)).slice(-2);}
+
+      function _ytUpdateSeek(c,d){
+        var sk=document.getElementById('vp-seek');
+        var curTm=document.getElementById('vp-cur');
+        var remTm=document.getElementById('vp-rem');
+        if(d>0&&sk){sk.style.setProperty('--pct',(c/d*100)+'%');sk.value=(c/d)*1000;}
+        if(curTm)curTm.textContent=_ytFmt(c);
+        if(remTm)remTm.textContent='-'+_ytFmt(d-c);
+      }
+
+      /* ── Icon sync ────────────────────────────────────────────── */
+      var _YT_PLAY_SVG ='<svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+      var _YT_PAUSE_SVG='<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+      function _ytSyncPlay(){
+        var playC=document.getElementById('vp-play-c');if(!playC)return;
+        var playing=player&&player.getPlayerState&&player.getPlayerState()===YT.PlayerState.PLAYING;
+        if(playing){playC.innerHTML=_YT_PAUSE_SVG;playC.classList.add('vp-pause-mode');playC.title='Pause';}
+        else{playC.innerHTML=_YT_PLAY_SVG;playC.classList.remove('vp-pause-mode');playC.title='Play';}
+      }
+
+      var _YT_MUTED_SVG  ='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
+      var _YT_UNMUTED_SVG='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+      var _YT_VMUTED='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
+      var _YT_VLOW ='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+      var _YT_VHIGH='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
+      function _ytSyncMute(){
+        var muteC=document.getElementById('vp-mute-c');if(!muteC)return;
+        var muted=player&&player.isMuted&&player.isMuted();
+        if(muted){muteC.innerHTML=_YT_MUTED_SVG;muteC.classList.remove('vp-unmuted');muteC.title='Unmute';}
+        else{muteC.innerHTML=_YT_UNMUTED_SVG;muteC.classList.add('vp-unmuted');muteC.title='Mute';}
+      }
+      function _ytSyncVol(){
+        var volBtn=document.getElementById('vp-vol-btn');
+        var volSl=document.getElementById('vp-vol');
+        if(!player)return;
+        var vol=player.getVolume?player.getVolume():100;
+        var muted=player.isMuted?player.isMuted():false;
+        if(volBtn){
+          if(muted||vol===0){volBtn.innerHTML=_YT_VMUTED;volBtn.title='Unmute';}
+          else if(vol<50){volBtn.innerHTML=_YT_VLOW;volBtn.title='Mute';}
+          else{volBtn.innerHTML=_YT_VHIGH;volBtn.title='Mute';}
+        }
+        if(volSl){volSl.value=muted?0:vol;volSl.style.setProperty('--vol',(muted?0:vol)+'%');}
+      }
+
+      /* ── Main control wiring ──────────────────────────────────── */
+      function attachYTControls(){
+        var pw    =document.getElementById('player-wrap');
+        var playC =document.getElementById('vp-play-c');
+        var muteC =document.getElementById('vp-mute-c');
+        var sk    =document.getElementById('vp-seek');
+        var sp    =document.getElementById('vp-speed');
+        var fs    =document.getElementById('vp-fs');
+        var volBtn=document.getElementById('vp-vol-btn');
+        var volSl =document.getElementById('vp-vol');
+
+        /* Init state */
+        _ytSyncPlay();_ytSyncMute();_ytSyncVol();
+        pw&&pw.classList.add('vp-paused');
+
+        /* Show controls on hover / touch */
+        pw&&pw.addEventListener('mousemove',function(){_ytSetUI(true);});
+        pw&&pw.addEventListener('touchstart',function(){_ytSetUI(true);},{passive:true});
+
+        /* Click anywhere on wrap = play/pause */
+        pw&&pw.addEventListener('click',function(e){
+          if(e.target.closest('button,input,select'))return;
+          if(player.getPlayerState()===YT.PlayerState.PLAYING){player.pauseVideo();}
+          else{player.playVideo();}
+          _ytSetUI(true);
+        });
+
+        /* Center play/pause button */
+        playC&&playC.addEventListener('click',function(e){
+          e.stopPropagation();
+          if(player.getPlayerState()===YT.PlayerState.PLAYING){player.pauseVideo();}
+          else{player.playVideo();}
+          _ytSetUI(true);
+        });
+
+        /* Center mute button */
+        muteC&&muteC.addEventListener('click',function(e){
+          e.stopPropagation();
+          if(player.isMuted()){player.unMute();}else{player.mute();}
+          _ytSyncMute();_ytSyncVol();_ytSetUI(true);
+        });
+
+        /* Volume button (bottom bar) */
+        volBtn&&volBtn.addEventListener('click',function(e){
+          e.stopPropagation();
+          if(player.isMuted()){player.unMute();}else{player.mute();}
+          _ytSyncVol();_ytSyncMute();_ytSetUI(true);
+        });
+
+        /* Volume slider */
+        volSl&&volSl.addEventListener('input',function(){
+          var val=parseInt(volSl.value,10);
+          player.setVolume(val);
+          if(val===0){player.mute();}else{player.unMute();}
+          volSl.style.setProperty('--vol',val+'%');
+          _ytSyncVol();_ytSyncMute();
+        });
+
+        /* Seek bar */
+        if(sk){
+          var _skDrag=false;
+          sk.addEventListener('mousedown',function(){_skDrag=true;});
+          sk.addEventListener('touchstart',function(){_skDrag=true;},{passive:true});
+          sk.addEventListener('input',function(){
+            sk.style.setProperty('--pct',(sk.value/10)+'%');
+            var d=player.getDuration()||ytDur;
+            if(d>0){
+              var ct=(sk.value/1000)*d;
+              var curTm=document.getElementById('vp-cur');
+              var remTm=document.getElementById('vp-rem');
+              if(curTm)curTm.textContent=_ytFmt(ct);
+              if(remTm)remTm.textContent='-'+_ytFmt(d-ct);
+            }
+          });
+          function _ytCommitSeek(){
+            _skDrag=false;
+            var d=player.getDuration()||ytDur;
+            if(d>0){
+              var ct=(sk.value/1000)*d;
+              player.seekTo(ct,true);
+              if(on){secs+=ct-t0;ivs.push([t0,ct]);t0=ct;}
+            }
+          }
+          sk.addEventListener('change',_ytCommitSeek);
+          sk.addEventListener('mouseup',_ytCommitSeek);
+          sk.addEventListener('touchend',_ytCommitSeek,{passive:true});
+          sk.addEventListener('touchcancel',function(){_skDrag=false;},{passive:true});
+        }
+
+        /* Playback speed — YT IFrame API supports setPlaybackRate() */
+        sp&&(sp.onchange=function(){
+          try{player.setPlaybackRate(parseFloat(sp.value));}catch(_){}
+        });
+
+        /* Skip ±10 s */
+        var rwdBtn=document.getElementById('vp-rwd');
+        var fwdBtn=document.getElementById('vp-fwd');
+        rwdBtn&&rwdBtn.addEventListener('click',function(e){
+          e.stopPropagation();
+          var c=player.getCurrentTime()||0;var to=Math.max(0,c-10);
+          player.seekTo(to,true);
+          if(on){secs+=c-t0;ivs.push([t0,c]);t0=to;}
+          _ytSetUI(true);
+        });
+        fwdBtn&&fwdBtn.addEventListener('click',function(e){
+          e.stopPropagation();
+          var c=player.getCurrentTime()||0;
+          var d=player.getDuration()||ytDur;
+          var to=Math.min(d||Infinity,c+10);
+          player.seekTo(to,true);
+          if(on){secs+=c-t0;ivs.push([t0,c]);t0=to;}
+          _ytSetUI(true);
+        });
+
+        /* Fullscreen */
+        var _YT_FS_IN ='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+        var _YT_FS_OUT='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>';
+        if(fs){
+          fs.addEventListener('click',function(e){
+            e.stopPropagation();
+            var isFs=!!(document.fullscreenElement||document.webkitFullscreenElement);
+            if(isFs){
+              if(document.exitFullscreen){document.exitFullscreen();}
+              else if(document.webkitExitFullscreen){document.webkitExitFullscreen();}
+            } else {
+              var el=pw||document.getElementById('yt-wrap');
+              if(el.requestFullscreen){el.requestFullscreen().catch(function(){});}
+              else if(el.webkitRequestFullscreen){el.webkitRequestFullscreen();}
+            }
+          });
+          function _ytSyncFs(){if(fs)fs.innerHTML=(document.fullscreenElement||document.webkitFullscreenElement)?_YT_FS_OUT:_YT_FS_IN;}
+          document.addEventListener('fullscreenchange',_ytSyncFs);
+          document.addEventListener('webkitfullscreenchange',_ytSyncFs);
+        }
+
+        /* Resume playback */
+        var _ytRPos=loadPos();var _ytREl=document.getElementById('vp-resume');
+        if(RESUME&&_ytRPos>5&&_ytREl){
+          var _ytBEl=document.getElementById('vp-bar');
+          _ytREl.style.bottom=((_ytBEl?_ytBEl.offsetHeight:0)+8)+'px';
+          var _ytRC=document.getElementById('vp-res-cont');
+          if(_ytRC)_ytRC.textContent='▶ Resume – '+_ytFmt(_ytRPos);
+          _ytREl.style.display='flex';
+          function _ytDismissR(){if(_ytREl)_ytREl.style.display='none';}
+          var _ytRS=document.getElementById('vp-res-start');
+          _ytRS&&_ytRS.addEventListener('click',function(e){
+            e.stopPropagation();_ytDismissR();player.seekTo(0,true);player.playVideo();
+          });
+          _ytRC&&_ytRC.addEventListener('click',function(e){
+            e.stopPropagation();_ytDismissR();player.seekTo(_ytRPos,true);player.playVideo();
+          });
+        }
       }
     `;
   }
