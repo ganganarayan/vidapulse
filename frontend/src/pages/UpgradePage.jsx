@@ -4,6 +4,7 @@ import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import AppLayout from '../components/AppLayout';
 import { savePurchaseIntent } from '../lib/pixel';
+import { getLockColor } from '../components/PlanTierBadge';
 
 /**
  * UpgradePage — /upgrade
@@ -238,24 +239,24 @@ export default function UpgradePage() {
 
 function PlanCard({
   planKey, name, tagline, price, priceSuffix, features,
-  current, canUpgrade, onUpgrade, noLink,
-  accent, recommended,
+  current, canUpgrade, onUpgrade, noLink, recommended,
 }) {
-  const accentConfig = {
-    gray  : { border: 'border-gray-700/50',  badge: 'bg-gray-700/60 text-gray-300',        btn: 'bg-gray-700 text-gray-300' },
-    amber : { border: 'border-amber-500/30', badge: 'bg-amber-500/10 text-amber-300',      btn: 'bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold' },
-    indigo: { border: 'border-indigo-500/30',badge: 'bg-indigo-500/10 text-indigo-300',    btn: 'bg-indigo-500 hover:bg-indigo-400 text-white font-semibold' },
-  };
-  const cfg = accentConfig[accent] ?? accentConfig.gray;
+  // Starter=#00FFFF  Pro=#F59E0B  Free=null (gray)
+  const color = (planKey === 'starter' || planKey === 'pro') ? getLockColor(planKey) : null;
+
+  const cardBorderStyle = color && recommended
+    ? { borderColor: `${color}44`, boxShadow: `0 4px 24px -4px ${color}18` }
+    : {};
 
   return (
-    <div className={`relative flex flex-col bg-gray-800/50 border rounded-xl p-5
-                     ${recommended ? 'border-indigo-500/40 shadow-lg shadow-indigo-500/5' : cfg.border}`}>
+    <div className="relative flex flex-col bg-gray-800/50 border border-gray-700/50 rounded-xl p-5"
+         style={cardBorderStyle}>
 
-      {/* Recommended badge */}
-      {recommended && (
+      {/* Most Popular badge */}
+      {recommended && color && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <span className="px-3 py-0.5 text-[10px] font-bold bg-indigo-500 text-white rounded-full uppercase tracking-wider">
+          <span className="px-3 py-0.5 text-[10px] font-bold text-gray-900 rounded-full uppercase tracking-wider"
+                style={{ background: color }}>
             Most Popular
           </span>
         </div>
@@ -264,8 +265,15 @@ function PlanCard({
       {/* Plan name + current badge */}
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-base font-bold text-gray-100">{name}</h2>
-        {current && (
-          <span className={`px-2 py-0.5 text-[10px] font-medium border rounded-full ${cfg.badge} border-current`}>
+        {current && color && (
+          <span className="px-2 py-0.5 text-[10px] font-medium border rounded-full"
+                style={{ color, background: `${color}18`, borderColor: `${color}40` }}>
+            Current plan
+          </span>
+        )}
+        {current && !color && (
+          <span className="px-2 py-0.5 text-[10px] font-medium border rounded-full
+                           bg-gray-700/60 text-gray-300 border-gray-600/40">
             Current plan
           </span>
         )}
@@ -290,7 +298,7 @@ function PlanCard({
         ))}
       </ul>
 
-      {/* CTA — Razorpay handles both Indian and international cards */}
+      {/* CTA */}
       {current ? (
         <div className="w-full py-2 rounded-lg text-center text-xs font-medium
                         bg-gray-700/50 text-gray-500 border border-gray-700/50">
@@ -305,7 +313,10 @@ function PlanCard({
         ) : (
           <button
             onClick={onUpgrade}
-            className={`w-full py-2 rounded-lg text-sm transition-colors ${cfg.btn}`}
+            className="w-full py-2 rounded-lg text-sm font-semibold text-gray-900 transition-colors"
+            style={{ background: color ?? '#374151', color: color ? '#111827' : '#9ca3af' }}
+            onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+            onMouseLeave={e => e.currentTarget.style.filter = ''}
           >
             Upgrade to {name} →
           </button>
@@ -323,14 +334,24 @@ function PlanCard({
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function CurrentPlanBadge({ plan, displayName }) {
-  const colors = {
-    free          : 'bg-gray-700/60 text-gray-300',
-    starter       : 'bg-amber-500/10 text-amber-300',
-    pro           : 'bg-indigo-500/10 text-indigo-300',
-    admin_lifetime: 'bg-emerald-500/10 text-emerald-300',
-  };
+  const color = getLockColor(plan); // starter=#00FFFF, pro=#F59E0B, others→amber fallback
+  if (plan === 'free') {
+    return (
+      <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-gray-700/60 text-gray-300">
+        {displayName ?? plan}
+      </span>
+    );
+  }
+  if (plan === 'admin_lifetime') {
+    return (
+      <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-500/10 text-emerald-300">
+        {displayName ?? plan}
+      </span>
+    );
+  }
   return (
-    <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${colors[plan] ?? colors.free}`}>
+    <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full border"
+          style={{ color, background: `${color}18`, borderColor: `${color}33` }}>
       {displayName ?? plan}
     </span>
   );

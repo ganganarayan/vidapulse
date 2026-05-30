@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../lib/api';
 import { savePurchaseIntent }  from '../../lib/pixel';
+import { getLockColor } from '../PlanTierBadge';
 
 /**
  * UpgradeModal
@@ -140,12 +141,13 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
         {/* ── Header ─────────────────────────────────────────────── */}
         <div className="px-6 pt-6 pb-5 border-b border-gray-700">
           <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-              <LockIcon className="text-amber-500" />
+            <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
+                 style={{ background: `${getLockColor(requiredPlan)}18`, border: `1px solid ${getLockColor(requiredPlan)}33` }}>
+              <LockIcon style={{ color: getLockColor(requiredPlan) }} />
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-50">
-                Unlock Pro Features
+                Unlock {capitalize(requiredPlan)} Features
               </h2>
               <p className="text-sm text-gray-400 mt-0.5">
                 {feature === 'video_upload'
@@ -243,19 +245,7 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
 // ─────────────────────────────────────────────────────────────────────────
 
 function PlanCard({ plan, pricing, region, isHighlighted, features, singleCard, subscribing, onSubscribe }) {
-  const isPro = plan === 'pro';
-
-  const borderCls = isHighlighted
-    ? (isPro ? 'border-indigo-500' : 'border-amber-500')
-    : 'border-gray-700';
-
-  const badgeBg = isPro
-    ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
-    : 'bg-amber-500/10  text-amber-300  border-amber-500/30';
-
-  const btnCls = isPro
-    ? 'bg-indigo-500 hover:bg-indigo-400 text-white'
-    : 'bg-amber-500  hover:bg-amber-400  text-gray-900';
+  const color = getLockColor(plan); // #00FFFF starter, #F59E0B pro
 
   const priceLabel = region === 'india'
     ? (pricing?.inr_label ?? `₹${pricing?.inr ?? '—'}`)
@@ -263,15 +253,16 @@ function PlanCard({ plan, pricing, region, isHighlighted, features, singleCard, 
 
   return (
     <div
-      className={`relative rounded-xl border ${borderCls} bg-gray-900 p-5 flex flex-col gap-4
+      className={`relative rounded-xl border bg-gray-900 p-5 flex flex-col gap-4
                   ${singleCard ? 'w-full max-w-xs' : ''}`}
+      style={{ borderColor: isHighlighted ? color : '#374151' }}
     >
       {/* "Recommended" ribbon */}
       {isHighlighted && (
         <div
-          className={`absolute -top-px left-1/2 -translate-x-1/2 -translate-y-full
-                      px-3 py-0.5 text-xs font-semibold rounded-t-lg border-x border-t
-                      ${badgeBg}`}
+          className="absolute -top-px left-1/2 -translate-x-1/2 -translate-y-full
+                      px-3 py-0.5 text-xs font-semibold rounded-t-lg border-x border-t"
+          style={{ color, background: `${color}18`, borderColor: `${color}40` }}
         >
           Recommended
         </div>
@@ -306,9 +297,12 @@ function PlanCard({ plan, pricing, region, isHighlighted, features, singleCard, 
       <button
         onClick={onSubscribe}
         disabled={!!subscribing}
-        className={`w-full py-2.5 px-4 rounded-lg font-semibold text-sm transition-colors
-                    flex items-center justify-center gap-2
-                    disabled:opacity-60 disabled:cursor-not-allowed ${btnCls}`}
+        className="w-full py-2.5 px-4 rounded-lg font-semibold text-sm text-gray-900 transition-colors
+                   flex items-center justify-center gap-2
+                   disabled:opacity-60 disabled:cursor-not-allowed"
+        style={{ background: color }}
+        onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+        onMouseLeave={e => e.currentTarget.style.filter = ''}
       >
         {subscribing ? (
           <>
@@ -328,16 +322,11 @@ function PlanCard({ plan, pricing, region, isHighlighted, features, singleCard, 
 // ─────────────────────────────────────────────────────────────────────────
 
 export function PlanBadge({ plan }) {
-  if (plan === 'pro') {
-    return (
-      <span className="px-2 py-0.5 text-xs font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 rounded-full">
-        Pro
-      </span>
-    );
-  }
+  const color = getLockColor(plan);
   return (
-    <span className="px-2 py-0.5 text-xs font-medium bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded-full">
-      Starter
+    <span className="px-2 py-0.5 text-xs font-medium rounded-full border"
+          style={{ color, background: `${color}18`, borderColor: `${color}40` }}>
+      {plan === 'pro' ? 'Pro' : 'Starter'}
     </span>
   );
 }
@@ -348,11 +337,11 @@ function capitalize(str) {
 
 // ── Inline SVG icons (no icon library dependency) ─────────────────────────
 
-function LockIcon({ className = '' }) {
+function LockIcon({ className = '', style }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-      className={className}
+      className={className} style={style}
     >
       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
