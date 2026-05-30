@@ -30,7 +30,6 @@ export default function UpgradePage() {
   const [upgradeData,     setUpgradeData]     = useState(null);
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState('');
-  const [region,          setRegion]          = useState('india'); // 'india' | 'international'
 
   const load = useCallback(async () => {
     try {
@@ -74,8 +73,8 @@ export default function UpgradePage() {
     const url = buildRazorpayUrl(baseUrl, plan);
     savePurchaseIntent({
       plan,
-      currency: 'INR',
-      value   : upgradeData.pricing?.[plan]?.inr ?? (plan === 'starter' ? 999 : 1999),
+      currency: upgradeData.currency ?? 'INR',
+      value   : upgradeData.pricing?.[plan]?.price ?? (plan === 'starter' ? 999 : 1999),
     });
     window.location.href = url;
   }
@@ -97,34 +96,6 @@ export default function UpgradePage() {
             </p>
           </div>
 
-          {/* India / International toggle */}
-          {!loading && !error && (
-            <div className="flex justify-center mb-6">
-              <div className="flex items-center bg-gray-800 border border-gray-700 rounded-full p-0.5 gap-0.5">
-                <button
-                  onClick={() => setRegion('india')}
-                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    region === 'india'
-                      ? 'bg-amber-500 text-gray-900 shadow'
-                      : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  🇮🇳 India ₹
-                </button>
-                <button
-                  onClick={() => setRegion('international')}
-                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    region === 'international'
-                      ? 'bg-amber-500 text-gray-900 shadow'
-                      : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  🌍 International $
-                </button>
-              </div>
-            </div>
-          )}
-
           {loading ? (
             <LoadingSkeleton />
           ) : error ? (
@@ -140,7 +111,7 @@ export default function UpgradePage() {
                 planKey     = "free"
                 name        = "Free"
                 tagline     = "Forever free — no credit card"
-                price       = {region === 'india' ? '₹0' : '$0'}
+                price       = {upgradeData?.currency === 'USD' ? '$0' : '₹0'}
                 priceSuffix = "forever"
                 features    = {[
                   '3 videos',
@@ -159,9 +130,7 @@ export default function UpgradePage() {
                 planKey          = "starter"
                 name             = "Starter"
                 tagline          = "For creators growing their audience"
-                price            = {region === 'india'
-                  ? (upgradeData?.pricing?.starter?.inr_label ?? '₹999')
-                  : (upgradeData?.pricing?.starter?.usd_label ?? '$15')}
+                price            = {upgradeData?.pricing?.starter?.price_label ?? '₹999'}
                 priceSuffix      = "/ month"
                 features         = {[
                   '10 videos',
@@ -183,9 +152,7 @@ export default function UpgradePage() {
                 planKey          = "pro"
                 name             = "Pro"
                 tagline          = "For any serious business, B2B or B2C, to scale through video marketing"
-                price            = {region === 'india'
-                  ? (upgradeData?.pricing?.pro?.inr_label ?? '₹1,999')
-                  : (upgradeData?.pricing?.pro?.usd_label ?? '$29')}
+                price            = {upgradeData?.pricing?.pro?.price_label ?? '₹1,999'}
                 priceSuffix      = "/ month"
                 features         = {[
                   '20 videos',
