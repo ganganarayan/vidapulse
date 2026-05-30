@@ -20,11 +20,34 @@
 const express = require('express');
 const router  = express.Router();
 const logger  = require('../config/logger');
+const geoip   = require('geoip-lite');
 
 const { requireAuth }  = require('../middleware/requireAuth');
 const { emitEvent }    = require('../services/behavioralEventService');
 const { getVisiblePromotionVideos } = require('../services/promotionService');
 const { startedAt }    = require('../config/serverInfo');
+
+/** Extract real client IP, honouring Cloudflare and reverse-proxy headers */
+function getClientIp(req) {
+  const cf = req.headers['cf-connecting-ip'];
+  if (cf) return cf.trim();
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) return xff.split(',')[0].trim();
+  return req.ip || null;
+}
+
+/** Returns true if the request originates from India; defaults to true on lookup failure */
+function isIndianUser(req) {
+  const ip   = getClientIp(req);
+  if (!ip) return true;
+  const ipv4 = ip.replace(/^::ffff:/i, '');
+  try {
+    const geo = geoip.lookup(ipv4);
+    return geo?.country === 'IN';
+  } catch {
+    return true;
+  }
+}
 
 // ── Route modules ─────────────────────────────────────────
 const healthRoutes    = require('./health');
@@ -95,16 +118,27 @@ router.get('/upgrade', requireAuth, async (req, res, next) => {
       upgrade_options = []; // pro / admin_lifetime — already at top
     }
 
-    const env = require('../config/env');
+    const env    = require('../config/env');
+    const india  = isIndianUser(req);
+    const currency = india ? 'INR' : 'USD';
 
     return res.json({
       current_plan       : plan,
       videos_count       : parseInt(stats.video_count, 10),
       total_plays_to_date: parseInt(stats.total_plays_to_date, 10),
       upgrade_options,
+      currency,          // 'INR' | 'USD' — derived from request IP
       pricing: {
-        starter: { inr: 999,  usd: 15, inr_label: '₹999',   usd_label: '$15', video_limit: 10   },
-        pro    : { inr: 1999, usd: 29, inr_label: '₹1,999', usd_label: '$29', video_limit: 20   },
+        starter: {
+          inr: 999,  usd: 15, inr_label: '₹999',   usd_label: '$15', video_limit: 10,
+          price      : india ? 999  : 15,
+          price_label: india ? '₹999'   : '$15',
+        },
+        pro: {
+          inr: 1999, usd: 29, inr_label: '₹1,999', usd_label: '$29', video_limit: 20,
+          price      : india ? 1999 : 29,
+          price_label: india ? '₹1,999' : '$29',
+        },
       },
       // Razorpay: static payment-link URLs for INR one-time / subscription entry
       razorpay_links: {

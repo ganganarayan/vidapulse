@@ -60,7 +60,6 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
   const [loading,      setLoading]      = useState(true);
   const [subscribing,  setSubscribing]  = useState(null); // plan key being subscribed
   const [subError,     setSubError]     = useState('');
-  const [region,       setRegion]       = useState('india'); // 'india' | 'international'
 
   // Fetch live pricing + upgrade options
   useEffect(() => {
@@ -159,34 +158,8 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
           </div>
         </div>
 
-        {/* ── Region toggle + Plan cards ──────────────────────────── */}
+        {/* ── Plan cards ──────────────────────────── */}
         <div className="px-6 pb-2 pt-2">
-          {/* India / International toggle */}
-          <div className="flex justify-center mb-5">
-            <div className="flex items-center bg-gray-900/60 border border-gray-700 rounded-full p-0.5 gap-0.5">
-              <button
-                onClick={() => setRegion('india')}
-                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  region === 'india'
-                    ? 'bg-amber-500 text-gray-900 shadow'
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                🇮🇳 India ₹
-              </button>
-              <button
-                onClick={() => setRegion('international')}
-                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  region === 'international'
-                    ? 'bg-amber-500 text-gray-900 shadow'
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                🌍 International $
-              </button>
-            </div>
-          </div>
-
           {subError && (
             <div className="mb-3 px-4 py-2.5 bg-red-500/10 border border-red-500/20 rounded-lg">
               <p className="text-xs text-red-400">{subError}</p>
@@ -204,7 +177,6 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
                   key={plan}
                   plan={plan}
                   pricing={upgradeData?.pricing?.[plan]}
-                  region={region}
                   isHighlighted={plan === requiredPlan}
                   features={PLAN_FEATURES[plan] ?? []}
                   singleCard={isSingleCard}
@@ -222,11 +194,6 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
             Free plan is free forever — no credit card required.{' '}
             Upgrades are processed securely via Razorpay.
           </p>
-          {region === 'international' && (
-            <p className="text-xs text-amber-500/70 mt-1">
-              International cards accepted — billed in INR via Razorpay.
-            </p>
-          )}
           <p className="text-xs text-gray-500 mt-1.5">
             Need more than 20 videos?{' '}
             <a href="mailto:support@vidapulse.in" className="text-amber-400 hover:text-amber-300 transition-colors">
@@ -244,12 +211,11 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
 // PlanCard
 // ─────────────────────────────────────────────────────────────────────────
 
-function PlanCard({ plan, pricing, region, isHighlighted, features, singleCard, subscribing, onSubscribe }) {
+function PlanCard({ plan, pricing, isHighlighted, features, singleCard, subscribing, onSubscribe }) {
   const color = getLockColor(plan); // #00FFFF starter, #F59E0B pro
 
-  const priceLabel = region === 'india'
-    ? (pricing?.inr_label ?? `₹${pricing?.inr ?? '—'}`)
-    : (pricing?.usd_label ?? `$${pricing?.usd ?? '—'}`);
+  // price_label is set by the backend based on the user's IP (INR for India, USD otherwise)
+  const priceLabel = pricing?.price_label ?? pricing?.inr_label ?? `₹${pricing?.inr ?? '—'}`;
 
   return (
     <div
