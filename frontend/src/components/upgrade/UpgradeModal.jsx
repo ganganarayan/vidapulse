@@ -55,27 +55,29 @@ const PLAN_FEATURES = {
 
 // ─────────────────────────────────────────────────────────────────────────
 
+/** Default pricing shown immediately — API call updates currency/price in background */
+function defaultUpgradeData(currentPlan) {
+  return {
+    currency       : 'INR',
+    upgrade_options: currentPlan === 'starter' ? ['pro'] : ['starter', 'pro'],
+    pricing: {
+      starter: { price_label: '₹999',   price: 999,  inr: 999,  usd: 15, video_limit: 10 },
+      pro    : { price_label: '₹1,999', price: 1999, inr: 1999, usd: 29, video_limit: 20 },
+    },
+  };
+}
+
 export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClose }) {
-  const [upgradeData,  setUpgradeData]  = useState(null);
-  const [loading,      setLoading]      = useState(true);
+  const [upgradeData,  setUpgradeData]  = useState(() => defaultUpgradeData(currentPlan));
   const [subscribing,  setSubscribing]  = useState(null); // plan key being subscribed
   const [subError,     setSubError]     = useState('');
 
-  // Fetch live pricing + upgrade options
+  // Fetch live pricing in background — updates price_label (INR vs USD) without blocking render
   useEffect(() => {
     api.get('/upgrade')
       .then(res => setUpgradeData(res.data))
-      .catch(() => {
-        setUpgradeData({
-          upgrade_options : currentPlan === 'starter' ? ['pro'] : ['starter', 'pro'],
-          pricing: {
-            starter: { inr: 999,  usd: 15, inr_label: '₹999',  usd_label: '$15', video_limit: 10 },
-            pro    : { inr: 1999, usd: 29, inr_label: '₹1,999', usd_label: '$29', video_limit: 20 },
-          },
-        });
-      })
-      .finally(() => setLoading(false));
-  }, [currentPlan]);
+      .catch(() => {}); // keep defaults on failure
+  }, []);
 
   // Create Razorpay subscription on-the-fly and redirect
   async function handleSubscribe(plan) {
@@ -85,8 +87,8 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
       const { data } = await api.post('/payments/subscribe', { plan });
       savePurchaseIntent({
         plan,
-        currency: 'INR',
-        value   : plan === 'starter' ? 999 : 1999,
+        currency: upgradeData.currency ?? 'INR',
+        value   : upgradeData.pricing?.[plan]?.price ?? (plan === 'starter' ? 999 : 1999),
       });
       window.location.href = data.paymentUrl;
     } catch (err) {
@@ -109,7 +111,7 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
   }, []);
 
   const featureLabel = FEATURE_LABELS[feature] ?? feature;
-  const options      = upgradeData?.upgrade_options ?? [];
+  const options      = upgradeData.upgrade_options;
   const isSingleCard = options.length === 1;
 
   return createPortal(
@@ -166,26 +168,20 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
             </div>
           )}
 
-          {loading ? (
-            <div className="flex items-center justify-center py-10">
-              <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : (
-            <div className={`${isSingleCard ? 'flex justify-center' : 'grid grid-cols-1 sm:grid-cols-2 gap-4'}`}>
-              {options.map(plan => (
-                <PlanCard
-                  key={plan}
-                  plan={plan}
-                  pricing={upgradeData?.pricing?.[plan]}
-                  isHighlighted={plan === requiredPlan}
-                  features={PLAN_FEATURES[plan] ?? []}
-                  singleCard={isSingleCard}
-                  subscribing={subscribing === plan}
-                  onSubscribe={() => handleSubscribe(plan)}
-                />
-              ))}
-            </div>
-          )}
+          <div className={`${isSingleCard ? 'flex justify-center' : 'grid grid-cols-1 sm:grid-cols-2 gap-4'}`}>
+            {options.map(plan => (
+              <PlanCard
+                key={plan}
+                plan={plan}
+                pricing={upgradeData.pricing?.[plan]}
+                isHighlighted={plan === requiredPlan}
+                features={PLAN_FEATURES[plan] ?? []}
+                singleCard={isSingleCard}
+                subscribing={subscribing === plan}
+                onSubscribe={() => handleSubscribe(plan)}
+              />
+            ))}
+          </div>
         </div>
 
         {/* ── Footer ─────────────────────────────────────────────── */}
