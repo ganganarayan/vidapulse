@@ -50,12 +50,32 @@ app.use(helmet({
 }));
 
 // ── CORS ─────────────────────────────────────────────────────
-// In production: only allow requests from vidapulse.in domains.
-// In development: allow everything (for local testing with curl/Postman).
-const allowedOrigins = env.NODE_ENV === 'production'
-  ? ['https://app.vidapulse.in', 'https://vidapulse.in', 'https://www.vidapulse.in',
-     'https://orbitq.vidapulse.in']
-  : '*';
+// Derives allowed origins from APP_URL so no code change is needed
+// when the domain changes. E.g. APP_URL=https://app.vidapulse.io
+// → allows app / root / www / orbitq on that domain automatically.
+// Also keeps .in origins during any transition period.
+function buildAllowedOrigins() {
+  try {
+    const base = new URL(env.APP_URL); // e.g. https://app.vidapulse.io
+    const host = base.hostname.replace(/^[^.]+\./, ''); // vidapulse.io
+    const proto = base.protocol; // https:
+    return [
+      `${proto}//app.${host}`,
+      `${proto}//${host}`,
+      `${proto}//www.${host}`,
+      `${proto}//orbitq.${host}`,
+      // Keep .in origins during transition
+      'https://app.vidapulse.in',
+      'https://vidapulse.in',
+      'https://www.vidapulse.in',
+      'https://orbitq.vidapulse.in',
+    ];
+  } catch {
+    return ['https://app.vidapulse.in', 'https://vidapulse.in'];
+  }
+}
+
+const allowedOrigins = env.NODE_ENV === 'production' ? buildAllowedOrigins() : '*';
 
 app.use(cors({
   origin     : allowedOrigins,
@@ -103,8 +123,8 @@ app.use('/api', routes);
 // Static file serving in production
 //
 // Domain routing (checked via req.hostname):
-//   vidapulse.in / www.vidapulse.in  →  landing/index.html (marketing page)
-//   app.vidapulse.in                 →  frontend/dist/     (React dashboard)
+//   vidapulse.io / www.vidapulse.io  →  landing/index.html (marketing page)
+//   app.vidapulse.io                 →  frontend/dist/     (React dashboard)
 //   localhost / unknown              →  React dashboard (dev fallback)
 //
 // Railway runs a single service on one port, so both domains point to the
@@ -114,7 +134,10 @@ app.use('/api', routes);
 if (env.NODE_ENV === 'production') {
   const landingDir     = path.join(__dirname, '../../landing');
   const frontendDist   = path.join(__dirname, '../../frontend/dist');
-  const landingDomains = new Set(['vidapulse.in', 'www.vidapulse.in']);
+  // Build landing domains from APP_URL (e.g. vidapulse.io + www.vidapulse.io)
+  // plus keep .in entries during transition
+  const _appHost       = (() => { try { return new URL(env.APP_URL).hostname.replace(/^[^.]+\./, ''); } catch { return 'vidapulse.in'; } })();
+  const landingDomains = new Set([_appHost, `www.${_appHost}`, 'vidapulse.in', 'www.vidapulse.in']);
 
   // Serve landing page static assets (CSS, images, favicon, etc.)
   // Only for requests on the marketing domain
