@@ -178,8 +178,8 @@ export default function UpgradeModal() {
           </p>
           <p className="text-xs text-gray-500">
             Need more than 20 videos?{' '}
-            <a href="mailto:support@vidapulse.in" className="text-amber-400 hover:text-amber-300 transition-colors">
-              Contact support@vidapulse.in
+            <a href="mailto:support@vidapulse.io" className="text-amber-400 hover:text-amber-300 transition-colors">
+              Contact support@vidapulse.io
             </a>
           </p>
         </div>

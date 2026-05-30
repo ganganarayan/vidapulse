@@ -7,7 +7,7 @@
  * Usage — paste once before </body>:
  *
  *   <script
- *     src="https://app.vidapulse.in/tracker.js"
+ *     src="https://app.vidapulse.io/tracker.js"
  *     data-video-id="YOUR_VIDEO_UUID"
  *     async
  *   ></script>
@@ -34,7 +34,7 @@
 
   // ── Config ────────────────────────────────────────────────────────────
 
-  var API_BASE = 'https://app.vidapulse.in/api/analytics';
+  var API_BASE = 'https://app.vidapulse.io/api/analytics';
   var HEARTBEAT_INTERVAL_MS = 10000; // 10 s between progress pings
   var VIEWER_COOKIE_KEY     = 'vp_viewer_id';
   var MAX_INTERVALS_PER_PING = 300;  // cap heatmap payload size

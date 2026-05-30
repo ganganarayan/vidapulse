@@ -35,9 +35,9 @@ export default function HelpPage() {
           </p>
           <p className="text-sm text-gray-500 mt-1">
             Questions? Email us at{' '}
-            <a href="mailto:support@vidapulse.in"
+            <a href="mailto:support@vidapulse.io"
                className="text-amber-400 hover:text-amber-300 transition-colors">
-              support@vidapulse.in
+              support@vidapulse.io
             </a>
           </p>
         </div>
@@ -81,9 +81,9 @@ export default function HelpPage() {
               <p className="text-sm font-semibold text-amber-400 mb-1">Still need help?</p>
               <p className="text-xs text-gray-400 leading-relaxed">
                 Email us at{' '}
-                <a href="mailto:support@vidapulse.in"
+                <a href="mailto:support@vidapulse.io"
                    className="text-amber-400 hover:text-amber-300 transition-colors font-medium">
-                  support@vidapulse.in
+                  support@vidapulse.io
                 </a>
                 {' '}— we're happy to walk you through anything.
               </p>

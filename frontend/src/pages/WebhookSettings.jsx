@@ -264,7 +264,7 @@ export default function WebhookSettings() {
                 spellCheck="false"
                 value={notifUrl}
                 onChange={e => setNotifUrl(e.target.value)}
-                placeholder="https://login.vidapulse.in/api/automations/…/execute"
+                placeholder="https://login.vidapulse.io/api/automations/…/execute"
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5
                            text-sm text-gray-100 placeholder-gray-600
                            focus:outline-none focus:border-red-500/60 transition-colors"
@@ -549,7 +549,7 @@ export default function WebhookSettings() {
                 spellCheck="false"
                 value={passResetUrl}
                 onChange={e => setPassResetUrl(e.target.value)}
-                placeholder="https://login.vidapulse.in/api/automations/…/execute"
+                placeholder="https://login.vidapulse.io/api/automations/…/execute"
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5
                            text-sm text-gray-100 placeholder-gray-600
                            focus:outline-none focus:border-amber-500/60 transition-colors"
@@ -581,7 +581,7 @@ export default function WebhookSettings() {
           <p className="text-xs text-gray-400 mb-5">
             Razorpay webhook URL to configure:{' '}
             <code className="text-amber-500/80 text-[11px] select-all">
-              https://app.vidapulse.in/api/payments/razorpay
+              https://app.vidapulse.io/api/payments/razorpay
             </code>
             {' '}— subscribe to <code className="text-gray-400 text-[11px]">payment_link.paid</code> and{' '}
             <code className="text-gray-400 text-[11px]">payment.captured</code>.

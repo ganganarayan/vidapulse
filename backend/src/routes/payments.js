@@ -28,14 +28,14 @@
  *       subscription.cancelled, subscription.completed → clear subscription
  *
  * Razorpay Dashboard → Settings → Webhooks:
- *   URL:    https://app.vidapulse.in/api/payments/razorpay
+ *   URL:    https://app.vidapulse.io/api/payments/razorpay
  *   Events: payment_link.paid, payment.captured,
  *           subscription.charged, subscription.halted,
  *           subscription.cancelled, subscription.completed
  *
  * Return URLs (Razorpay redirects here after payment):
- *   https://app.vidapulse.in/payment/starter
- *   https://app.vidapulse.in/payment/pro
+ *   https://app.vidapulse.io/payment/starter
+ *   https://app.vidapulse.io/payment/pro
  */
 
 const express = require('express');

@@ -27,7 +27,7 @@
  *     feature      : 'heatmap',
  *     required_plan: 'pro',
  *     current_plan : 'free',
- *     upgrade_url  : 'https://app.vidapulse.in/upgrade'
+ *     upgrade_url  : 'https://app.vidapulse.io/upgrade'
  *   }
  */
 
