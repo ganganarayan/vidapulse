@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth }    from '../contexts/AuthContext';
 import { useUpgrade } from '../contexts/UpgradeContext';
+import { getLockColor, PadLockIcon } from './PlanTierBadge';
 
 /**
  * FeatureGate
@@ -8,12 +9,9 @@ import { useUpgrade } from '../contexts/UpgradeContext';
  * Renders children if the user's plan meets `required`.
  * Otherwise renders a centred "locked" card with an upgrade CTA.
  *
- * Usage (inside a page that already has <AppLayout>):
- *   <AppLayout>
- *     <FeatureGate required="pro" feature="Events">
- *       <actual page content />
- *     </FeatureGate>
- *   </AppLayout>
+ * Lock color comes from getLockColor(required):
+ *   Starter feature → cyan  #00FFFF
+ *   Pro feature     → amber #F59E0B
  *
  * Props:
  *   required  — 'starter' | 'pro'
@@ -46,26 +44,33 @@ export default function FeatureGate({ required = 'pro', feature = '', children }
   // Plan qualifies — render normally
   if (userRank >= requiredRank) return children;
 
-  const copy = COPY[required] ?? COPY.pro;
+  const copy      = COPY[required] ?? COPY.pro;
+  const lockColor = getLockColor(required);
 
   return (
     <div className="flex-1 flex items-center justify-center p-10 min-h-0">
       <div className="max-w-sm w-full text-center">
 
         {/* Lock icon */}
-        <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gray-800/80 border border-gray-700
-                        flex items-center justify-center">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
-            className="text-gray-400">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
+        <div
+          className="w-16 h-16 mx-auto mb-6 rounded-2xl flex items-center justify-center"
+          style={{
+            background  : `${lockColor}18`,
+            border      : `1px solid ${lockColor}33`,
+          }}
+        >
+          <PadLockIcon size={28} color={lockColor} />
         </div>
 
         {/* Badge */}
-        <span className="inline-block px-3 py-1 mb-4 text-xs font-bold text-amber-300
-                         bg-amber-500/10 border border-amber-500/25 rounded-full uppercase tracking-wider">
+        <span
+          className="inline-block px-3 py-1 mb-4 text-xs font-bold rounded-full uppercase tracking-wider"
+          style={{
+            color       : lockColor,
+            background  : `${lockColor}18`,
+            border      : `1px solid ${lockColor}33`,
+          }}
+        >
           {copy.badge}
         </span>
 
@@ -82,15 +87,20 @@ export default function FeatureGate({ required = 'pro', feature = '', children }
         {/* CTA */}
         <button
           onClick={() => showUpgrade(required)}
-          className="px-7 py-2.5 bg-amber-500 hover:bg-amber-400 text-gray-900
-                     text-sm font-bold rounded-lg transition-colors shadow-lg shadow-amber-500/20"
+          className="px-7 py-2.5 text-gray-900 text-sm font-bold rounded-lg transition-colors"
+          style={{
+            background : lockColor,
+            boxShadow  : `0 8px 20px -4px ${lockColor}44`,
+          }}
+          onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+          onMouseLeave={e => e.currentTarget.style.filter = ''}
         >
           {copy.cta} →
         </button>
 
         {/* Plan reminder */}
         <p className="mt-4 text-xs text-gray-400">
-          You are on the <span className="text-gray-400 font-medium capitalize">{user?.plan_display_name ?? user?.plan ?? 'Free'}</span> plan
+          You are on the <span className="font-medium text-gray-300 capitalize">{user?.plan_display_name ?? user?.plan ?? 'Free'}</span> plan
         </p>
 
       </div>

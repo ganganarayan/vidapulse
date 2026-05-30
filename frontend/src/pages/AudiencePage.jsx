@@ -5,6 +5,7 @@ import AppLayout        from '../components/AppLayout';
 import { useAuth }      from '../contexts/AuthContext';
 import { useUpgrade }   from '../contexts/UpgradeContext';
 import api              from '../lib/api';
+import { getLockColor, PadLockIcon } from '../components/PlanTierBadge';
 
 /**
  * AudiencePage — /audience
@@ -312,9 +313,14 @@ function GatedTablePrompt({ onUpgrade, plan }) {
         ))}
 
         {/* Overlay */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/70 backdrop-blur-[1px] gap-3 px-4 text-center">
-          <span className="inline-block px-3 py-1 text-xs font-bold text-amber-300
-                           bg-amber-500/10 border border-amber-500/25 rounded-full uppercase tracking-wider">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/70 backdrop-blur-[1px] gap-2.5 px-4 text-center">
+          {/* Lock icon */}
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+               style={{ background: `${getLockColor('starter')}18`, border: `1px solid ${getLockColor('starter')}33` }}>
+            <PadLockIcon size={18} color={getLockColor('starter')} />
+          </div>
+          <span className="inline-block px-3 py-1 text-xs font-bold rounded-full uppercase tracking-wider"
+                style={{ color: getLockColor('starter'), background: `${getLockColor('starter')}18`, border: `1px solid ${getLockColor('starter')}33` }}>
             Starter Feature
           </span>
           <p className="text-sm text-gray-300 max-w-xs">
@@ -322,13 +328,15 @@ function GatedTablePrompt({ onUpgrade, plan }) {
           </p>
           <button
             onClick={onUpgrade}
-            className="mt-1 px-6 py-2 bg-amber-500 hover:bg-amber-400 text-gray-900
-                       text-sm font-bold rounded-lg transition-colors shadow-lg shadow-amber-500/20"
+            className="mt-1 px-6 py-2 text-gray-900 text-sm font-bold rounded-lg transition-colors"
+            style={{ background: getLockColor('starter') }}
+            onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+            onMouseLeave={e => e.currentTarget.style.filter = ''}
           >
             Upgrade to Starter →
           </button>
           <p className="text-xs text-gray-400">
-            You are on the <span className="text-gray-400 capitalize">{plan ?? 'Free'}</span> plan
+            You are on the <span className="font-medium text-gray-300 capitalize">{plan ?? 'Free'}</span> plan
           </p>
         </div>
       </div>

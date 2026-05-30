@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import UpgradeModal, { PlanBadge } from './UpgradeModal';
+import { getLockColor } from '../PlanTierBadge';
 
 /**
  * FeatureWall
@@ -55,6 +56,7 @@ export default function FeatureWall({
 
   const featureLabel = FEATURE_LABELS[feature] ?? feature;
   const planDesc     = PLAN_DESCRIPTIONS[requiredPlan] ?? requiredPlan;
+  const lockColor    = getLockColor(requiredPlan);
 
   return (
     <>
@@ -81,13 +83,16 @@ export default function FeatureWall({
         >
           <div
             className="bg-gray-800 border border-gray-700 rounded-xl px-6 py-5
-                       mx-4 text-center shadow-2xl max-w-xs w-full
-                       group-hover:border-amber-500/40 transition-colors duration-200"
+                       mx-4 text-center shadow-2xl max-w-xs w-full transition-colors duration-200"
+          style={{ '--tw-border-opacity': 1 }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = `${lockColor}66`}
+          onMouseLeave={e => e.currentTarget.style.borderColor = ''}
           >
             {/* Lock icon */}
             <div className="flex justify-center mb-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                <LockIcon className="text-amber-500" />
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                   style={{ background: `${lockColor}1a`, border: `1px solid ${lockColor}33` }}>
+                <LockIcon style={{ color: lockColor }} />
               </div>
             </div>
 
@@ -109,8 +114,8 @@ export default function FeatureWall({
             {/* CTA chip */}
             <span
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5
-                         bg-amber-500 text-gray-900 text-xs font-semibold rounded-lg
-                         group-hover:bg-amber-400 transition-colors duration-200"
+                         text-gray-900 text-xs font-semibold rounded-lg transition-colors duration-200"
+              style={{ background: lockColor }}
             >
               <UnlockIcon />
               Unlock this feature
@@ -136,11 +141,11 @@ function capitalize(str) {
   return str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
 }
 
-function LockIcon({ className = '' }) {
+function LockIcon({ style }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-      className={className}
+      style={style}
     >
       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />

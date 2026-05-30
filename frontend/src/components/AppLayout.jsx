@@ -8,6 +8,7 @@ import { useUpgrade }          from '../contexts/UpgradeContext';
 import { useWebhookAlerts }    from '../hooks/useWebhookAlerts';
 import ExpiryReminderBanner    from './ExpiryReminderBanner';
 import api                     from '../lib/api';
+import { getLockColor }        from './PlanTierBadge';
 
 /**
  * AppLayout — persistent left sidebar + content area.
@@ -202,7 +203,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
       >
         <span className="flex-shrink-0 w-4 h-4">{icon}</span>
         <span className="flex-1 truncate">{label}</span>
-        {locked && <LockIcon />}
+        {locked && <LockIcon color={getLockColor(requiredPlan)} />}
       </button>
     );
   }
@@ -382,7 +383,7 @@ function RevenueIcon()      { return I(<><line x1="12" y1="1" x2="12" y2="23"/><
 function UpgradeIcon()      { return I(<><polyline points="17 11 12 6 7 11"/><line x1="12" y1="6" x2="12" y2="18"/></>); }
 function BillingIcon()      { return I(<><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></>); }
 function BackIcon()         { return I(<><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>); }
-function LockIcon()         { return (<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>); }
+function LockIcon({ color = '#F59E0B' }) { return (<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>); }
 
 // Video-context metric icons
 function PlaysIcon()    { return I(<><polygon points="5 3 19 12 5 21 5 3"/></>); }

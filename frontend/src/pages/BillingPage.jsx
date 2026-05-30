@@ -3,6 +3,7 @@ import { useAuth }    from '../contexts/AuthContext';
 import { useUpgrade } from '../contexts/UpgradeContext';
 import AppLayout      from '../components/AppLayout';
 import api            from '../lib/api';
+import { getLockColor } from '../components/PlanTierBadge';
 
 /**
  * BillingPage — /billing
@@ -13,10 +14,11 @@ import api            from '../lib/api';
  * redirects to the Razorpay invoice page.
  */
 
-const PLAN_COLORS = {
-  starter: 'bg-amber-500/10 text-amber-300 border-amber-500/25',
-  pro    : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/25',
-};
+// Plan badge colors: Starter=#00FFFF  Pro=#F59E0B
+function planBadgeStyle(planKey) {
+  const c = getLockColor(planKey);
+  return { color: c, background: `${c}18`, borderColor: `${c}33` };
+}
 
 export default function BillingPage() {
   const { user }              = useAuth();
@@ -95,9 +97,10 @@ export default function BillingPage() {
               {(plan === 'free' || plan === 'starter') && !isAdmin && (
                 <button
                   onClick={() => showUpgrade(plan === 'free' ? 'starter' : 'pro')}
-                  className="flex-shrink-0 px-4 py-2 text-xs font-semibold
-                             bg-amber-500 hover:bg-amber-400 text-gray-900
-                             rounded-lg transition-colors"
+                  className="flex-shrink-0 px-4 py-2 text-xs font-semibold text-gray-900 rounded-lg transition-colors"
+                  style={{ background: getLockColor(plan === 'free' ? 'starter' : 'pro') }}
+                  onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+                  onMouseLeave={e => e.currentTarget.style.filter = ''}
                 >
                   {plan === 'free' ? 'Upgrade plan' : 'Upgrade to Pro'}
                 </button>
@@ -206,7 +209,7 @@ function PaymentRow({ payment }) {
   const hasInvoice = !!payment.razorpay_payment_id;
 
   const planLabel = payment.plan === 'starter' ? 'Starter' : 'Pro';
-  const planColor = PLAN_COLORS[payment.plan] ?? 'bg-gray-700/60 text-gray-300 border-gray-600';
+  const planColor = planBadgeStyle(payment.plan);
 
   return (
     <div className="grid grid-cols-[1fr_90px_110px_110px_32px] gap-3 px-5 py-3.5
@@ -217,8 +220,9 @@ function PaymentRow({ payment }) {
         <span className="text-sm text-gray-200 font-medium flex-shrink-0 tabular-nums">
           {formatDate(payment.paid_at)}
         </span>
-        <span className={`hidden sm:inline-block px-2 py-0.5 text-[10px] font-semibold
-                          border rounded-full flex-shrink-0 ${planColor}`}>
+        <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-semibold
+                          border rounded-full flex-shrink-0"
+              style={planColor}>
           {planLabel}
         </span>
       </div>
@@ -308,14 +312,24 @@ function formatDate(iso) {
 }
 
 function PlanBadge({ plan, displayName }) {
-  const classes = {
-    free          : 'bg-gray-700/60 text-gray-200 border-gray-600',
-    starter       : 'bg-amber-500/15 text-amber-300 border-amber-500/40',
-    pro           : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40',
-    admin_lifetime: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40',
-  };
+  if (plan === 'free') {
+    return (
+      <span className="px-3 py-1 text-sm font-semibold border rounded-full bg-gray-700/60 text-gray-200 border-gray-600">
+        {displayName ?? plan}
+      </span>
+    );
+  }
+  if (plan === 'admin_lifetime') {
+    return (
+      <span className="px-3 py-1 text-sm font-semibold border rounded-full bg-emerald-500/15 text-emerald-300 border-emerald-500/40">
+        {displayName ?? plan}
+      </span>
+    );
+  }
+  const color = getLockColor(plan);
   return (
-    <span className={`px-3 py-1 text-sm font-semibold border rounded-full ${classes[plan] ?? classes.free}`}>
+    <span className="px-3 py-1 text-sm font-semibold border rounded-full"
+          style={{ color, background: `${color}18`, borderColor: `${color}40` }}>
       {displayName ?? plan}
     </span>
   );

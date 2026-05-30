@@ -3,6 +3,10 @@ import { useUpgrade }        from '../contexts/UpgradeContext';
 import { useAuth }           from '../contexts/AuthContext';
 import api                   from '../lib/api';
 import { savePurchaseIntent } from '../lib/pixel';
+import { getLockColor }       from './PlanTierBadge';
+
+// Plan color: Starter=#00FFFF  Pro=#F59E0B  (single source of truth)
+function planColor(planKey) { return getLockColor(planKey); }
 
 /**
  * UpgradeModal
@@ -101,10 +105,10 @@ export default function UpgradeModal() {
       />
 
       {/* Modal panel */}
-      <div className="relative w-full max-w-3xl bg-gray-900 border border-gray-700/60 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-2xl bg-gray-900 border border-gray-700/60 rounded-2xl shadow-2xl overflow-y-auto max-h-[92vh]">
 
         {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-800 flex items-start justify-between">
+        <div className="px-5 py-3 border-b border-gray-800 flex items-start justify-between">
           <div>
             <h2 className="text-lg font-bold text-gray-100">Upgrade your plan</h2>
             <p className="text-sm text-gray-400 mt-0.5">
@@ -131,7 +135,7 @@ export default function UpgradeModal() {
         )}
 
         {/* Plan cards */}
-        <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
 
           {/* Starter */}
           <PlanCard
@@ -144,7 +148,6 @@ export default function UpgradeModal() {
             isFocused   = {upgradeTarget === 'starter'}
             canUpgrade  = {currentPlan === 'free'}
             loading     = {loading === 'starter'}
-            accent      = "amber"
             onSubscribe = {() => handleSubscribe('starter')}
           />
 
@@ -159,7 +162,6 @@ export default function UpgradeModal() {
             isFocused   = {upgradeTarget === 'pro'}
             canUpgrade  = {currentPlan === 'free' || currentPlan === 'starter'}
             loading     = {loading === 'pro'}
-            accent      = "indigo"
             recommended = {currentPlan === 'free' || currentPlan === 'starter'}
             onSubscribe = {() => handleSubscribe('pro')}
           />
@@ -167,7 +169,7 @@ export default function UpgradeModal() {
         </div>
 
         {/* Fine print */}
-        <div className="px-6 pb-5 text-center space-y-1">
+        <div className="px-5 pb-3 text-center space-y-0.5">
           <p className="text-xs text-gray-500 font-medium">
             Your card will be charged every month until you cancel.
           </p>
@@ -191,32 +193,23 @@ export default function UpgradeModal() {
 
 function PlanCard({
   planKey, name, tagline, price, features,
-  current, isFocused, canUpgrade, loading, accent, recommended, onSubscribe,
+  current, isFocused, canUpgrade, loading, recommended, onSubscribe,
 }) {
-  const accentConfig = {
-    amber : {
-      border : 'border-amber-500/40',
-      badge  : 'bg-amber-500/10 text-amber-300 border-amber-500/30',
-      btn    : 'bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold',
-      ring   : 'ring-2 ring-amber-500/30',
-    },
-    indigo: {
-      border : 'border-indigo-500/40',
-      badge  : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30',
-      btn    : 'bg-indigo-500 hover:bg-indigo-400 text-white font-semibold',
-      ring   : 'ring-2 ring-indigo-500/30',
-    },
-  };
-  const cfg = accentConfig[accent];
+  const color = planColor(planKey); // #00FFFF for starter, #F59E0B for pro
+
+  const cardStyle = isFocused
+    ? { borderColor: `${color}66`, boxShadow: `0 0 0 2px ${color}22` }
+    : {};
 
   return (
-    <div className={`relative flex flex-col bg-gray-800/60 border rounded-xl p-5 transition-all
-                     ${isFocused ? `${cfg.border} ${cfg.ring}` : 'border-gray-700/50'}`}>
+    <div className="relative flex flex-col bg-gray-800/60 border border-gray-700/50 rounded-xl p-5 transition-all"
+         style={cardStyle}>
 
-      {/* Recommended badge */}
+      {/* "Most Popular" badge */}
       {recommended && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <span className="px-3 py-0.5 text-[10px] font-bold bg-indigo-500 text-white rounded-full uppercase tracking-wider shadow">
+          <span className="px-3 py-0.5 text-[10px] font-bold text-gray-900 rounded-full uppercase tracking-wider shadow"
+                style={{ background: color }}>
             Most Popular
           </span>
         </div>
@@ -226,7 +219,8 @@ function PlanCard({
       <div className="flex items-center justify-between mb-1">
         <h3 className="text-base font-bold text-gray-100">{name}</h3>
         {current && (
-          <span className={`px-2 py-0.5 text-[10px] font-medium border rounded-full ${cfg.badge}`}>
+          <span className="px-2 py-0.5 text-[10px] font-medium border rounded-full"
+                style={{ color, background: `${color}18`, borderColor: `${color}40` }}>
             Current plan
           </span>
         )}
@@ -260,10 +254,12 @@ function PlanCard({
         <button
           onClick={onSubscribe}
           disabled={!!loading}
-          className={`w-full py-2.5 rounded-lg text-sm transition-colors
-                      flex items-center justify-center gap-2
-                      disabled:opacity-60 disabled:cursor-not-allowed
-                      ${cfg.btn}`}
+          className="w-full py-2.5 rounded-lg text-sm font-semibold text-gray-900 transition-colors
+                     flex items-center justify-center gap-2
+                     disabled:opacity-60 disabled:cursor-not-allowed"
+          style={{ background: color }}
+          onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+          onMouseLeave={e => e.currentTarget.style.filter = ''}
         >
           {loading ? (
             <>
