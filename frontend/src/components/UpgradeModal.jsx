@@ -105,10 +105,10 @@ export default function UpgradeModal() {
       />
 
       {/* Modal panel */}
-      <div className="relative w-full max-w-3xl bg-gray-900 border border-gray-700/60 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-2xl bg-gray-900 border border-gray-700/60 rounded-2xl shadow-2xl overflow-y-auto max-h-[92vh]">
 
         {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-800 flex items-start justify-between">
+        <div className="px-5 py-3 border-b border-gray-800 flex items-start justify-between">
           <div>
             <h2 className="text-lg font-bold text-gray-100">Upgrade your plan</h2>
             <p className="text-sm text-gray-400 mt-0.5">
@@ -135,7 +135,7 @@ export default function UpgradeModal() {
         )}
 
         {/* Plan cards */}
-        <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
 
           {/* Starter */}
           <PlanCard
@@ -169,7 +169,7 @@ export default function UpgradeModal() {
         </div>
 
         {/* Fine print */}
-        <div className="px-6 pb-5 text-center space-y-1">
+        <div className="px-5 pb-3 text-center space-y-0.5">
           <p className="text-xs text-gray-500 font-medium">
             Your card will be charged every month until you cancel.
           </p>
