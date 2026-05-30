@@ -64,11 +64,6 @@ function buildAllowedOrigins() {
       `${proto}//${host}`,
       `${proto}//www.${host}`,
       `${proto}//orbitq.${host}`,
-      // Keep .in origins during transition
-      'https://app.vidapulse.in',
-      'https://vidapulse.in',
-      'https://www.vidapulse.in',
-      'https://orbitq.vidapulse.in',
     ];
   } catch {
     return ['https://app.vidapulse.in', 'https://vidapulse.in'];
@@ -137,7 +132,7 @@ if (env.NODE_ENV === 'production') {
   // Build landing domains from APP_URL (e.g. vidapulse.io + www.vidapulse.io)
   // plus keep .in entries during transition
   const _appHost       = (() => { try { return new URL(env.APP_URL).hostname.replace(/^[^.]+\./, ''); } catch { return 'vidapulse.in'; } })();
-  const landingDomains = new Set([_appHost, `www.${_appHost}`, 'vidapulse.in', 'www.vidapulse.in']);
+  const landingDomains = new Set([_appHost, `www.${_appHost}`]);
 
   // Serve landing page static assets (CSS, images, favicon, etc.)
   // Only for requests on the marketing domain
