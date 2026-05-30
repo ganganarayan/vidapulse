@@ -66,7 +66,7 @@ function buildAllowedOrigins() {
       `${proto}//orbitq.${host}`,
     ];
   } catch {
-    return ['https://app.vidapulse.in', 'https://vidapulse.in'];
+    return ['https://app.vidapulse.io', 'https://vidapulse.io'];
   }
 }
 
@@ -131,7 +131,7 @@ if (env.NODE_ENV === 'production') {
   const frontendDist   = path.join(__dirname, '../../frontend/dist');
   // Build landing domains from APP_URL (e.g. vidapulse.io + www.vidapulse.io)
   // plus keep .in entries during transition
-  const _appHost       = (() => { try { return new URL(env.APP_URL).hostname.replace(/^[^.]+\./, ''); } catch { return 'vidapulse.in'; } })();
+  const _appHost       = (() => { try { return new URL(env.APP_URL).hostname.replace(/^[^.]+\./, ''); } catch { return 'vidapulse.io'; } })();
   const landingDomains = new Set([_appHost, `www.${_appHost}`]);
 
   // Serve landing page static assets (CSS, images, favicon, etc.)

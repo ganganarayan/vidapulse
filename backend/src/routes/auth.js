@@ -655,7 +655,7 @@ router.get('/oauth/google/callback', async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 
 function _frontendUrl() {
-  // Production: same origin (app.vidapulse.in)
+  // Production: same origin (app.vidapulse.io)
   // Development: Vite dev server on port 5173
   return env.NODE_ENV === 'production' ? env.APP_URL : 'http://localhost:5173';
 }

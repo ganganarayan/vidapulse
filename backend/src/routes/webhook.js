@@ -61,7 +61,7 @@ const createUserSchema = z.object({
 
 /**
  * Creates a subscriber account when divineleads.guru fires a webhook
- * after a successful signup on vidapulse.in.
+ * after a successful signup on vidapulse.io.
  *
  * Flow:
  *   1. webhookAuth validates x-webhook-secret header
@@ -71,7 +71,7 @@ const createUserSchema = z.object({
  * Idempotent: safe to retry — returns 200 (not 201) if user already exists.
  *
  * Example request from divineleads.guru:
- *   POST https://app.vidapulse.in/api/webhook/create-user
+ *   POST https://app.vidapulse.io/api/webhook/create-user
  *   x-webhook-secret: <WEBHOOK_SECRET>
  *   Content-Type: application/json
  *   {

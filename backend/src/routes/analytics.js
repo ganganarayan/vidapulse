@@ -695,7 +695,7 @@ router.get('/cta/link/:ctaId', async (req, res) => {
 // CTA tracking link — no JavaScript required on the subscriber's page.
 //
 // The subscriber sets their CTA button's href/URL to:
-//   https://app.vidapulse.in/api/analytics/cta/VIDEO_ID?to=https://their-page.com
+//   https://app.vidapulse.io/api/analytics/cta/VIDEO_ID?to=https://their-page.com
 //
 // This endpoint:
 //   1. Validates the video exists

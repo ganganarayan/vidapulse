@@ -207,7 +207,7 @@ async function getOrCreatePlan(planKey) {
  *
  * @param {{ id: string, name: string, email: string, phone?: string }} user
  * @param {'starter'|'pro'} planKey
- * @param {string} returnUrl  URL to redirect to after payment (e.g. https://app.vidapulse.in/payment/starter)
+ * @param {string} returnUrl  URL to redirect to after payment (e.g. https://app.vidapulse.io/payment/starter)
  * @returns {Promise<{ subscriptionId: string, paymentUrl: string }>}
  */
 async function createSubscription(user, planKey, returnUrl) {
