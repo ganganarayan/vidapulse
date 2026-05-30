@@ -469,7 +469,6 @@ function MetricCard({ label, value, format, visible, accent, className = '', onC
     >
       <p className="text-[11px] text-gray-300 uppercase tracking-wider font-semibold mb-2 leading-tight flex items-center gap-1.5">
         <span className="flex-1 truncate">{label}</span>
-        {requiredPlan && <PlanCrown plan={requiredPlan} size={14} userPlan={userPlan} />}
       </p>
       <p className="text-3xl font-bold text-gray-50 tabular-nums">
         {isNull
@@ -479,7 +478,9 @@ function MetricCard({ label, value, format, visible, accent, className = '', onC
       </p>
       <p className="text-[10px] mt-1.5 leading-snug">
         {locked
-          ? <span className="text-amber-400 font-medium">Upgrade to {requiredPlan} →</span>
+          ? <span className="font-medium" style={{ color: requiredPlan === 'pro' ? '#f97316' : '#00FFFF' }}>
+              Upgrade to {requiredPlan} →
+            </span>
           : <span className="text-gray-400">{subtitle ?? 'View details →'}</span>
         }
       </p>

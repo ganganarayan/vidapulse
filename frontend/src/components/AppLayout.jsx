@@ -8,7 +8,6 @@ import { useUpgrade }          from '../contexts/UpgradeContext';
 import { useWebhookAlerts }    from '../hooks/useWebhookAlerts';
 import ExpiryReminderBanner    from './ExpiryReminderBanner';
 import api                     from '../lib/api';
-import { PlanCrown }           from './PlanTierBadge';
 
 /**
  * AppLayout — persistent left sidebar + content area.
@@ -203,7 +202,6 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
       >
         <span className="flex-shrink-0 w-4 h-4">{icon}</span>
         <span className="flex-1 truncate">{label}</span>
-        {requiredPlan && <PlanCrown plan={requiredPlan} size={16} userPlan={user?.plan} />}
         {locked && <LockIcon />}
       </button>
     );
@@ -305,7 +303,6 @@ function SidebarItem({ to, icon, label, active, coming = false, badge = null, pl
     <>
       <span className="flex-shrink-0 w-4 h-4">{icon}</span>
       <span className="flex-1 truncate">{label}</span>
-      {plan && <PlanCrown plan={plan} size={16} userPlan={userPlan} />}
       {badge != null && (
         <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white
                          text-[10px] font-bold flex items-center justify-center leading-none">
