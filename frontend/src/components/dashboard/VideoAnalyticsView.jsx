@@ -15,7 +15,7 @@ import BrowsersSection             from './BrowsersSection';
 import IndividualViewerSection     from './IndividualViewerSection';
 import TrafficSourcesSection       from './TrafficSourcesSection';
 import DomainsSection              from './DomainsSection';
-import PlanTierBadge, { PlanCrown } from '../PlanTierBadge';
+import PlanTierBadge, { PlanCrown, getLockColor, PadLockIcon } from '../PlanTierBadge';
 import { useUpgrade }          from '../../contexts/UpgradeContext';
 
 /**
@@ -478,7 +478,8 @@ function MetricCard({ label, value, format, visible, accent, className = '', onC
       </p>
       <p className="text-[10px] mt-1.5 leading-snug">
         {locked
-          ? <span className="font-medium" style={{ color: requiredPlan === 'pro' ? '#f97316' : '#00FFFF' }}>
+          ? <span className="font-medium inline-flex items-center gap-1" style={{ color: getLockColor(requiredPlan) }}>
+              <PadLockIcon size={9} color={getLockColor(requiredPlan)} />
               Upgrade to {requiredPlan} →
             </span>
           : <span className="text-gray-400">{subtitle ?? 'View details →'}</span>

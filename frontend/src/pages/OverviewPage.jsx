@@ -319,10 +319,9 @@ function LockedHeatmap({ onUpgrade }) {
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3
                       bg-gray-950/50 backdrop-blur-[1px] rounded-2xl">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-             style={{ background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.3)' }}>
+             style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)' }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            style={{ color: '#f97316' }}>
+            stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
@@ -332,10 +331,10 @@ function LockedHeatmap({ onUpgrade }) {
           <p className="text-xs text-gray-400 mt-0.5">See exactly where viewers drop off · Pro feature</p>
         </div>
         <button onClick={onUpgrade}
-          className="px-4 py-1.5 text-white text-xs font-semibold rounded-lg transition-colors"
-          style={{ background: '#f97316' }}
-          onMouseEnter={e => e.currentTarget.style.background = '#fb923c'}
-          onMouseLeave={e => e.currentTarget.style.background = '#f97316'}>
+          className="px-4 py-1.5 text-gray-900 text-xs font-semibold rounded-lg transition-colors"
+          style={{ background: '#F59E0B' }}
+          onMouseEnter={e => e.currentTarget.style.background = '#FBBF24'}
+          onMouseLeave={e => e.currentTarget.style.background = '#F59E0B'}>
           Upgrade to Pro →
         </button>
       </div>
