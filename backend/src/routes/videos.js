@@ -37,6 +37,8 @@ const { fetchDuration }          = require('../services/durationService');
  */
 const IFRAME_SOURCES  = new Set(['youtube', 'vimeo', 'loom', 'zoom', 'google_drive']);
 const DIRECT_SOURCES  = new Set(['hls_stream', 'mp4_direct', 'amazon_s3', 'azure_blob']);
+// Sources that need server-side URL resolution at creation time
+const RESOLVE_SOURCES = new Set(['veed', 'mega']);
 
 /**
  * Detect the source_type ENUM value from a video URL.
@@ -56,6 +58,8 @@ function detectSourceType(rawUrl) {
     if (host === 'onedrive.live.com' || host === '1drv.ms') return 'onedrive';
     if (host.endsWith('.amazonaws.com') || host === 's3.amazonaws.com') return 'amazon_s3';
     if (host.endsWith('.blob.core.windows.net'))             return 'azure_blob';
+    if (host === 'veed.io' || host.endsWith('.veed.io'))    return 'veed';
+    if (host === 'mega.nz')                                  return 'mega';
 
     const ext = pathname.split('.').pop().toLowerCase();
     if (['mp4', 'webm', 'mov', 'avi', 'mkv', 'flv'].includes(ext)) return 'mp4_direct';
@@ -83,6 +87,8 @@ function generateDefaultTitle(rawUrl) {
     if (host === 'zoom.us'  || host.endsWith('.zoom.us'))  return 'Zoom Recording';
     if (host === 'drive.google.com')                    return 'Google Drive Video';
     if (host === 'dropbox.com')                         return 'Dropbox Video';
+    if (host === 'veed.io' || host.endsWith('.veed.io')) return 'Veed Video';
+    if (host === 'mega.nz')                              return 'Mega Video';
 
     // Fall back to the last path segment, cleaned up
     const segments = pathname.split('/').filter(Boolean);
@@ -98,6 +104,67 @@ function generateDefaultTitle(rawUrl) {
     return 'My Video';
   } catch {
     return 'My Video';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// URL resolvers for veed.io and mega.nz
+// Returns { playableUrl, notPublic }
+// ─────────────────────────────────────────────────────────────────────────
+
+const RESOLVE_TIMEOUT_MS = 6000;
+
+async function resolveVeedUrl(url) {
+  try {
+    const { pathname } = new URL(url);
+    // Accept /view/UUID or /view/UUID/any-title-slug
+    const match = pathname.match(/\/view\/([a-f0-9-]{8,})/i);
+    if (!match) return { playableUrl: null, notPublic: true };
+
+    const videoId  = match[1];
+    const embedUrl = `https://www.veed.io/embed/${videoId}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), RESOLVE_TIMEOUT_MS);
+    try {
+      const resp = await fetch(url, {
+        method : 'GET',
+        signal : controller.signal,
+        redirect: 'follow',
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; VidaPulse/1.0; +https://vidapulse.com)' },
+      });
+      clearTimeout(timer);
+      // Veed redirects private/workspace videos to /workspaces or /login
+      const finalUrl = resp.url || '';
+      const notPublic = !resp.ok || finalUrl.includes('/workspaces') || finalUrl.includes('/login');
+      return { playableUrl: embedUrl, notPublic };
+    } catch {
+      clearTimeout(timer);
+      // Network error or timeout — flag not_public so user sees the warning
+      return { playableUrl: embedUrl, notPublic: true };
+    }
+  } catch {
+    return { playableUrl: null, notPublic: true };
+  }
+}
+
+function resolveMegaUrl(url) {
+  try {
+    const parsed = new URL(url);
+    // Supported path forms: /file/HASH, /video/HASH, /embed/HASH
+    const pathMatch = parsed.pathname.match(/\/(file|video|embed)\/([A-Za-z0-9_-]+)/);
+    if (!pathMatch) return { playableUrl: null, notPublic: true };
+
+    const fileId = pathMatch[2];
+    const key    = parsed.hash; // '#KEY' — needed for client-side decryption
+
+    // Without the decryption key the file is completely inaccessible
+    if (!key || key.length < 5) return { playableUrl: null, notPublic: true };
+
+    const embedUrl = `https://mega.nz/embed/${fileId}${key}`;
+    return { playableUrl: embedUrl, notPublic: false };
+  } catch {
+    return { playableUrl: null, notPublic: true };
   }
 }
 
@@ -122,6 +189,7 @@ router.get('/', requireAuth, async (req, res, next) => {
               v.unique_viewers,
               v.avg_watch_pct,
               v.processing_status,
+              v.processing_error,
               v.insight_status,
               v.story_status,
               v.primary_drop_off_second,
@@ -231,12 +299,28 @@ router.post('/', requireAuth, videoLimitGate, async (req, res, next) => {
 
     // Sources that need no server-side processing — mark as completed
     // immediately so the frontend skips the animation and shows the dashboard.
-    const isIframe         = IFRAME_SOURCES.has(sourceType);
-    const isDirect         = DIRECT_SOURCES.has(sourceType);
-    const isReadyNow       = isIframe || isDirect;
-    const processingStatus = isReadyNow ? 'completed' : 'pending';
-    const playableUrl      = isReadyNow ? url : null;
-    const usingIframe      = isIframe;
+    const isIframe   = IFRAME_SOURCES.has(sourceType);
+    const isDirect   = DIRECT_SOURCES.has(sourceType);
+    const isResolve  = RESOLVE_SOURCES.has(sourceType);
+
+    let processingStatus = 'pending';
+    let processingError  = null;
+    let playableUrl      = null;
+    let usingIframe      = isIframe;
+
+    if (isIframe || isDirect) {
+      processingStatus = 'completed';
+      playableUrl      = url;
+    } else if (isResolve) {
+      const resolved = sourceType === 'veed'
+        ? await resolveVeedUrl(url)
+        : resolveMegaUrl(url);
+
+      playableUrl      = resolved.playableUrl;
+      processingStatus = resolved.notPublic ? 'failed' : 'completed';
+      processingError  = resolved.notPublic ? 'not_public' : null;
+      usingIframe      = !resolved.notPublic;
+    }
 
     // ── Fetch duration (non-blocking, best-effort) ────────────────────────
     // Run before the INSERT so the value is available immediately in the
@@ -250,20 +334,20 @@ router.post('/', requireAuth, videoLimitGate, async (req, res, next) => {
     const { rows: [video] } = await pool.query(
       `INSERT INTO videos
          (user_id, title, original_url, source_type,
-          processing_status, using_iframe_fallback, playable_url,
+          processing_status, processing_error, using_iframe_fallback, playable_url,
           duration_seconds,
           insight_status, story_status)
        VALUES
-         ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', 'pending')
+         ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', 'pending')
        RETURNING
          id, title, original_url, source_type, playable_url, thumbnail_url,
          duration_seconds,
          total_plays, unique_viewers, avg_watch_pct,
-         processing_status, using_iframe_fallback,
+         processing_status, processing_error, using_iframe_fallback,
          insight_status, story_status,
          created_at`,
-      [req.user.id, videoTitle, url, sourceType, processingStatus, usingIframe, playableUrl,
-       durationSeconds ?? null]
+      [req.user.id, videoTitle, url, sourceType, processingStatus, processingError,
+       usingIframe, playableUrl, durationSeconds ?? null]
     );
 
     logger.info(`[videos] Created video ${video.id} (${sourceType}) for user ${req.user.id}`);
@@ -302,6 +386,26 @@ router.post('/', requireAuth, videoLimitGate, async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ── GET /api/videos/archived — archived videos list ───────────────────────────
+router.get('/archived', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT v.id, v.title, v.description, v.original_url, v.source_type,
+              v.thumbnail_url, v.duration_seconds, v.total_plays, v.unique_viewers,
+              v.processing_status, v.is_archived, v.created_at, v.updated_at,
+              0 AS total_views, 0 AS unique_views, 0 AS total_viewers, 0 AS unique_session_viewers
+       FROM   videos v
+       WHERE  v.user_id     = $1
+         AND  v.is_active   = TRUE
+         AND  v.is_archived = TRUE
+       ORDER  BY v.updated_at DESC
+       LIMIT  100`,
+      [req.user.id]
+    );
+    return res.json({ videos: rows });
+  } catch (err) { next(err); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -525,6 +629,27 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 router.patch('/:id/archive', requireAuth, async (req, res, next) => {
   try {
     const { archive } = req.body;           // true = archive, false = restore
+    const { rows: [planRow] } = await pool.query(
+      `SELECT p.video_limit, p.archive_limit,
+              (SELECT COUNT(*) FROM videos WHERE user_id=$1 AND is_active=TRUE AND is_archived=FALSE)::int AS live_count,
+              (SELECT COUNT(*) FROM videos WHERE user_id=$1 AND is_active=TRUE AND is_archived=TRUE)::int  AS archive_count
+       FROM users u JOIN plans p ON p.id = u.plan_id
+       WHERE u.id = $1`,
+      [req.user.id]
+    );
+
+    if (archive) {
+      // Archiving: archive slot must not be full
+      if (planRow.archive_limit !== null && planRow.archive_count >= planRow.archive_limit) {
+        return res.status(403).json({ error: 'archive_limit' });
+      }
+    } else {
+      // Restoring: live slot must not be full
+      if (planRow.video_limit !== null && planRow.live_count >= planRow.video_limit) {
+        return res.status(403).json({ error: 'plan_limit' });
+      }
+    }
+
     const { rowCount } = await pool.query(
       `UPDATE videos
        SET    is_archived = $1,
@@ -540,23 +665,41 @@ router.patch('/:id/archive', requireAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ── GET /api/videos/archived — archived videos list ───────────────────────────
-router.get('/archived', requireAuth, async (req, res, next) => {
+// ── POST /api/videos/:id/recheck — re-verify public accessibility ────────────
+router.post('/:id/recheck', requireAuth, async (req, res, next) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT v.id, v.title, v.description, v.original_url, v.source_type,
-              v.thumbnail_url, v.duration_seconds, v.total_plays, v.unique_viewers,
-              v.processing_status, v.is_archived, v.created_at, v.updated_at,
-              0 AS total_views, 0 AS unique_views, 0 AS total_viewers, 0 AS unique_session_viewers
-       FROM   videos v
-       WHERE  v.user_id     = $1
-         AND  v.is_active   = TRUE
-         AND  v.is_archived = TRUE
-       ORDER  BY v.updated_at DESC
-       LIMIT  100`,
-      [req.user.id]
+    const { rows: [video] } = await pool.query(
+      `SELECT id, original_url, source_type FROM videos WHERE id=$1 AND user_id=$2 AND is_active=TRUE`,
+      [req.params.id, req.user.id]
     );
-    return res.json({ videos: rows });
+    if (!video) return res.status(404).json({ error: 'Video not found' });
+    if (!RESOLVE_SOURCES.has(video.source_type)) {
+      return res.status(400).json({ error: 'Recheck not supported for this source type' });
+    }
+
+    const resolved = video.source_type === 'veed'
+      ? await resolveVeedUrl(video.original_url)
+      : resolveMegaUrl(video.original_url);
+
+    const { rows: [updated] } = await pool.query(
+      `UPDATE videos
+       SET processing_status      = $1,
+           processing_error       = $2,
+           playable_url           = $3,
+           using_iframe_fallback  = $4,
+           updated_at             = NOW()
+       WHERE id = $5
+       RETURNING id, processing_status, processing_error, playable_url`,
+      [
+        resolved.notPublic ? 'failed' : 'completed',
+        resolved.notPublic ? 'not_public' : null,
+        resolved.playableUrl,
+        !resolved.notPublic,
+        video.id,
+      ]
+    );
+    logger.info(`[videos] Recheck ${video.id} (${video.source_type}): ${resolved.notPublic ? 'still not public' : 'now public'}`);
+    return res.json({ video: updated });
   } catch (err) { next(err); }
 });
 
@@ -833,7 +976,10 @@ async function fetchPlayerSettings(videoId) {
        WHERE  video_id = $1`,
       [videoId]
     );
-    return row ? { ...PLAYER_DEFAULTS, ...row } : { ...PLAYER_DEFAULTS };
+    if (!row) return { ...PLAYER_DEFAULTS };
+    // Strip null values so DB nulls never override the defaults
+    const cleaned = Object.fromEntries(Object.entries(row).filter(([, v]) => v != null));
+    return { ...PLAYER_DEFAULTS, ...cleaned };
   } catch (_) {
     return { ...PLAYER_DEFAULTS };
   }
@@ -846,7 +992,7 @@ async function fetchPlayerSettings(videoId) {
 router.get('/:id/player-settings', requireAuth, async (req, res, next) => {
   try {
     const { rows: [video] } = await pool.query(
-      `SELECT id FROM videos WHERE id=$1 AND user_id=$2 AND is_active=TRUE`,
+      `SELECT id FROM videos WHERE id=$1 AND user_id=$2`,
       [req.params.id, req.user.id]
     );
     if (!video) return res.status(404).json({ error: 'Video not found' });
@@ -864,36 +1010,43 @@ router.get('/:id/player-settings', requireAuth, async (req, res, next) => {
 // The frontend always sends the full settings object on any toggle change.
 // ─────────────────────────────────────────────────────────────────────────
 
+// Coerce null → undefined so DB nulls in boolean columns never fail validation
+const nullBool = z.boolean().nullish().transform(v => v ?? undefined);
+
 const playerSettingsSchema = z.object({
-  autoplay              : z.boolean().optional(),
-  autoplay_muted        : z.boolean().optional(),
-  show_seek_bar         : z.boolean().optional(),
-  show_play_pause_btn   : z.boolean().optional(),
-  show_playback_speed   : z.boolean().optional(),
-  show_fullscreen_btn   : z.boolean().optional(),
-  show_volume_control   : z.boolean().optional(),
-  show_rewind_forward   : z.boolean().optional(),
-  resume_playback       : z.boolean().optional(),
-  loop                  : z.boolean().optional(),
-  accent_color          : z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  autoplay              : nullBool,
+  autoplay_muted        : nullBool,
+  show_seek_bar         : nullBool,
+  show_play_pause_btn   : nullBool,
+  show_playback_speed   : nullBool,
+  show_fullscreen_btn   : nullBool,
+  show_volume_control   : nullBool,
+  show_rewind_forward   : nullBool,
+  resume_playback       : nullBool,
+  loop                  : nullBool,
+  accent_color          : z.string().regex(/^#[0-9a-fA-F]{6}$/).nullish().transform(v => v ?? undefined),
 });
 
 router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
   try {
     const parseResult = playerSettingsSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ error: 'Validation failed', fields: parseResult.error.flatten().fieldErrors });
+      const fieldErrors = parseResult.error.flatten().fieldErrors;
+      logger.error(`[player-settings] validation failed for video ${req.params.id}: ${JSON.stringify(fieldErrors)}`);
+      return res.status(400).json({ error: 'Validation failed', message: 'Invalid settings values', fields: fieldErrors });
     }
 
+    // Check ownership only — is_active not required (settings can be edited regardless)
     const { rows: [video] } = await pool.query(
-      `SELECT id FROM videos WHERE id=$1 AND user_id=$2 AND is_active=TRUE`,
+      `SELECT id FROM videos WHERE id=$1 AND user_id=$2`,
       [req.params.id, req.user.id]
     );
-    if (!video) return res.status(404).json({ error: 'Video not found' });
+    if (!video) return res.status(404).json({ error: 'Video not found', message: 'Video not found' });
 
     // Merge incoming with current defaults, then upsert the full row
     const existing = await fetchPlayerSettings(req.params.id);
     const merged   = { ...existing, ...parseResult.data };
+    if (!merged.accent_color) merged.accent_color = PLAYER_DEFAULTS.accent_color;
 
     // Note: no user_id in INSERT — CHECK constraint forbids video_id + user_id both non-null.
     await pool.query(

@@ -167,8 +167,9 @@ async function videoLimitGate(req, res, next) {
     const { rows } = await pool.query(
       `SELECT COUNT(*) AS video_count
        FROM   videos
-       WHERE  user_id  = $1
-         AND  is_active = TRUE`,
+       WHERE  user_id     = $1
+         AND  is_active   = TRUE
+         AND  is_archived = FALSE`,
       [req.user.id]
     );
 
