@@ -440,7 +440,7 @@ export default function WebhookSettings() {
           </p>
 
           {/* Live counters */}
-          <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="grid grid-cols-3 sm:grid-cols-3 gap-2 sm:gap-3 mb-6">
             <StatTile label="Fires this hour"  value={firesThisHr}                    accent="amber"   />
             <StatTile label="Queue depth"       value={queueDepth}                    accent="indigo"  />
             <StatTile label="Governor cap"      value={`${governor?.hourly_cap ?? 25}/hr`} accent="gray" />
@@ -580,7 +580,7 @@ export default function WebhookSettings() {
           </p>
           <p className="text-xs text-gray-400 mb-5">
             Razorpay webhook URL to configure:{' '}
-            <code className="text-amber-500/80 text-[11px] select-all">
+            <code className="text-amber-500/80 text-xs sm:text-[11px] select-all">
               https://app.vidapulse.io/api/payments/razorpay
             </code>
             {' '}— subscribe to <code className="text-gray-400 text-[11px]">payment_link.paid</code> and{' '}

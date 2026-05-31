@@ -12,16 +12,59 @@ import { getLockColor }        from './PlanTierBadge';
 
 /**
  * AppLayout — persistent left sidebar + content area.
+ * On mobile the sidebar becomes a hamburger-triggered drawer overlay.
  * Used by all authenticated pages EXCEPT VideoDetail (which uses VideoLayout).
  */
 export default function AppLayout({ children }) {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const location = useLocation();
+
+  // Close drawer on route change
+  useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
+
   return (
     <div className="min-h-screen bg-gray-900 flex">
-      <AppSidebar />
+      {/* ── Mobile drawer backdrop ── */}
+      {drawerOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+          onClick={() => setDrawerOpen(false)}
+        />
+      )}
+
+      {/* ── Sidebar — hidden on mobile unless drawer open ── */}
+      <div className={`
+        fixed inset-y-0 left-0 z-40 w-56 flex-shrink-0
+        transform transition-transform duration-200 ease-in-out
+        md:relative md:translate-x-0 md:z-auto
+        ${drawerOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        <AppSidebar onClose={() => setDrawerOpen(false)} />
+      </div>
+
+      {/* ── Main content ── */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        {/* Mobile top bar with hamburger */}
+        <div className="md:hidden flex items-center gap-3 px-4 py-3 border-b border-gray-800 bg-gray-900 flex-shrink-0">
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="text-gray-400 hover:text-gray-200 transition-colors p-1 -ml-1"
+            aria-label="Open menu"
+          >
+            <HamburgerIcon />
+          </button>
+          <Link to="/dashboard" className="flex items-center gap-1.5">
+            <span className="text-amber-500 text-lg leading-none select-none">{'▶︎'}</span>
+            <span className="text-sm font-bold text-amber-500 tracking-tight">VidaPulse</span>
+          </Link>
+          <div className="ml-auto">
+            <ThemeToggle />
+          </div>
+        </div>
+
         <ExpiryReminderBanner />
         {children}
-        <div className="flex-shrink-0 border-t border-gray-800/60 px-6 py-2 text-center">
+        <div className="flex-shrink-0 border-t border-gray-800/60 px-4 py-2 text-center">
           <p className="text-[11px] text-gray-400">
             Need help?{' '}
             <a href="mailto:support@vidapulse.io"
@@ -39,7 +82,7 @@ export default function AppLayout({ children }) {
 // AppSidebar — global nav (no video context)
 // ─────────────────────────────────────────────────────────────────────────
 
-function AppSidebar() {
+function AppSidebar({ onClose }) {
   const { user, isImpersonating } = useAuth();
   const { showUpgrade }           = useUpgrade();
   const location = useLocation();
@@ -49,13 +92,11 @@ function AppSidebar() {
 
   const isAdmin = user?.role === 'admin' || user?.plan === 'admin_lifetime';
 
-  // Poll webhook alert status for admins — shows OS notification + toast on new failure
+  // Poll webhook alert status for admins
   const webhookAlerts = useWebhookAlerts({ enabled: isAdmin });
-  const prevPausedRef  = useRef(null); // null = "not yet seen first result"
+  const prevPausedRef  = useRef(null);
   useEffect(() => {
-    if (webhookAlerts.loading) return; // wait for first result
-    // prevPausedRef.current === null means this is the first result from the server:
-    // don't fire a toast for a pre-existing pause (user already knows about it)
+    if (webhookAlerts.loading) return;
     const isNewPause = prevPausedRef.current === false && webhookAlerts.paused;
     if (isNewPause) {
       showToast(
@@ -79,14 +120,24 @@ function AppSidebar() {
   }
 
   return (
-    <aside className="w-56 flex-shrink-0 border-r border-gray-800 flex flex-col bg-gray-900">
+    <aside className="w-56 h-full border-r border-gray-800 flex flex-col bg-gray-900">
       {/* Logo */}
       <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
         <Link to="/dashboard" className="flex items-center gap-2 group">
           <span className="text-amber-500 text-xl leading-none select-none">{'▶︎'}</span>
           <span className="text-base font-bold text-amber-500 tracking-tight">VidaPulse</span>
         </Link>
-        <ThemeToggle />
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          {/* Close button — mobile only */}
+          <button
+            onClick={onClose}
+            className="md:hidden ml-1 text-gray-500 hover:text-gray-300 transition-colors p-1"
+            aria-label="Close menu"
+          >
+            <CloseIcon />
+          </button>
+        </div>
       </div>
 
       {/* Navigation */}
@@ -108,7 +159,7 @@ function AppSidebar() {
         <SidebarItem to="/integrations"  icon={<IntegrationsIcon />} label="Integrations"   active={active('/integrations')} />
         <SidebarItem to="/help"          icon={<HelpIcon />}         label="Help & Support" active={active('/help')} />
 
-        {/* Upgrade CTA — only shown to free and starter users */}
+        {/* Upgrade CTA */}
         {user && (user.plan === 'free' || user.plan === 'starter') && (
           <button
             onClick={() => showUpgrade(user.plan === 'free' ? 'starter' : 'pro')}
@@ -168,7 +219,7 @@ function AppSidebar() {
 // VideoSidebar — video-context left panel shown in VideoDetail
 // ─────────────────────────────────────────────────────────────────────────
 
-export function VideoSidebar({ video, activeView, onViewChange, user }) {
+export function VideoSidebar({ video, activeView, onViewChange, user, drawerOpen, onClose }) {
   const navigate       = useNavigate();
   const isAdmin        = user?.role === 'admin' || user?.plan === 'admin_lifetime';
   const isPro          = ['pro','admin_lifetime'].includes(user?.plan);
@@ -191,6 +242,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
         onClick={() => {
           if (locked) { showUpgrade(requiredPlan); return; }
           onViewChange(view);
+          if (onClose) onClose();
         }}
         title={locked ? `Upgrade to ${requiredPlan} to access` : label}
         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left
@@ -209,7 +261,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
   }
 
   return (
-    <aside className="w-56 flex-shrink-0 border-r border-gray-800 flex flex-col bg-gray-900">
+    <aside className="w-56 h-full border-r border-gray-800 flex flex-col bg-gray-900">
       {/* Logo / back */}
       <div className="px-4 py-4 border-b border-gray-800 flex items-center gap-2">
         <button
@@ -223,7 +275,18 @@ export function VideoSidebar({ video, activeView, onViewChange, user }) {
           <span className="text-amber-500 text-lg leading-none select-none flex-shrink-0">{'▶︎'}</span>
           <span className="text-sm font-bold text-amber-500 tracking-tight truncate">VidaPulse</span>
         </Link>
-        <ThemeToggle className="flex-shrink-0" />
+        <div className="flex items-center gap-1">
+          <ThemeToggle className="flex-shrink-0" />
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="md:hidden text-gray-500 hover:text-gray-300 transition-colors p-1"
+              aria-label="Close menu"
+            >
+              <CloseIcon />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Video title */}
@@ -349,7 +412,7 @@ function PlanChip({ plan, displayName }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Icons (16×16, stroke-based)
+// Icons
 // ─────────────────────────────────────────────────────────────────────────
 
 const I = (paths) => (
@@ -359,14 +422,30 @@ const I = (paths) => (
   </svg>
 );
 
+function HamburgerIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <line x1="3" y1="12" x2="21" y2="12"/>
+      <line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"/>
+      <line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  );
+}
+
 function GridIcon()         { return I(<><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></>); }
 function AudienceIcon()     { return I(<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>); }
 function VideoIcon()        { return I(<><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></>); }
-function ListIcon()         { return I(<><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></>); }
-function ChartBarIcon()     { return I(<><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></>); }
-function UsersIcon()        { return I(<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>); }
-function ActivityIcon()     { return I(<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>); }
-function HeatmapIcon()      { return I(<><rect x="3" y="3" width="4" height="4" rx="1"/><rect x="10" y="3" width="4" height="4" rx="1"/><rect x="17" y="3" width="4" height="4" rx="1"/><rect x="3" y="10" width="4" height="4" rx="1"/><rect x="10" y="10" width="4" height="4" rx="1"/><rect x="17" y="10" width="4" height="4" rx="1"/><rect x="3" y="17" width="4" height="4" rx="1"/><rect x="10" y="17" width="4" height="4" rx="1"/><rect x="17" y="17" width="4" height="4" rx="1"/></>); }
 function FunnelIcon()       { return I(<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>); }
 function CtaIcon()          { return I(<><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/></>); }
 function EventsIcon()       { return I(<><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>); }
@@ -375,6 +454,7 @@ function BellIcon()         { return I(<><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 
 function SettingsIcon()     { return I(<><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></>); }
 function IntegrationsIcon() { return I(<><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></>); }
 function HelpIcon()         { return I(<><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></>); }
+function UsersIcon()        { return I(<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>); }
 function WebhookIcon()      { return I(<path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11A2.99 2.99 0 0 0 18 8a3 3 0 1 0 0-6 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81A3 3 0 0 0 6 9a3 3 0 1 0 0 6 3 3 0 0 0 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65a3 3 0 1 0 3-3z"/>); }
 function HeartIcon()        { return I(<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>); }
 function LogIcon()          { return I(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></>); }
@@ -384,6 +464,7 @@ function UpgradeIcon()      { return I(<><polyline points="17 11 12 6 7 11"/><li
 function BillingIcon()      { return I(<><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></>); }
 function BackIcon()         { return I(<><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>); }
 function LockIcon({ color = '#F59E0B' }) { return (<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>); }
+function HeatmapIcon()      { return I(<><rect x="3" y="3" width="4" height="4" rx="1"/><rect x="10" y="3" width="4" height="4" rx="1"/><rect x="17" y="3" width="4" height="4" rx="1"/><rect x="3" y="10" width="4" height="4" rx="1"/><rect x="10" y="10" width="4" height="4" rx="1"/><rect x="17" y="10" width="4" height="4" rx="1"/><rect x="3" y="17" width="4" height="4" rx="1"/><rect x="10" y="17" width="4" height="4" rx="1"/><rect x="17" y="17" width="4" height="4" rx="1"/></>); }
 
 // Video-context metric icons
 function PlaysIcon()    { return I(<><polygon points="5 3 19 12 5 21 5 3"/></>); }

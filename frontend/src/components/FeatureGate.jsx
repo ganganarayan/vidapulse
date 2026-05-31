@@ -48,7 +48,7 @@ export default function FeatureGate({ required = 'pro', feature = '', children }
   const lockColor = getLockColor(required);
 
   return (
-    <div className="flex-1 flex items-center justify-center p-10 min-h-0">
+    <div className="flex-1 overflow-y-auto flex items-center justify-center p-6 sm:p-10">
       <div className="max-w-sm w-full text-center">
 
         {/* Lock icon */}

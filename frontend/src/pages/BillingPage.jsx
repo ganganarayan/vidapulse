@@ -51,7 +51,7 @@ export default function BillingPage() {
   return (
     <AppLayout>
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl w-full mx-auto px-6 py-10">
+        <div className="max-w-3xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-10">
 
           <h1 className="text-xl font-bold text-gray-50 mb-8">Billing</h1>
 
@@ -163,7 +163,7 @@ export default function BillingPage() {
               <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
 
                 {/* Table header */}
-                <div className="grid grid-cols-[1fr_90px_110px_110px_32px] gap-3 px-5 py-3
+                <div className="grid grid-cols-[1fr_80px_32px] sm:grid-cols-[1fr_80px_110px_100px_32px] gap-2 sm:gap-3 px-3 sm:px-5 py-3
                                 border-b border-gray-700/60">
                   <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Date
@@ -212,7 +212,7 @@ function PaymentRow({ payment }) {
   const planColor = planBadgeStyle(payment.plan);
 
   return (
-    <div className="grid grid-cols-[1fr_90px_110px_110px_32px] gap-3 px-5 py-3.5
+    <div className="grid grid-cols-[1fr_80px_32px] sm:grid-cols-[1fr_80px_110px_100px_32px] gap-2 sm:gap-3 px-3 sm:px-5 py-3.5
                     items-center hover:bg-gray-700/20 transition-colors">
 
       {/* Date + plan badge */}

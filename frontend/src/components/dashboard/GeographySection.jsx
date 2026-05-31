@@ -45,7 +45,7 @@ export default function GeographySection({ videoId, userPlan }) {
   );
 
   return (
-    <div className="px-6 py-6 min-w-0">
+    <div className="px-4 sm:px-6 py-4 sm:py-6 min-w-0">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
