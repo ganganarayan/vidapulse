@@ -47,6 +47,7 @@ router.get('/me', requireAuth, async (req, res, next) => {
           u.razorpay_subscription_id,
           p.name          AS plan,
           p.video_limit,
+          p.archive_limit,
           p.display_name  AS plan_display_name,
           (
             SELECT COUNT(*)
@@ -55,6 +56,13 @@ router.get('/me', requireAuth, async (req, res, next) => {
               AND  v.is_active   = TRUE
               AND  v.is_archived = FALSE
           )               AS video_count,
+          (
+            SELECT COUNT(*)
+            FROM   videos v
+            WHERE  v.user_id     = u.id
+              AND  v.is_active   = TRUE
+              AND  v.is_archived = TRUE
+          )               AS archive_count,
           up.theme,
           up.timezone,
           up.email_notifications,
@@ -80,7 +88,9 @@ router.get('/me', requireAuth, async (req, res, next) => {
         plan                : u.plan,
         plan_display_name   : u.plan_display_name,
         video_limit         : u.video_limit,
-        video_count         : parseInt(u.video_count, 10),
+        archive_limit       : u.archive_limit   ?? null,
+        video_count         : parseInt(u.video_count,   10),
+        archive_count       : parseInt(u.archive_count, 10),
         onboarding_completed: u.onboarding_completed,
         wow_moment_seen          : u.wow_moment_seen,
         first_video_id           : u.first_video_id,

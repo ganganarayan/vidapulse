@@ -93,6 +93,10 @@ export default function Dashboard() {
   function handleArchive(videoId) {
     setVideos(prev => (prev ?? []).filter(v => v.id !== videoId));
     setArchived(null); // force re-fetch archived list on next tab switch
+    updateUser({
+      video_count:   (user?.video_count   ?? 1) - 1,
+      archive_count: (user?.archive_count ?? 0) + 1,
+    });
     showToast('Video archived', 'info');
   }
 
@@ -101,6 +105,10 @@ export default function Dashboard() {
     setVideos(null);    // force re-fetch live list
     setVideosLoading(true);
     api.get('/videos').then(res => setVideos(res.data.videos)).catch(() => setVideos([])).finally(() => setVideosLoading(false));
+    updateUser({
+      video_count:   (user?.video_count   ?? 0) + 1,
+      archive_count: (user?.archive_count ?? 1) - 1,
+    });
     showToast('Video restored', 'success');
   }
 
@@ -167,6 +175,10 @@ export default function Dashboard() {
               promoVideos={promoVideos}
               onArchive={handleArchive}
               onDelete={handleDelete}
+              archiveFull={
+                user?.archive_limit != null &&
+                (user?.archive_count ?? 0) >= user.archive_limit
+              }
             />
           )
         ) : (
@@ -186,6 +198,10 @@ export default function Dashboard() {
                     key={video.id}
                     video={video}
                     onRestore={() => handleRestore(video.id)}
+                    liveFull={
+                      user?.video_limit != null &&
+                      (user?.video_count ?? 0) >= user.video_limit
+                    }
                   />
                 ))}
               </div>
@@ -231,7 +247,7 @@ const SOURCE_LABELS = {
 // VideoList
 // ─────────────────────────────────────────────────────────────────────────
 
-function VideoList({ videos, setVideos, user, promoVideos = [], onArchive, onDelete }) {
+function VideoList({ videos, setVideos, user, promoVideos = [], onArchive, onDelete, archiveFull }) {
   const navigate = useNavigate();
   const hasUserVideos = videos.length > 0;
   const hasPromoVideos = promoVideos.length > 0;
@@ -294,6 +310,7 @@ function VideoList({ videos, setVideos, user, promoVideos = [], onArchive, onDel
                 }
                 onArchive={() => onArchive(video.id)}
                 onDelete={() => onDelete(video.id)}
+                archiveFull={archiveFull}
               />
             ))}
           </div>
@@ -325,7 +342,7 @@ function VideoList({ videos, setVideos, user, promoVideos = [], onArchive, onDel
 // VideoCard — redesigned with thumbnail, duration, embed btn, edit pencil
 // ─────────────────────────────────────────────────────────────────────────
 
-function VideoCard({ video, onClick, onTitleUpdate, onArchive, onDelete }) {
+function VideoCard({ video, onClick, onTitleUpdate, onArchive, onDelete, archiveFull }) {
   const [showEmbed,    setShowEmbed]    = useState(false);
   const [showEdit,     setShowEdit]     = useState(false);
   const [showDelModal, setShowDelModal] = useState(false);
@@ -445,9 +462,9 @@ function VideoCard({ video, onClick, onTitleUpdate, onArchive, onDelete }) {
             {/* Archive */}
             <button
               onClick={handleArchive}
-              disabled={archiving || deleting}
-              title="Archive video"
-              className="p-1.5 rounded-lg text-gray-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors disabled:opacity-40"
+              disabled={archiving || deleting || archiveFull}
+              title={archiveFull ? 'Archive full — delete an archived video to free a slot' : 'Archive video'}
+              className="p-1.5 rounded-lg text-gray-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {archiving
                 ? <span className="w-3.5 h-3.5 border border-amber-400 border-t-transparent rounded-full animate-spin block" />
@@ -517,7 +534,7 @@ function VideoCard({ video, onClick, onTitleUpdate, onArchive, onDelete }) {
 // ArchivedVideoCard — same bar as VideoCard but restore-only, no analytics
 // ─────────────────────────────────────────────────────────────────────────
 
-function ArchivedVideoCard({ video, onRestore }) {
+function ArchivedVideoCard({ video, onRestore, liveFull }) {
   const { showToast } = useToast();
   const [restoring, setRestoring] = useState(false);
   const sourceLabel = SOURCE_LABELS[video.source_type] ?? 'Video';
@@ -566,12 +583,12 @@ function ArchivedVideoCard({ video, onRestore }) {
         {/* Restore button */}
         <button
           onClick={handleRestore}
-          disabled={restoring}
-          title="Restore to live"
+          disabled={restoring || liveFull}
+          title={liveFull ? 'Live slots full — archive or delete a video first' : 'Restore to live'}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
                      bg-gray-700/60 text-gray-400 border border-gray-600/60
                      hover:bg-amber-500/15 hover:text-amber-400 hover:border-amber-500/30
-                     disabled:opacity-50 transition-colors flex-shrink-0"
+                     disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
         >
           {restoring
             ? <span className="w-3 h-3 border border-amber-400 border-t-transparent rounded-full animate-spin" />

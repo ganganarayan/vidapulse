@@ -545,6 +545,27 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 router.patch('/:id/archive', requireAuth, async (req, res, next) => {
   try {
     const { archive } = req.body;           // true = archive, false = restore
+    const { rows: [planRow] } = await pool.query(
+      `SELECT p.video_limit, p.archive_limit,
+              (SELECT COUNT(*) FROM videos WHERE user_id=$1 AND is_active=TRUE AND is_archived=FALSE)::int AS live_count,
+              (SELECT COUNT(*) FROM videos WHERE user_id=$1 AND is_active=TRUE AND is_archived=TRUE)::int  AS archive_count
+       FROM users u JOIN plans p ON p.id = u.plan_id
+       WHERE u.id = $1`,
+      [req.user.id]
+    );
+
+    if (archive) {
+      // Archiving: archive slot must not be full
+      if (planRow.archive_limit !== null && planRow.archive_count >= planRow.archive_limit) {
+        return res.status(403).json({ error: 'archive_limit' });
+      }
+    } else {
+      // Restoring: live slot must not be full
+      if (planRow.video_limit !== null && planRow.live_count >= planRow.video_limit) {
+        return res.status(403).json({ error: 'plan_limit' });
+      }
+    }
+
     const { rowCount } = await pool.query(
       `UPDATE videos
        SET    is_archived = $1,
