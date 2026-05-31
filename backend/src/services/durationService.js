@@ -113,22 +113,27 @@ async function fetchLoomDuration(url) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Google Drive — parse durationMillis from the embedded page JSON
-// Works for public "anyone with link" files; no API key required.
+// Google Drive — extract duration from the viewer page HTML
+// Works for public "anyone with link" video files; no API key required.
+// Google Drive embeds metadata in the initial HTML for video files.
 // ─────────────────────────────────────────────────────────────────────────
 
 async function fetchGoogleDriveDuration(url) {
   try {
     const { pathname } = new URL(url);
-    const match = pathname.match(/\/file\/d\/([^/]+)/);
+    const match = pathname.match(/\/file\/d\/([^/?#]+)/);
     if (!match) return null;
 
-    const fileId  = match[1];
-    const viewUrl = `https://drive.google.com/file/d/${fileId}/view?usp=sharing`;
+    const fileId = match[1];
 
+    // Try the viewer page — Google Drive includes video metadata in the
+    // initial page JSON for public video files.
+    const viewUrl = `https://drive.google.com/file/d/${fileId}/view`;
     const res = await fetch(viewUrl, {
+      redirect: 'follow',
       headers: {
-        'User-Agent'     : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent'     : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        'Accept'         : 'text/html,application/xhtml+xml',
         'Accept-Language': 'en-US,en;q=0.9',
       },
     });
@@ -136,9 +141,22 @@ async function fetchGoogleDriveDuration(url) {
 
     const html = await res.text();
 
-    // Google Drive embeds video metadata as JSON in the initial HTML
-    const m = html.match(/"durationMillis":"(\d+)"/);
+    // Pattern 1: "durationMillis":"12345"  (most common in page JSON blobs)
+    let m = html.match(/"durationMillis":"(\d+)"/);
     if (m) return Math.round(parseInt(m[1], 10) / 1000);
+
+    // Pattern 2: durationMillis without quotes around value
+    m = html.match(/"durationMillis":(\d+)/);
+    if (m) return Math.round(parseInt(m[1], 10) / 1000);
+
+    // Pattern 3: og:video:duration meta tag (seconds)
+    m = html.match(/property="og:video:duration"\s+content="(\d+)"/);
+    if (!m) m = html.match(/content="(\d+)"\s+property="og:video:duration"/);
+    if (m) {
+      const val = parseInt(m[1], 10);
+      // og:video:duration is in seconds; sanity-check it's not milliseconds
+      return val > 0 ? val : null;
+    }
 
     return null;
   } catch {
