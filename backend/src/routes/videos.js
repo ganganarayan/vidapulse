@@ -854,7 +854,10 @@ async function fetchPlayerSettings(videoId) {
        WHERE  video_id = $1`,
       [videoId]
     );
-    return row ? { ...PLAYER_DEFAULTS, ...row } : { ...PLAYER_DEFAULTS };
+    if (!row) return { ...PLAYER_DEFAULTS };
+    // Strip null values so DB nulls never override the defaults
+    const cleaned = Object.fromEntries(Object.entries(row).filter(([, v]) => v != null));
+    return { ...PLAYER_DEFAULTS, ...cleaned };
   } catch (_) {
     return { ...PLAYER_DEFAULTS };
   }
@@ -896,7 +899,7 @@ const playerSettingsSchema = z.object({
   show_rewind_forward   : z.boolean().optional(),
   resume_playback       : z.boolean().optional(),
   loop                  : z.boolean().optional(),
-  accent_color          : z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  accent_color          : z.string().regex(/^#[0-9a-fA-F]{6}$/).nullish().transform(v => v ?? undefined),
 });
 
 router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
@@ -915,6 +918,7 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
     // Merge incoming with current defaults, then upsert the full row
     const existing = await fetchPlayerSettings(req.params.id);
     const merged   = { ...existing, ...parseResult.data };
+    if (!merged.accent_color) merged.accent_color = PLAYER_DEFAULTS.accent_color;
 
     // Note: no user_id in INSERT — CHECK constraint forbids video_id + user_id both non-null.
     await pool.query(
