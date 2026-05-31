@@ -80,7 +80,7 @@ export default function OverviewPage() {
         ) : (!hasData && promoVideos.length === 0) ? (
           <EmptyOverview />
         ) : (
-          <div className="max-w-5xl mx-auto px-6 py-8 flex flex-col gap-8">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-8">
 
             {/* ── Featured / promotion videos ─────────────────────── */}
             {promoVideos.length > 0 && (
@@ -700,7 +700,7 @@ function EmptyOverview() {
 
 function LoadingSkeleton() {
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8 flex flex-col gap-8 animate-pulse">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-8 animate-pulse">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[1,2,3,4,5].map(i => (
           <div key={i} className="bg-gray-800/50 border border-gray-700/40 rounded-2xl p-4 h-28" />

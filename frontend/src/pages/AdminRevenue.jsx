@@ -78,7 +78,7 @@ export default function AdminRevenue() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
         {/* Page header */}
         <div className="mb-6">
@@ -127,7 +127,7 @@ export default function AdminRevenue() {
                 <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase tracking-wider">
                   <th className="px-4 py-3 text-left font-medium">Customer</th>
                   <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">Last Payment</th>
-                  <th className="px-4 py-3 text-left font-medium hidden md:table-cell">Last Date</th>
+                  <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Last Date</th>
                   <th className="px-4 py-3 text-right font-medium">Total Paid</th>
                 </tr>
               </thead>
@@ -145,7 +145,7 @@ export default function AdminRevenue() {
                         </div>
                       </td>
                       <td className="px-4 py-3 hidden sm:table-cell"><div className="h-3 w-16 bg-gray-700 rounded" /></td>
-                      <td className="px-4 py-3 hidden md:table-cell"><div className="h-3 w-20 bg-gray-700 rounded" /></td>
+                      <td className="px-4 py-3 hidden lg:table-cell"><div className="h-3 w-20 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3"><div className="h-4 w-20 bg-gray-700 rounded ml-auto" /></td>
                     </tr>
                   ))
@@ -199,7 +199,7 @@ export default function AdminRevenue() {
                       </td>
 
                       {/* Last payment date */}
-                      <td className="px-4 py-3 hidden md:table-cell text-gray-400 text-xs">
+                      <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">
                         {formatDate(user.last_payment_at)}
                       </td>
 

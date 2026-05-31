@@ -78,7 +78,7 @@ export default function BrowsersSection({ videoId, userPlan }) {
   );
 
   return (
-    <div className="px-6 py-6 min-w-0">
+    <div className="px-4 sm:px-6 py-4 sm:py-6 min-w-0">
       {/* Header */}
       <div className="mb-6">
         <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">

@@ -36,7 +36,7 @@ export default function DomainsSection({ videoId }) {
   }, [videoId]);
 
   return (
-    <div className="px-6 py-6">
+    <div className="px-4 sm:px-6 py-4 sm:py-6">
       {/* Header */}
       <div className="mb-6">
         <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">

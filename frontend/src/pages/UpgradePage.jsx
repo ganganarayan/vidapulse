@@ -85,7 +85,7 @@ export default function UpgradePage() {
   return (
     <AppLayout>
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
 
           {/* Header */}
           <div className="mb-8">

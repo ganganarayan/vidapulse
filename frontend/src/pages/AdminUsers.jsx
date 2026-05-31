@@ -481,7 +481,7 @@ function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick }) {
       </td>
 
       {/* Plan Expires — inline date input */}
-      <td className="px-4 py-3 hidden md:table-cell">
+      <td className="px-4 py-3 hidden lg:table-cell">
         {neverExpires ? (
           <span className="text-green-400 text-xs font-medium">Forever</span>
         ) : (
@@ -660,7 +660,7 @@ export default function AdminUsers() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
         {/* Impersonation expired notice */}
         {expiredNotice && (
@@ -727,7 +727,7 @@ export default function AdminUsers() {
                 <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase tracking-wider">
                   <th className="px-4 py-3 text-left font-medium">User</th>
                   <th className="px-4 py-3 text-left font-medium">Plan</th>
-                  <th className="px-4 py-3 text-left font-medium hidden md:table-cell">Plan Expires</th>
+                  <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Plan Expires</th>
                   <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">Videos</th>
                   <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Last Login</th>
                   <th className="px-4 py-3 text-right font-medium">Action</th>
@@ -747,7 +747,7 @@ export default function AdminUsers() {
                         </div>
                       </td>
                       <td className="px-4 py-3"><div className="h-5 w-14 bg-gray-700 rounded" /></td>
-                      <td className="px-4 py-3 hidden md:table-cell"><div className="h-3 w-20 bg-gray-700 rounded" /></td>
+                      <td className="px-4 py-3 hidden lg:table-cell"><div className="h-3 w-20 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3 hidden sm:table-cell"><div className="h-3 w-6 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3 hidden lg:table-cell"><div className="h-3 w-16 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3"><div className="h-7 w-24 bg-gray-700 rounded ml-auto" /></td>

@@ -342,7 +342,7 @@ export default function VideoAnalyticsView({
             </div>
 
             {/* Metric cards grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
+            <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
               <MetricCard label="Total Plays"        value={plays}          format={n => n.toLocaleString()}                              visible={stage >= 3} accent="amber"   onClick={() => onViewChange('plays')} userPlan={user?.plan} subtitle="times this video was played" />
               <MetricCard label="Unique Viewers"     value={viewers}        format={n => n.toLocaleString()}                              visible={stage >= 4} accent="indigo"  onClick={() => onViewChange('viewers')} userPlan={user?.plan} subtitle="individual viewers" />
               <MetricCard label="Avg. Watch"         value={hasPlays ? avgWatch : null}   format={n => `${n.toFixed(0)}%`}              visible={stage >= 5} accent="emerald" className="col-span-2 sm:col-span-1" onClick={() => onViewChange('avg_watch')} requiredPlan={CARD_REQUIRED_PLAN.avg_watch} userPlan={user?.plan} subtitle="of video watched on average" />
