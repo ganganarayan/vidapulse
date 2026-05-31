@@ -363,11 +363,12 @@ function isoToDateInput(iso) {
 }
 
 function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick }) {
-  const [planVal,   setPlanVal]   = useState(user.plan ?? 'free');
-  const [dateVal,   setDateVal]   = useState(isoToDateInput(user.plan_expires_at));
-  const [saving,    setSaving]    = useState(false);
-  const [saveErr,   setSaveErr]   = useState('');
-  const [saved,     setSaved]     = useState(false); // brief ✓ flash
+  const [planVal,      setPlanVal]      = useState(user.plan ?? 'free');
+  const [dateVal,      setDateVal]      = useState(isoToDateInput(user.plan_expires_at));
+  const [saving,       setSaving]       = useState(false);
+  const [saveErr,      setSaveErr]      = useState('');
+  const [saved,        setSaved]        = useState(false);   // brief ✓ flash
+  const [awaitingDate, setAwaitingDate] = useState(false);   // starter/pro selected, date not yet set
   const prevDateRef = useRef(isoToDateInput(user.plan_expires_at));
 
   // Keep local state in sync when parent re-fetches users
@@ -376,14 +377,17 @@ function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick }) {
     const d = isoToDateInput(user.plan_expires_at);
     setDateVal(d);
     prevDateRef.current = d;
+    setAwaitingDate(false);
   }, [user.plan, user.plan_expires_at]);
 
   const neverExpires = planVal === 'free' || planVal === 'admin_lifetime';
+  const needsDate    = planVal === 'starter' || planVal === 'pro';
 
   async function persist(newPlan, newDate) {
     setSaving(true);
     setSaveErr('');
     setSaved(false);
+    setAwaitingDate(false);
     try {
       const body = {
         plan      : newPlan,
@@ -409,8 +413,16 @@ function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick }) {
   function handlePlanChange(e) {
     const val = e.target.value;
     setPlanVal(val);
-    if (val === 'free' || val === 'admin_lifetime') setDateVal('');
-    persist(val, val === 'free' || val === 'admin_lifetime' ? '' : dateVal);
+    setSaveErr('');
+    if (val === 'free' || val === 'admin_lifetime') {
+      // No date needed — save immediately and clear any pending date
+      setDateVal('');
+      setAwaitingDate(false);
+      persist(val, '');
+    } else {
+      // starter / pro — wait for a date before saving
+      setAwaitingDate(true);
+    }
   }
 
   function handleDateChange(e) {
@@ -418,7 +430,13 @@ function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick }) {
   }
 
   function handleDateBlur() {
-    if (dateVal !== prevDateRef.current) {
+    if (!dateVal) return; // no date entered yet — keep waiting
+    if (needsDate && awaitingDate) {
+      // Date just provided after plan change — now save both together
+      prevDateRef.current = dateVal;
+      persist(planVal, dateVal);
+    } else if (dateVal !== prevDateRef.current) {
+      // Date changed on existing paid plan — save
       prevDateRef.current = dateVal;
       persist(planVal, dateVal);
     }
@@ -477,6 +495,9 @@ function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick }) {
             </svg>
           )}
         </div>
+        {awaitingDate && !saveErr && (
+          <p className="text-amber-400 text-xs mt-0.5">← set expiry date to save</p>
+        )}
         {saveErr && <p className="text-red-400 text-xs mt-0.5 max-w-[120px] truncate" title={saveErr}>{saveErr}</p>}
       </td>
 
@@ -491,12 +512,16 @@ function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick }) {
             onChange={handleDateChange}
             onBlur={handleDateBlur}
             disabled={saving}
-            className="
-              bg-gray-700 border border-gray-600 rounded px-2 py-1
-              text-xs text-white focus:outline-none focus:border-amber-500
+            className={`
+              bg-gray-700 rounded px-2 py-1
+              text-xs text-white focus:outline-none
               disabled:opacity-60 cursor-pointer
               [color-scheme:dark]
-            "
+              ${awaitingDate
+                ? 'border-2 border-amber-400 animate-pulse'
+                : 'border border-gray-600 focus:border-amber-500'
+              }
+            `}
           />
         )}
       </td>
