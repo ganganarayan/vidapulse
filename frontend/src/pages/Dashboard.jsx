@@ -216,6 +216,9 @@ function VideoList({ videos, setVideos, user, promoVideos = [] }) {
                 onTitleUpdate={(newTitle) =>
                   setVideos(prev => prev.map(v => v.id === video.id ? { ...v, title: newTitle } : v))
                 }
+                onDelete={() =>
+                  setVideos(prev => prev.filter(v => v.id !== video.id))
+                }
               />
             ))}
           </div>
@@ -247,10 +250,12 @@ function VideoList({ videos, setVideos, user, promoVideos = [] }) {
 // VideoCard — redesigned with thumbnail, duration, embed btn, edit pencil
 // ─────────────────────────────────────────────────────────────────────────
 
-function VideoCard({ video, onClick, onTitleUpdate }) {
-  const [showEmbed,   setShowEmbed]   = useState(false);
-  const [showEdit,    setShowEdit]    = useState(false);
-  const [embedCopied, setEmbedCopied] = useState(false);
+function VideoCard({ video, onClick, onTitleUpdate, onDelete }) {
+  const [showEmbed,    setShowEmbed]    = useState(false);
+  const [showEdit,     setShowEdit]     = useState(false);
+  const [embedCopied,  setEmbedCopied]  = useState(false);
+  const [confirmDel,   setConfirmDel]   = useState(false);
+  const [deleting,     setDeleting]     = useState(false);
 
   const sourceLabel    = SOURCE_LABELS[video.source_type] ?? 'Video';
   const duration       = fmtDuration(video.duration_seconds);
@@ -266,6 +271,19 @@ function VideoCard({ video, onClick, onTitleUpdate }) {
     navigator.clipboard.writeText(snippet)
       .then(() => { setEmbedCopied(true); setTimeout(() => setEmbedCopied(false), 2500); })
       .catch(() => {});
+  }
+
+  async function handleDelete(e) {
+    e.stopPropagation();
+    if (!confirmDel) { setConfirmDel(true); return; }
+    setDeleting(true);
+    try {
+      await api.delete(`/videos/${video.id}`);
+      onDelete();
+    } catch {
+      setDeleting(false);
+      setConfirmDel(false);
+    }
   }
 
   return (
@@ -337,6 +355,23 @@ function VideoCard({ video, onClick, onTitleUpdate }) {
               className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-700 transition-colors"
             >
               <PencilIcon />
+            </button>
+
+            {/* Delete */}
+            <button
+              onClick={handleDelete}
+              onBlur={() => setTimeout(() => setConfirmDel(false), 200)}
+              disabled={deleting}
+              title={confirmDel ? 'Click again to confirm delete' : 'Delete video'}
+              className={`p-1.5 rounded-lg transition-colors disabled:opacity-40
+                ${confirmDel
+                  ? 'text-red-400 bg-red-500/15 hover:bg-red-500/25'
+                  : 'text-gray-500 hover:text-red-400 hover:bg-red-500/10'}`}
+            >
+              {deleting
+                ? <span className="w-3.5 h-3.5 border border-red-400 border-t-transparent rounded-full animate-spin block" />
+                : <TrashIcon />
+              }
             </button>
           </div>
         </div>
@@ -810,6 +845,18 @@ function CheckSmIcon() {
       stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
     >
       <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+      <path d="M10 11v6M14 11v6"/>
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
     </svg>
   );
 }
