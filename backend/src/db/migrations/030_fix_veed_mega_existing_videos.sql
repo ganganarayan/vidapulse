@@ -3,7 +3,6 @@
 
 -- ── Mega.nz ──────────────────────────────────────────────────────────────────
 -- Convert mega.nz/file/HASH#KEY  →  mega.nz/embed/HASH#KEY
--- Only update rows that have a valid key in the URL (# present with content)
 UPDATE videos
 SET source_type           = 'mega',
     playable_url          = regexp_replace(original_url, 'mega\.nz/(file|video)/', 'mega.nz/embed/'),
@@ -13,17 +12,19 @@ SET source_type           = 'mega',
     updated_at            = NOW()
 WHERE source_type = 'other'
   AND original_url ~* 'mega\.nz/(file|video)/'
-  AND original_url LIKE '%#%';   -- must have decryption key
+  AND original_url LIKE '%#%';
 
 -- ── Veed.io ───────────────────────────────────────────────────────────────────
--- Extract UUID from /view/UUID[/...] and build embed URL
+-- Use regexp_match (returns text[] or NULL, safe in scalar context) to extract
+-- the UUID from /view/UUID[/...] and build the embed URL.
 UPDATE videos
 SET source_type           = 'veed',
     playable_url          = 'https://www.veed.io/embed/' ||
-                            (regexp_matches(original_url, '/view/([a-f0-9\-]{8,})'))[1],
+                            (regexp_match(original_url, '/view/([a-f0-9-]{8,})'))[1],
     processing_status     = 'completed',
     using_iframe_fallback = TRUE,
     processing_error      = NULL,
     updated_at            = NOW()
 WHERE source_type = 'other'
-  AND original_url ~* 'veed\.io/view/[a-f0-9\-]{8}';
+  AND original_url ~* 'veed\.io'
+  AND regexp_match(original_url, '/view/([a-f0-9-]{8,})') IS NOT NULL;
