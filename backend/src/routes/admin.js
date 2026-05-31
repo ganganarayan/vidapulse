@@ -1279,10 +1279,8 @@ router.patch('/users/:userId/promo-hidden', async (req, res, next) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/admin/copy-user-data
-// ONE-TIME utility: copies videos + analytics from one account to another.
+// Copies videos + analytics from one account to another.
 // Body: { source_email, target_email }
-// Protected by requireAdmin — safe to leave deployed but only callable by admin.
-// ─────────────────────────────────────────────────────────────────────────────
 router.post('/copy-user-data', requireAuth, requireAdmin, async (req, res, next) => {
   const { source_email, target_email } = req.body ?? {};
   if (!source_email || !target_email) {
@@ -1294,15 +1292,14 @@ router.post('/copy-user-data', requireAuth, requireAdmin, async (req, res, next)
     const videoMap = {};
 
     try {
-      // Resolve users
       const srcRes = await client.query(
-        `SELECT u.id, u.email, p.name AS plan FROM users u
+        `SELECT u.id, u.email, COALESCE(p.name::text,'free') AS plan FROM users u
          LEFT JOIN plans p ON p.id = u.plan_id WHERE u.email = $1`, [source_email]);
       if (!srcRes.rows.length) return res.status(404).json({ error: `Source user not found: ${source_email}` });
       const src = srcRes.rows[0];
 
       const tgtRes = await client.query(
-        `SELECT u.id, u.email, p.name AS plan FROM users u
+        `SELECT u.id, u.email, COALESCE(p.name::text,'free') AS plan FROM users u
          LEFT JOIN plans p ON p.id = u.plan_id WHERE u.email = $1`, [target_email]);
       if (!tgtRes.rows.length) return res.status(404).json({ error: `Target user not found: ${target_email} — create the account first` });
       const tgt = tgtRes.rows[0];
@@ -1317,95 +1314,111 @@ router.post('/copy-user-data', requireAuth, requireAdmin, async (req, res, next)
       await client.query('BEGIN');
 
       for (const v of videos) {
+        // ── video ──────────────────────────────────────────────────────────
         const { rows: [nv] } = await client.query(
-          `INSERT INTO videos (user_id,title,description,source_type,source_url,thumbnail_url,
-             duration_seconds,processing_status,total_plays,total_views,total_unique_viewers,
-             is_active,created_at,updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
-          [tgt.id,v.title,v.description,v.source_type,v.source_url,v.thumbnail_url,
-           v.duration_seconds,v.processing_status,v.total_plays,v.total_views,
-           v.total_unique_viewers,v.is_active,v.created_at,v.updated_at]);
+          `INSERT INTO videos (user_id,title,description,source_type,original_url,thumbnail_url,
+             duration_seconds,processing_status,total_plays,unique_viewers,is_active,created_at,updated_at)
+           SELECT $1,title,description,source_type,original_url,thumbnail_url,
+             duration_seconds,processing_status,total_plays,unique_viewers,is_active,created_at,updated_at
+           FROM videos WHERE id=$2 RETURNING id`,
+          [tgt.id, v.id]);
         const newId = nv.id;
         videoMap[v.id] = newId;
-        log.push(`  Copied video: "${v.title}" → ${newId}`);
+        log.push(`  Video "${v.title}" → ${newId}`);
 
-        // player settings
-        const { rows: [ps] } = await client.query(`SELECT * FROM video_player_settings WHERE video_id=$1`, [v.id]);
-        if (ps) await client.query(
+        // ── player settings ────────────────────────────────────────────────
+        await client.query(
           `INSERT INTO video_player_settings (user_id,video_id,autoplay,muted,loop,show_controls,primary_color,border_radius,shadow,created_at,updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (video_id) DO NOTHING`,
-          [tgt.id,newId,ps.autoplay,ps.muted,ps.loop,ps.show_controls,ps.primary_color,ps.border_radius,ps.shadow,ps.created_at,ps.updated_at]);
+           SELECT $1,$2,autoplay,muted,loop,show_controls,primary_color,border_radius,shadow,created_at,updated_at
+           FROM video_player_settings WHERE video_id=$3 ON CONFLICT (video_id) DO NOTHING`,
+          [tgt.id, newId, v.id]);
 
-        // embed configs
-        const { rows: [ec] } = await client.query(`SELECT * FROM embed_configs WHERE video_id=$1`, [v.id]);
-        if (ec) await client.query(
+        // ── embed configs ──────────────────────────────────────────────────
+        await client.query(
           `INSERT INTO embed_configs (video_id,allowed_domains,require_domain_match,created_at,updated_at)
-           VALUES ($1,$2,$3,$4,$5) ON CONFLICT (video_id) DO NOTHING`,
-          [newId,ec.allowed_domains,ec.require_domain_match,ec.created_at,ec.updated_at]);
+           SELECT $1,allowed_domains,require_domain_match,created_at,updated_at
+           FROM embed_configs WHERE video_id=$2 ON CONFLICT (video_id) DO NOTHING`,
+          [newId, v.id]);
 
-        // sessions
-        const { rows: sessions } = await client.query(`SELECT * FROM analytics_sessions WHERE video_id=$1`, [v.id]);
-        log.push(`    Sessions: ${sessions.length}`);
-        for (const s of sessions) {
+        // ── sessions (one by one to map old id → new id for events) ────────
+        const { rows: sessions } = await client.query(
+          `SELECT id FROM analytics_sessions WHERE video_id=$1`, [v.id]);
+        log.push(`    ${sessions.length} session(s)`);
+
+        for (const { id: oldSessId } of sessions) {
           const { rows: [ns] } = await client.query(
-            `INSERT INTO analytics_sessions (video_id,viewer_id,started_at,last_ping_at,ended_at,
-               ip_address,user_agent,referrer,page_url,country_code,country_name,city,region,timezone,
-               device_type,browser,os,is_mobile,total_watch_seconds,max_watch_seconds,percent_watched,
-               completed,replays,play_count,source_type,utm_source,utm_medium,utm_campaign,utm_content,utm_term)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
+            `INSERT INTO analytics_sessions
+               (video_id,viewer_id,page_url,domain,referrer_url,
+                utm_source,utm_medium,utm_campaign,utm_term,utm_content,
+                device_type,browser,browser_version,os,os_version,user_agent,
+                screen_width,screen_height,ip_address,
+                country_code,country_name,region,city,latitude,longitude,timezone,
+                started_at,ended_at,total_watch_seconds,max_watch_pct,avg_watch_pct,
+                play_count,pause_count,seek_count,started_muted,unmuted_at_seconds,
+                final_playback_speed,reached_end,analytics_flags,created_at)
+             SELECT $1,viewer_id,page_url,domain,referrer_url,
+                utm_source,utm_medium,utm_campaign,utm_term,utm_content,
+                device_type,browser,browser_version,os,os_version,user_agent,
+                screen_width,screen_height,ip_address,
+                country_code,country_name,region,city,latitude,longitude,timezone,
+                started_at,ended_at,total_watch_seconds,max_watch_pct,avg_watch_pct,
+                play_count,pause_count,seek_count,started_muted,unmuted_at_seconds,
+                final_playback_speed,reached_end,analytics_flags,created_at
+             FROM analytics_sessions WHERE id=$2
              RETURNING id`,
-            [newId,s.viewer_id,s.started_at,s.last_ping_at,s.ended_at,s.ip_address,s.user_agent,
-             s.referrer,s.page_url,s.country_code,s.country_name,s.city,s.region,s.timezone,
-             s.device_type,s.browser,s.os,s.is_mobile,s.total_watch_seconds,s.max_watch_seconds,
-             s.percent_watched,s.completed,s.replays,s.play_count,s.source_type,s.utm_source,
-             s.utm_medium,s.utm_campaign,s.utm_content,s.utm_term]);
-          const nsId = ns.id;
+            [newId, oldSessId]);
+          const newSessId = ns.id;
 
           // events
-          const { rows: evts } = await client.query(`SELECT * FROM analytics_events WHERE session_id=$1`, [s.id]);
-          for (const e of evts) await client.query(
-            `INSERT INTO analytics_events (session_id,video_id,event_type,timestamp_seconds,value,created_at)
-             VALUES ($1,$2,$3,$4,$5,$6)`,
-            [nsId,newId,e.event_type,e.timestamp_seconds,e.value,e.created_at]);
+          await client.query(
+            `INSERT INTO analytics_events (session_id,video_id,event_type,video_position,occurred_at,metadata)
+             SELECT $1,$2,event_type,video_position,occurred_at,metadata
+             FROM analytics_events WHERE session_id=$3`,
+            [newSessId, newId, oldSessId]);
 
           // watch intervals
-          const { rows: ints } = await client.query(`SELECT * FROM analytics_watch_intervals WHERE session_id=$1`, [s.id]);
-          for (const i of ints) await client.query(
-            `INSERT INTO analytics_watch_intervals (session_id,video_id,start_second,end_second)
-             VALUES ($1,$2,$3,$4)`, [nsId,newId,i.start_second,i.end_second]);
+          await client.query(
+            `INSERT INTO analytics_watch_intervals (session_id,video_id,start_second,end_second,watch_pass,created_at)
+             SELECT $1,$2,start_second,end_second,watch_pass,created_at
+             FROM analytics_watch_intervals WHERE session_id=$3`,
+            [newSessId, newId, oldSessId]);
         }
 
-        // heatmap aggregate
-        const { rows: hm } = await client.query(`SELECT * FROM analytics_heatmap_aggregate WHERE video_id=$1`, [v.id]);
-        for (const h of hm) await client.query(
-          `INSERT INTO analytics_heatmap_aggregate (video_id,second_bucket,view_count,replay_count)
-           VALUES ($1,$2,$3,$4) ON CONFLICT (video_id,second_bucket) DO NOTHING`,
-          [newId,h.second_bucket,h.view_count,h.replay_count]);
+        // ── heatmap aggregate ──────────────────────────────────────────────
+        await client.query(
+          `INSERT INTO analytics_heatmap_aggregate (video_id,second_bucket,first_watches,replays,updated_at)
+           SELECT $1,second_bucket,first_watches,replays,updated_at
+           FROM analytics_heatmap_aggregate WHERE video_id=$2
+           ON CONFLICT (video_id,second_bucket) DO NOTHING`,
+          [newId, v.id]);
 
-        // daily stats
-        const { rows: ds } = await client.query(`SELECT * FROM analytics_daily_stats WHERE video_id=$1`, [v.id]);
-        for (const d of ds) await client.query(
-          `INSERT INTO analytics_daily_stats (video_id,stat_date,total_views,unique_views,total_plays,unique_viewers,avg_watch_seconds,completion_count,total_watch_seconds)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (video_id,stat_date) DO NOTHING`,
-          [newId,d.stat_date,d.total_views,d.unique_views,d.total_plays,d.unique_viewers,d.avg_watch_seconds,d.completion_count,d.total_watch_seconds]);
+        // ── daily stats ────────────────────────────────────────────────────
+        await client.query(
+          `INSERT INTO analytics_daily_stats (video_id,stat_date,total_plays,unique_viewers,total_watch_seconds,avg_watch_pct,completed_views,play_rate,updated_at)
+           SELECT $1,stat_date,total_plays,unique_viewers,total_watch_seconds,avg_watch_pct,completed_views,play_rate,updated_at
+           FROM analytics_daily_stats WHERE video_id=$2
+           ON CONFLICT (video_id,stat_date) DO NOTHING`,
+          [newId, v.id]);
 
-        // insights
-        const { rows: ins } = await client.query(`SELECT * FROM video_insights WHERE video_id=$1`, [v.id]);
-        for (const i of ins) await client.query(
-          `INSERT INTO video_insights (video_id,user_id,insight_type,insight_text,severity,is_primary,is_dismissed,timestamp_seconds,created_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-          [newId,tgt.id,i.insight_type,i.insight_text,i.severity,i.is_primary,i.is_dismissed,i.timestamp_seconds,i.created_at]);
+        // ── video insights ─────────────────────────────────────────────────
+        await client.query(
+          `INSERT INTO video_insights (video_id,user_id,insight_type,severity,timestamp_seconds,headline,body,action_prompt,metric_value,metric_label,is_primary,is_dismissed,generated_at,data_snapshot)
+           SELECT $1,$2,insight_type,severity,timestamp_seconds,headline,body,action_prompt,metric_value,metric_label,is_primary,is_dismissed,generated_at,data_snapshot
+           FROM video_insights WHERE video_id=$3
+           ON CONFLICT (video_id,insight_type,(COALESCE(timestamp_seconds,-1))) DO NOTHING`,
+          [newId, tgt.id, v.id]);
 
-        // viewer stories
-        const { rows: vs } = await client.query(`SELECT * FROM viewer_stories WHERE video_id=$1`, [v.id]);
-        for (const s of vs) await client.query(
-          `INSERT INTO viewer_stories (video_id,viewer_id,story_text,story_type,percent_watched,country_name,device_type,created_at,is_stale)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-          [newId,s.viewer_id,s.story_text,s.story_type,s.percent_watched,s.country_name,s.device_type,s.created_at,s.is_stale]);
+        // ── viewer stories ─────────────────────────────────────────────────
+        await client.query(
+          `INSERT INTO viewer_stories (video_id,story_type,headline,detail,interpretation,viewer_count,is_stale,generated_at)
+           SELECT $1,story_type,headline,detail,interpretation,viewer_count,is_stale,generated_at
+           FROM viewer_stories WHERE video_id=$2
+           ON CONFLICT (video_id,story_type) DO NOTHING`,
+          [newId, v.id]);
       }
 
       await client.query('COMMIT');
-      log.push(`\n✓ Done — ${videos.length} video(s) copied.`);
+      log.push(`✓ Done — ${videos.length} video(s) copied.`);
       return res.json({ ok: true, videos_copied: videos.length, video_map: videoMap, log });
 
     } catch (err) {

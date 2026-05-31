@@ -505,6 +505,7 @@ function EditNameModal({ video, onSave, onClose }) {
 function AddVideoButton({ user, onVideoAdded }) {
   const [open,       setOpen]       = useState(false);
   const [url,        setUrl]        = useState('');
+  const [title,      setTitle]      = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error,      setError]      = useState('');
   const { updateUser } = useAuth();
@@ -525,12 +526,15 @@ function AddVideoButton({ user, onVideoAdded }) {
     if (!trimmed) return;
     setSubmitting(true);
     try {
-      const { data } = await api.post('/videos', { url: trimmed });
+      const body = { url: trimmed };
+      if (title.trim()) body.title = title.trim();
+      const { data } = await api.post('/videos', body);
       updateUser({ video_count: (user?.video_count ?? 0) + 1 });
       onVideoAdded(data.video);
       setOpen(false);
       setUrl('');
-      navigate(`/dashboard/videos/${data.video.id}`);
+      setTitle('');
+      navigate('/videos');
     } catch (err) {
       setError(err.response?.data?.message ?? 'Something went wrong.');
     } finally {
@@ -568,21 +572,29 @@ function AddVideoButton({ user, onVideoAdded }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2 items-start">
-      <div>
-        <input
-          ref={inputRef}
-          type="text"
-          value={url}
-          onChange={e => setUrl(e.target.value)}
-          placeholder="Paste a video URL…"
-          className="bg-gray-800 border border-gray-700 text-gray-100 placeholder-gray-500
-                     rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2
-                     focus:ring-amber-500 focus:border-transparent w-52 sm:w-72"
-          disabled={submitting}
-        />
-        {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
-      </div>
+    <form onSubmit={handleSubmit} className="flex flex-wrap gap-2 items-start">
+      <input
+        ref={inputRef}
+        type="text"
+        value={url}
+        onChange={e => setUrl(e.target.value)}
+        placeholder="Paste video URL…"
+        className="bg-gray-800 border border-gray-700 text-gray-100 placeholder-gray-500
+                   rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2
+                   focus:ring-amber-500 focus:border-transparent w-52 sm:w-64"
+        disabled={submitting}
+      />
+      <input
+        type="text"
+        value={title ?? ''}
+        onChange={e => setTitle(e.target.value)}
+        placeholder="Video title (optional)"
+        className="bg-gray-800 border border-gray-700 text-gray-100 placeholder-gray-500
+                   rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2
+                   focus:ring-amber-500 focus:border-transparent w-40 sm:w-52"
+        disabled={submitting}
+      />
+      {error && <p className="w-full text-xs text-red-400 -mt-1">{error}</p>}
       <button
         type="submit"
         disabled={submitting || !url.trim()}
@@ -593,7 +605,7 @@ function AddVideoButton({ user, onVideoAdded }) {
       </button>
       <button
         type="button"
-        onClick={() => { setOpen(false); setUrl(''); setError(''); }}
+        onClick={() => { setOpen(false); setUrl(''); setTitle(''); setError(''); }}
         className="px-2 py-1.5 text-gray-500 hover:text-gray-300 text-sm"
       >
         Cancel
