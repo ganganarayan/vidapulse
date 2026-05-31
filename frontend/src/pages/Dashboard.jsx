@@ -343,6 +343,9 @@ function VideoList({ videos, setVideos, user, promoVideos = [], onArchive, onDel
 // ─────────────────────────────────────────────────────────────────────────
 
 function VideoCard({ video, onClick, onTitleUpdate, onArchive, onDelete, archiveFull }) {
+  const { user }        = useAuth();
+  const { showUpgrade } = useUpgrade();
+  const { showToast }   = useToast();
   const [showEmbed,    setShowEmbed]    = useState(false);
   const [showEdit,     setShowEdit]     = useState(false);
   const [showDelModal, setShowDelModal] = useState(false);
@@ -372,8 +375,24 @@ function VideoCard({ video, onClick, onTitleUpdate, onArchive, onDelete, archive
     try {
       await api.patch(`/videos/${video.id}/archive`, { archive: true });
       onArchive();
-    } catch {
+    } catch (err) {
       setArchiving(false);
+      if (err.response?.data?.error === 'archive_limit') {
+        const nextPlan = user?.plan === 'free' ? 'starter' : 'pro';
+        showToast(
+          <span>
+            Archive full.{' '}
+            <button
+              onClick={() => showUpgrade(nextPlan)}
+              className="underline font-semibold hover:text-white transition-colors"
+            >
+              Upgrade
+            </button>{' '}
+            for more slots.
+          </span>,
+          'error'
+        );
+      }
     }
   }
 
@@ -535,7 +554,9 @@ function VideoCard({ video, onClick, onTitleUpdate, onArchive, onDelete, archive
 // ─────────────────────────────────────────────────────────────────────────
 
 function ArchivedVideoCard({ video, onRestore, liveFull }) {
-  const { showToast } = useToast();
+  const { user }        = useAuth();
+  const { showUpgrade } = useUpgrade();
+  const { showToast }   = useToast();
   const [restoring, setRestoring] = useState(false);
   const sourceLabel = SOURCE_LABELS[video.source_type] ?? 'Video';
   const duration    = fmtDuration(video.duration_seconds);
@@ -546,8 +567,24 @@ function ArchivedVideoCard({ video, onRestore, liveFull }) {
     try {
       await api.patch(`/videos/${video.id}/archive`, { archive: false });
       onRestore();
-    } catch {
+    } catch (err) {
       setRestoring(false);
+      if (err.response?.data?.error === 'plan_limit') {
+        const nextPlan = user?.plan === 'free' ? 'starter' : 'pro';
+        showToast(
+          <span>
+            Live slots full.{' '}
+            <button
+              onClick={() => showUpgrade(nextPlan)}
+              className="underline font-semibold hover:text-white transition-colors"
+            >
+              Upgrade
+            </button>{' '}
+            for more videos.
+          </span>,
+          'error'
+        );
+      }
     }
   }
 
