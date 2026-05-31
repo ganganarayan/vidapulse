@@ -57,6 +57,7 @@ export default function VideoDetail() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeView,   setActiveView]   = useState('overview');
   const [animateIn,    setAnimateIn]    = useState(false);
+  const [drawerOpen,   setDrawerOpen]   = useState(false); // mobile sidebar drawer
 
   // ── Initial fetch ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -117,8 +118,6 @@ export default function VideoDetail() {
   }
 
   // viewState === 'ready' — two-panel dashboard
-  const [drawerOpen, setDrawerOpen] = React.useState(false);
-
   return (
     <div className="min-h-screen bg-gray-900 flex overflow-hidden" style={{ height: '100vh' }}>
       {/* Mobile drawer backdrop */}
