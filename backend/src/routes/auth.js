@@ -226,11 +226,7 @@ router.post('/login', async (req, res, next) => {
     // Also return token in the body so native/mobile clients can use it directly.
     authService.setJwtCookie(res, token);
 
-    // Fire contact webhook only on the user's FIRST-EVER login (never on repeat logins).
-    // authService.loginWithPassword sets first_login=true when last_login_at was NULL.
-    if (user.first_login) {
-      fireContactWebhook(user.id, 'login').catch(() => {});
-    }
+    // Webhook fires only for new signups — login events do not trigger the contact webhook.
 
     return res.json({
       success    : true,
@@ -631,11 +627,7 @@ router.get('/oauth/google/callback', async (req, res) => {
 
     // New OAuth users: authService.findOrCreateOAuthUser already emits
     // user_signed_up → behavioralEventService → contact webhook. No extra fire.
-    // Returning OAuth users: fire login webhook only on their FIRST-EVER login
-    // (isFirstLogin = last_login_at was NULL before this session).
-    if (!isNew && isFirstLogin) {
-      fireContactWebhook(user.id, 'login').catch(() => {});
-    }
+    // Login events do not trigger the contact webhook — signup only.
 
     logger.info(`[auth] Google OAuth success: ${profile.email} (${isNew ? 'new user' : 'login'})`);
     // Token in URL lets the frontend store it in localStorage for non-cookie clients.

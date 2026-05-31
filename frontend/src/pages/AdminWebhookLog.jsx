@@ -28,6 +28,11 @@ export default function AdminWebhookLog() {
   const [resolveMsg,      setResolveMsg]      = useState('');
   const [resendFailedMsg, setResendFailedMsg] = useState('');
 
+  // Bulk selection + staggered retry
+  const [selectedIds,  setSelectedIds]  = useState(new Set());
+  const [bulkRetrying, setBulkRetrying] = useState(null); // null | { total, current, done[], failed[] }
+  const [bulkCountdown,setBulkCountdown]= useState(0);    // seconds to next retry
+
   const load = useCallback(async (pg = 1, status = '') => {
     setLoading(true);
     setFetchError('');
@@ -90,6 +95,53 @@ export default function AdminWebhookLog() {
       setResolveMsg('Failed to unpause.');
     } finally {
       setResolving('');
+    }
+  }
+
+  // Staggered bulk retry — 60 s between each entry
+  async function handleBulkRetry() {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    setBulkRetrying({ total: ids.length, current: 0, done: [], failed: [] });
+    setBulkCountdown(0);
+
+    for (let i = 0; i < ids.length; i++) {
+      setBulkRetrying(prev => ({ ...prev, current: i + 1 }));
+      try {
+        await api.post(`/admin/contact-webhook/retry-entry/${ids[i]}`);
+        setBulkRetrying(prev => ({ ...prev, done: [...prev.done, ids[i]] }));
+      } catch {
+        setBulkRetrying(prev => ({ ...prev, failed: [...prev.failed, ids[i]] }));
+      }
+      // Wait 60 s before the next one (skip wait after last)
+      if (i < ids.length - 1) {
+        for (let s = 60; s > 0; s--) {
+          setBulkCountdown(s);
+          await new Promise(r => setTimeout(r, 1000));
+        }
+        setBulkCountdown(0);
+      }
+    }
+
+    setSelectedIds(new Set());
+    setBulkRetrying(null);
+    webhookAlerts.refresh();
+    load(page, filter);
+  }
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === log.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(log.map(r => r.id)));
     }
   }
 
@@ -200,11 +252,34 @@ export default function AdminWebhookLog() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2">
-            {webhookAlerts.failedCount > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Bulk retry — shown when rows are selected */}
+            {selectedIds.size > 0 && !bulkRetrying && (
+              <button
+                onClick={handleBulkRetry}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border
+                           bg-amber-500/15 text-amber-300 border-amber-500/30
+                           hover:bg-amber-500/25 transition-colors"
+              >
+                ↺ Retry selected ({selectedIds.size})
+                <span className="text-amber-400/60 font-normal">· 1 min apart</span>
+              </button>
+            )}
+            {/* Bulk retry progress */}
+            {bulkRetrying && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs
+                              bg-amber-500/10 border border-amber-500/20 text-amber-300">
+                <span className="w-3 h-3 border border-amber-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                <span>
+                  Retrying {bulkRetrying.current}/{bulkRetrying.total}
+                  {bulkCountdown > 0 && ` — next in ${bulkCountdown}s`}
+                </span>
+              </div>
+            )}
+            {webhookAlerts.failedCount > 0 && !selectedIds.size && (
               <button
                 onClick={handleResendFailed}
-                disabled={!!resolving}
+                disabled={!!resolving || !!bulkRetrying}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border
                            bg-red-500/10 text-red-300 border-red-500/30
                            hover:bg-red-500/20 hover:text-red-200 disabled:opacity-50 transition-colors"
@@ -256,7 +331,16 @@ export default function AdminWebhookLog() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-800/70 border-b border-gray-700/50">
                   <tr>
-                    <th className="text-left px-4 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-[140px]">Sent At</th>
+                    <th className="px-3 py-3 w-8">
+                      <input
+                        type="checkbox"
+                        checked={log.length > 0 && selectedIds.size === log.length}
+                        onChange={toggleSelectAll}
+                        className="w-3.5 h-3.5 accent-amber-500 cursor-pointer"
+                        title="Select all"
+                      />
+                    </th>
+                    <th className="text-left px-4 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-[130px]">Sent At</th>
                     <th className="text-left px-4 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Contact / Event</th>
                     <th className="text-left px-4 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider hidden lg:table-cell">URL Sent To</th>
                     <th className="text-left px-4 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-[90px]">Status</th>
@@ -269,6 +353,8 @@ export default function AdminWebhookLog() {
                     <LogRow
                       key={row.id}
                       row={row}
+                      selected={selectedIds.has(row.id)}
+                      onToggle={() => toggleSelect(row.id)}
                       onRefresh={() => { webhookAlerts.refresh(); load(page, filter); }}
                     />
                   ))}
@@ -314,7 +400,7 @@ export default function AdminWebhookLog() {
 
 // ─── Log Row ──────────────────────────────────────────────────────────────────
 
-function LogRow({ row, onRefresh }) {
+function LogRow({ row, selected, onToggle, onRefresh }) {
   const [expanded,   setExpanded]   = useState(false);
   const [retrying,   setRetrying]   = useState(false);
   const [discarding, setDiscarding] = useState(false);
@@ -355,9 +441,19 @@ function LogRow({ row, onRefresh }) {
   return (
     <>
       <tr
-        className="hover:bg-gray-800/20 transition-colors cursor-pointer"
+        className={`hover:bg-gray-800/20 transition-colors cursor-pointer ${selected ? 'bg-amber-500/5' : ''}`}
         onClick={() => setExpanded(e => !e)}
       >
+        {/* Checkbox */}
+        <td className="px-3 py-3 align-top" onClick={e => { e.stopPropagation(); onToggle(); }}>
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={onToggle}
+            className="w-3.5 h-3.5 accent-amber-500 cursor-pointer"
+          />
+        </td>
+
         {/* Sent At */}
         <td className="px-4 py-3 align-top">
           <div className="text-xs text-gray-400 tabular-nums leading-tight">
@@ -470,7 +566,7 @@ function LogRow({ row, onRefresh }) {
       {/* Expanded detail row */}
       {expanded && (
         <tr className="bg-gray-800/30">
-          <td colSpan={6} className="px-4 py-4">
+          <td colSpan={7} className="px-4 py-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
               {/* Left: Request details */}
