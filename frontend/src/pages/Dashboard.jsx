@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useUpgrade } from '../contexts/UpgradeContext';
+import { useToast } from '../contexts/ToastContext';
 import { VideoLimitBanner } from '../components/upgrade';
 import NotificationBell from '../components/dashboard/NotificationBell';
 import AppLayout from '../components/AppLayout';
@@ -40,25 +41,26 @@ function detectPlatform(url) {
 export default function Dashboard() {
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
+  const [tab,           setTab]           = useState('live');   // 'live' | 'archived'
   const [videos,        setVideos]        = useState(null);
+  const [archived,      setArchived]      = useState(null);
   const [videosLoading, setVideosLoading] = useState(true);
+  const [archLoading,   setArchLoading]   = useState(false);
   const [promoVideos,   setPromoVideos]   = useState([]);
 
-  // After OAuth login the backend redirects to /dashboard?token=JWT.
-  // Strip the token from the URL immediately so it never sits in browser history.
-  // The httpOnly cookie is already set — the token param is only for non-cookie clients.
+  // Strip OAuth token from URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('token')) {
       params.delete('token');
-      const newSearch = params.toString();
-      const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '');
+      const newUrl = window.location.pathname + (params.toString() ? `?${params}` : '');
       window.history.replaceState({}, '', newUrl);
     }
   }, []);
 
-  // Fetch user's own videos
+  // Fetch live videos
   useEffect(() => {
     if (!user) return;
     api.get('/videos')
@@ -67,7 +69,17 @@ export default function Dashboard() {
       .finally(() => setVideosLoading(false));
   }, [user?.id]);
 
-  // Fetch promotion videos (non-blocking — renders when ready)
+  // Fetch archived videos when tab switches
+  useEffect(() => {
+    if (tab !== 'archived' || !user || archived !== null) return;
+    setArchLoading(true);
+    api.get('/videos/archived')
+      .then(res => setArchived(res.data.videos))
+      .catch(() => setArchived([]))
+      .finally(() => setArchLoading(false));
+  }, [tab, user?.id]);
+
+  // Fetch promotion videos
   useEffect(() => {
     if (!user) return;
     api.get('/promotion-videos')
@@ -75,18 +87,56 @@ export default function Dashboard() {
       .catch(() => {});
   }, [user?.id]);
 
-  const hasPromo     = promoVideos.length > 0;
+  const hasPromo      = promoVideos.length > 0;
   const hasUserVideos = videos?.length > 0;
+
+  function handleArchive(videoId) {
+    setVideos(prev => (prev ?? []).filter(v => v.id !== videoId));
+    setArchived(null); // force re-fetch archived list on next tab switch
+    showToast('Video archived', 'info');
+  }
+
+  function handleRestore(videoId) {
+    setArchived(prev => (prev ?? []).filter(v => v.id !== videoId));
+    setVideos(null);    // force re-fetch live list
+    setVideosLoading(true);
+    api.get('/videos').then(res => setVideos(res.data.videos)).catch(() => setVideos([])).finally(() => setVideosLoading(false));
+    showToast('Video restored', 'success');
+  }
+
+  function handleDelete(videoId) {
+    setVideos(prev => (prev ?? []).filter(v => v.id !== videoId));
+    updateUser({ video_count: Math.max(0, (user?.video_count ?? 1) - 1) });
+  }
 
   return (
     <AppLayout>
       {/* Content header */}
-      <div className="border-b border-gray-800 px-6 py-3.5 flex items-center justify-between flex-shrink-0">
-        <h1 className="text-sm font-semibold text-gray-200">Videos</h1>
+      <div className="border-b border-gray-800 px-4 sm:px-6 py-3.5 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-1">
+          {/* Tabs */}
+          {[{ id: 'live', label: 'Live' }, { id: 'archived', label: 'Archived' }].map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                tab === t.id
+                  ? 'bg-amber-500/15 text-amber-400'
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              {t.label}
+              {t.id === 'archived' && (archived?.length ?? 0) > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 text-[10px] bg-gray-700 text-gray-400 rounded-full">
+                  {archived.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
         <div className="flex items-center gap-3">
           <NotificationBell />
-          {/* Show add button once user has own videos, OR promo videos are visible (so they have context) */}
-          {(hasUserVideos || hasPromo) && (
+          {tab === 'live' && (hasUserVideos || hasPromo) && (
             <AddVideoButton user={user} onVideoAdded={(v) => {
               setVideos(prev => [v, ...(prev ?? [])]);
               updateUser({ video_count: (user?.video_count ?? 0) + 1 });
@@ -97,24 +147,50 @@ export default function Dashboard() {
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
-        {videosLoading ? (
-          <LoadingSkeleton />
-        ) : !hasUserVideos && !hasPromo ? (
-          <EmptyState
-            user={user}
-            onVideoAdded={(video) => {
-              setVideos([video]);
-              updateUser({ video_count: (user?.video_count ?? 0) + 1 });
-              navigate(`/dashboard/videos/${video.id}`);
-            }}
-          />
+        {tab === 'live' ? (
+          videosLoading ? (
+            <LoadingSkeleton />
+          ) : !hasUserVideos && !hasPromo ? (
+            <EmptyState
+              user={user}
+              onVideoAdded={(video) => {
+                setVideos([video]);
+                updateUser({ video_count: (user?.video_count ?? 0) + 1 });
+                navigate(`/dashboard/videos/${video.id}`);
+              }}
+            />
+          ) : (
+            <VideoList
+              videos={videos ?? []}
+              setVideos={setVideos}
+              user={user}
+              promoVideos={promoVideos}
+              onArchive={handleArchive}
+              onDelete={handleDelete}
+            />
+          )
         ) : (
-          <VideoList
-            videos={videos ?? []}
-            setVideos={setVideos}
-            user={user}
-            promoVideos={promoVideos}
-          />
+          /* Archived tab */
+          <div className="max-w-5xl w-full mx-auto px-4 sm:px-6 py-8">
+            {archLoading ? (
+              <LoadingSkeleton />
+            ) : !archived?.length ? (
+              <div className="py-20 text-center">
+                <p className="text-sm text-gray-400">No archived videos.</p>
+                <p className="text-xs text-gray-500 mt-1">Archive a video from the Live tab to keep it out of your main list.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {archived.map(video => (
+                  <ArchivedVideoCard
+                    key={video.id}
+                    video={video}
+                    onRestore={() => handleRestore(video.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </main>
     </AppLayout>
@@ -155,7 +231,7 @@ const SOURCE_LABELS = {
 // VideoList
 // ─────────────────────────────────────────────────────────────────────────
 
-function VideoList({ videos, setVideos, user, promoVideos = [] }) {
+function VideoList({ videos, setVideos, user, promoVideos = [], onArchive, onDelete }) {
   const navigate = useNavigate();
   const hasUserVideos = videos.length > 0;
   const hasPromoVideos = promoVideos.length > 0;
@@ -216,9 +292,8 @@ function VideoList({ videos, setVideos, user, promoVideos = [] }) {
                 onTitleUpdate={(newTitle) =>
                   setVideos(prev => prev.map(v => v.id === video.id ? { ...v, title: newTitle } : v))
                 }
-                onDelete={() =>
-                  setVideos(prev => prev.filter(v => v.id !== video.id))
-                }
+                onArchive={() => onArchive(video.id)}
+                onDelete={() => onDelete(video.id)}
               />
             ))}
           </div>
@@ -250,11 +325,12 @@ function VideoList({ videos, setVideos, user, promoVideos = [] }) {
 // VideoCard — redesigned with thumbnail, duration, embed btn, edit pencil
 // ─────────────────────────────────────────────────────────────────────────
 
-function VideoCard({ video, onClick, onTitleUpdate, onDelete }) {
+function VideoCard({ video, onClick, onTitleUpdate, onArchive, onDelete }) {
   const [showEmbed,    setShowEmbed]    = useState(false);
   const [showEdit,     setShowEdit]     = useState(false);
+  const [showDelModal, setShowDelModal] = useState(false);
   const [embedCopied,  setEmbedCopied]  = useState(false);
-  const [confirmDel,   setConfirmDel]   = useState(false);
+  const [archiving,    setArchiving]    = useState(false);
   const [deleting,     setDeleting]     = useState(false);
 
   const sourceLabel    = SOURCE_LABELS[video.source_type] ?? 'Video';
@@ -273,16 +349,25 @@ function VideoCard({ video, onClick, onTitleUpdate, onDelete }) {
       .catch(() => {});
   }
 
-  async function handleDelete(e) {
+  async function handleArchive(e) {
     e.stopPropagation();
-    if (!confirmDel) { setConfirmDel(true); return; }
+    setArchiving(true);
+    try {
+      await api.patch(`/videos/${video.id}/archive`, { archive: true });
+      onArchive();
+    } catch {
+      setArchiving(false);
+    }
+  }
+
+  async function handleDelete() {
     setDeleting(true);
+    setShowDelModal(false);
     try {
       await api.delete(`/videos/${video.id}`);
       onDelete();
     } catch {
       setDeleting(false);
-      setConfirmDel(false);
     }
   }
 
@@ -357,16 +442,25 @@ function VideoCard({ video, onClick, onTitleUpdate, onDelete }) {
               <PencilIcon />
             </button>
 
+            {/* Archive */}
+            <button
+              onClick={handleArchive}
+              disabled={archiving || deleting}
+              title="Archive video"
+              className="p-1.5 rounded-lg text-gray-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors disabled:opacity-40"
+            >
+              {archiving
+                ? <span className="w-3.5 h-3.5 border border-amber-400 border-t-transparent rounded-full animate-spin block" />
+                : <ArchiveIcon />
+              }
+            </button>
+
             {/* Delete */}
             <button
-              onClick={handleDelete}
-              onBlur={() => setTimeout(() => setConfirmDel(false), 200)}
-              disabled={deleting}
-              title={confirmDel ? 'Click again to confirm delete' : 'Delete video'}
-              className={`p-1.5 rounded-lg transition-colors disabled:opacity-40
-                ${confirmDel
-                  ? 'text-red-400 bg-red-500/15 hover:bg-red-500/25'
-                  : 'text-gray-500 hover:text-red-400 hover:bg-red-500/10'}`}
+              onClick={(e) => { e.stopPropagation(); setShowDelModal(true); }}
+              disabled={deleting || archiving}
+              title="Delete video"
+              className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40"
             >
               {deleting
                 ? <span className="w-3.5 h-3.5 border border-red-400 border-t-transparent rounded-full animate-spin block" />
@@ -385,7 +479,108 @@ function VideoCard({ video, onClick, onTitleUpdate, onDelete }) {
           onClose={() => setShowEdit(false)}
         />
       )}
+
+      {/* Delete confirmation modal */}
+      {showDelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowDelModal(false)} />
+          <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl max-w-sm w-full p-6">
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 mx-auto mb-4">
+              <TrashIcon className="text-red-400" size={20} />
+            </div>
+            <h3 className="text-base font-bold text-gray-100 text-center mb-2">Delete video?</h3>
+            <p className="text-sm text-gray-400 text-center leading-relaxed mb-6">
+              This will permanently delete <span className="font-semibold text-gray-200">"{video.title}"</span> along with all its analytics data. This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDelModal(false)}
+                className="flex-1 py-2.5 rounded-lg border border-gray-700 text-sm font-medium text-gray-400 hover:text-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 py-2.5 rounded-lg bg-red-500 hover:bg-red-400 text-sm font-semibold text-white transition-colors"
+              >
+                Delete permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ArchivedVideoCard — same bar as VideoCard but restore-only, no analytics
+// ─────────────────────────────────────────────────────────────────────────
+
+function ArchivedVideoCard({ video, onRestore }) {
+  const { showToast } = useToast();
+  const [restoring, setRestoring] = useState(false);
+  const sourceLabel = SOURCE_LABELS[video.source_type] ?? 'Video';
+  const duration    = fmtDuration(video.duration_seconds);
+
+  async function handleRestore(e) {
+    e.stopPropagation();
+    setRestoring(true);
+    try {
+      await api.patch(`/videos/${video.id}/archive`, { archive: false });
+      onRestore();
+    } catch {
+      setRestoring(false);
+    }
+  }
+
+  return (
+    <div
+      className="bg-gray-800/50 border border-gray-700/50 rounded-xl opacity-75 hover:opacity-90 transition-opacity cursor-pointer"
+      onClick={() => showToast('Restore the video to view its analytics', 'info')}
+    >
+      <div className="flex items-center gap-3 px-4 py-3">
+        {/* Thumbnail */}
+        <div className="flex-shrink-0 relative w-24 h-14 rounded-lg bg-gray-700/60 flex items-center justify-center overflow-hidden">
+          {video.thumbnail_url
+            ? <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover grayscale" />
+            : <VideoIcon className="text-gray-600" />
+          }
+          {duration && (
+            <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[10px] font-medium px-1 py-0.5 rounded leading-none">
+              {duration}
+            </span>
+          )}
+          {/* Archived overlay */}
+          <div className="absolute inset-0 bg-gray-900/40 flex items-center justify-center">
+            <ArchiveIcon className="text-gray-400" />
+          </div>
+        </div>
+
+        {/* Title + meta */}
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-gray-400 truncate">{video.title}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{sourceLabel} · Archived</p>
+        </div>
+
+        {/* Restore button */}
+        <button
+          onClick={handleRestore}
+          disabled={restoring}
+          title="Restore to live"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+                     bg-gray-700/60 text-gray-400 border border-gray-600/60
+                     hover:bg-amber-500/15 hover:text-amber-400 hover:border-amber-500/30
+                     disabled:opacity-50 transition-colors flex-shrink-0"
+        >
+          {restoring
+            ? <span className="w-3 h-3 border border-amber-400 border-t-transparent rounded-full animate-spin" />
+            : <RestoreIcon />
+          }
+          Restore
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -849,14 +1044,35 @@ function CheckSmIcon() {
   );
 }
 
-function TrashIcon() {
+function TrashIcon({ size = 14 }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="3 6 5 6 21 6"/>
       <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
       <path d="M10 11v6M14 11v6"/>
       <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+    </svg>
+  );
+}
+
+function ArchiveIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="21 8 21 21 3 21 3 8"/>
+      <rect x="1" y="3" width="22" height="5"/>
+      <line x1="10" y1="12" x2="14" y2="12"/>
+    </svg>
+  );
+}
+
+function RestoreIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="1 4 1 10 7 10"/>
+      <path d="M3.51 15a9 9 0 1 0 .49-3.35"/>
     </svg>
   );
 }
