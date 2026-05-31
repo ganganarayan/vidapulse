@@ -60,8 +60,10 @@ function requireAuth(req, res, next) {
 
   // Load fresh user from DB so plan + role are always current
   // (if user upgrades plan mid-session, they get the new plan immediately)
+  // COALESCE(p.name, 'free') guards against NULL plan_id — treats unassigned as free plan
   pool.query(
-    `SELECT u.id, u.email, u.name, u.role, u.is_active, p.name AS plan
+    `SELECT u.id, u.email, u.name, u.role, u.is_active,
+            COALESCE(p.name::text, 'free') AS plan
      FROM users u
      LEFT JOIN plans p ON p.id = u.plan_id
      WHERE u.id = $1`,
@@ -127,8 +129,9 @@ function requireAdmin(req, res, next) {
     });
   }
 
-  if (req.user.role !== 'admin') {
-    logger.warn(`[requireAdmin] Denied: ${req.user.email} (role=${req.user.role})`);
+  const isAdmin = req.user.role === 'admin' || req.user.plan === 'admin_lifetime';
+  if (!isAdmin) {
+    logger.warn(`[requireAdmin] Denied: ${req.user.email} (role=${req.user.role}, plan=${req.user.plan})`);
     return res.status(403).json({
       error  : 'Forbidden',
       message: 'Admin access required',

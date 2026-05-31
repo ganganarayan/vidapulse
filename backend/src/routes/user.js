@@ -629,7 +629,8 @@ router.put('/alert-prefs', requireAuth, planGate('alerts'), async (req, res, nex
 
 router.get('/audience', requireAuth, async (req, res, next) => {
   try {
-    const isPaid = ['starter', 'pro', 'admin_lifetime'].includes(req.user.plan);
+    const isPaid = ['starter', 'pro', 'admin_lifetime'].includes(req.user.plan)
+               || req.user.role === 'admin'; // admin role always gets full access
 
     // Aggregate stats (all plans)
     const { rows: [stats] } = await pool.query(
