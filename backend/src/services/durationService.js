@@ -26,10 +26,11 @@ const TIMEOUT_MS = 6000; // 6 s max per external request
 async function fetchDuration(url, sourceType) {
   try {
     switch (sourceType) {
-      case 'youtube':     return await withTimeout(fetchYouTubeDuration(url),  TIMEOUT_MS);
-      case 'vimeo':       return await withTimeout(fetchVimeoDuration(url),    TIMEOUT_MS);
-      case 'loom':        return await withTimeout(fetchLoomDuration(url),     TIMEOUT_MS);
-      default:            return null;
+      case 'youtube':      return await withTimeout(fetchYouTubeDuration(url),      TIMEOUT_MS);
+      case 'vimeo':        return await withTimeout(fetchVimeoDuration(url),        TIMEOUT_MS);
+      case 'loom':         return await withTimeout(fetchLoomDuration(url),         TIMEOUT_MS);
+      case 'google_drive': return await withTimeout(fetchGoogleDriveDuration(url),  TIMEOUT_MS);
+      default:             return null;
     }
   } catch (err) {
     logger.warn(`[duration] ${sourceType} fetch failed for ${url}: ${err.message}`);
@@ -109,6 +110,40 @@ async function fetchLoomDuration(url) {
   if (!res.ok) return null;
   const data = await res.json();
   return (data.duration && data.duration > 0) ? parseInt(data.duration, 10) : null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Google Drive — parse durationMillis from the embedded page JSON
+// Works for public "anyone with link" files; no API key required.
+// ─────────────────────────────────────────────────────────────────────────
+
+async function fetchGoogleDriveDuration(url) {
+  try {
+    const { pathname } = new URL(url);
+    const match = pathname.match(/\/file\/d\/([^/]+)/);
+    if (!match) return null;
+
+    const fileId  = match[1];
+    const viewUrl = `https://drive.google.com/file/d/${fileId}/view?usp=sharing`;
+
+    const res = await fetch(viewUrl, {
+      headers: {
+        'User-Agent'     : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
+    if (!res.ok) return null;
+
+    const html = await res.text();
+
+    // Google Drive embeds video metadata as JSON in the initial HTML
+    const m = html.match(/"durationMillis":"(\d+)"/);
+    if (m) return Math.round(parseInt(m[1], 10) / 1000);
+
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
