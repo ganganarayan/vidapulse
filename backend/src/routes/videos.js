@@ -992,7 +992,7 @@ async function fetchPlayerSettings(videoId) {
 router.get('/:id/player-settings', requireAuth, async (req, res, next) => {
   try {
     const { rows: [video] } = await pool.query(
-      `SELECT id FROM videos WHERE id=$1 AND user_id=$2 AND is_active=TRUE`,
+      `SELECT id FROM videos WHERE id=$1 AND user_id=$2`,
       [req.params.id, req.user.id]
     );
     if (!video) return res.status(404).json({ error: 'Video not found' });
@@ -1010,17 +1010,20 @@ router.get('/:id/player-settings', requireAuth, async (req, res, next) => {
 // The frontend always sends the full settings object on any toggle change.
 // ─────────────────────────────────────────────────────────────────────────
 
+// Coerce null → undefined so DB nulls in boolean columns never fail validation
+const nullBool = z.boolean().nullish().transform(v => v ?? undefined);
+
 const playerSettingsSchema = z.object({
-  autoplay              : z.boolean().optional(),
-  autoplay_muted        : z.boolean().optional(),
-  show_seek_bar         : z.boolean().optional(),
-  show_play_pause_btn   : z.boolean().optional(),
-  show_playback_speed   : z.boolean().optional(),
-  show_fullscreen_btn   : z.boolean().optional(),
-  show_volume_control   : z.boolean().optional(),
-  show_rewind_forward   : z.boolean().optional(),
-  resume_playback       : z.boolean().optional(),
-  loop                  : z.boolean().optional(),
+  autoplay              : nullBool,
+  autoplay_muted        : nullBool,
+  show_seek_bar         : nullBool,
+  show_play_pause_btn   : nullBool,
+  show_playback_speed   : nullBool,
+  show_fullscreen_btn   : nullBool,
+  show_volume_control   : nullBool,
+  show_rewind_forward   : nullBool,
+  resume_playback       : nullBool,
+  loop                  : nullBool,
   accent_color          : z.string().regex(/^#[0-9a-fA-F]{6}$/).nullish().transform(v => v ?? undefined),
 });
 
@@ -1028,14 +1031,17 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
   try {
     const parseResult = playerSettingsSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ error: 'Validation failed', fields: parseResult.error.flatten().fieldErrors });
+      const fieldErrors = parseResult.error.flatten().fieldErrors;
+      logger.error(`[player-settings] validation failed for video ${req.params.id}: ${JSON.stringify(fieldErrors)}`);
+      return res.status(400).json({ error: 'Validation failed', message: 'Invalid settings values', fields: fieldErrors });
     }
 
+    // Check ownership only — is_active not required (settings can be edited regardless)
     const { rows: [video] } = await pool.query(
-      `SELECT id FROM videos WHERE id=$1 AND user_id=$2 AND is_active=TRUE`,
+      `SELECT id FROM videos WHERE id=$1 AND user_id=$2`,
       [req.params.id, req.user.id]
     );
-    if (!video) return res.status(404).json({ error: 'Video not found' });
+    if (!video) return res.status(404).json({ error: 'Video not found', message: 'Video not found' });
 
     // Merge incoming with current defaults, then upsert the full row
     const existing = await fetchPlayerSettings(req.params.id);
