@@ -51,8 +51,9 @@ router.get('/me', requireAuth, async (req, res, next) => {
           (
             SELECT COUNT(*)
             FROM   videos v
-            WHERE  v.user_id   = u.id
-              AND  v.is_active = TRUE
+            WHERE  v.user_id     = u.id
+              AND  v.is_active   = TRUE
+              AND  v.is_archived = FALSE
           )               AS video_count,
           up.theme,
           up.timezone,

@@ -304,6 +304,26 @@ router.post('/', requireAuth, videoLimitGate, async (req, res, next) => {
   }
 });
 
+// ── GET /api/videos/archived — archived videos list ───────────────────────────
+router.get('/archived', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT v.id, v.title, v.description, v.original_url, v.source_type,
+              v.thumbnail_url, v.duration_seconds, v.total_plays, v.unique_viewers,
+              v.processing_status, v.is_archived, v.created_at, v.updated_at,
+              0 AS total_views, 0 AS unique_views, 0 AS total_viewers, 0 AS unique_session_viewers
+       FROM   videos v
+       WHERE  v.user_id     = $1
+         AND  v.is_active   = TRUE
+         AND  v.is_archived = TRUE
+       ORDER  BY v.updated_at DESC
+       LIMIT  100`,
+      [req.user.id]
+    );
+    return res.json({ videos: rows });
+  } catch (err) { next(err); }
+});
+
 // ─────────────────────────────────────────────────────────────────────────
 // GET /api/videos/:id
 //
@@ -537,26 +557,6 @@ router.patch('/:id/archive', requireAuth, async (req, res, next) => {
     if (rowCount === 0) return res.status(404).json({ error: 'Video not found' });
     logger.info(`[videos] ${archive ? 'Archived' : 'Restored'} video ${req.params.id} for user ${req.user.id}`);
     return res.json({ ok: true });
-  } catch (err) { next(err); }
-});
-
-// ── GET /api/videos/archived — archived videos list ───────────────────────────
-router.get('/archived', requireAuth, async (req, res, next) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT v.id, v.title, v.description, v.original_url, v.source_type,
-              v.thumbnail_url, v.duration_seconds, v.total_plays, v.unique_viewers,
-              v.processing_status, v.is_archived, v.created_at, v.updated_at,
-              0 AS total_views, 0 AS unique_views, 0 AS total_viewers, 0 AS unique_session_viewers
-       FROM   videos v
-       WHERE  v.user_id     = $1
-         AND  v.is_active   = TRUE
-         AND  v.is_archived = TRUE
-       ORDER  BY v.updated_at DESC
-       LIMIT  100`,
-      [req.user.id]
-    );
-    return res.json({ videos: rows });
   } catch (err) { next(err); }
 });
 
