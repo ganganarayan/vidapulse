@@ -1326,17 +1326,27 @@ router.post('/copy-user-data', requireAuth, requireAdmin, async (req, res, next)
         videoMap[v.id] = newId;
         log.push(`  Video "${v.title}" → ${newId}`);
 
-        // ── player settings ────────────────────────────────────────────────
+        // ── player settings (all actual columns) ───────────────────────────
         await client.query(
-          `INSERT INTO video_player_settings (user_id,video_id,autoplay,muted,loop,show_controls,primary_color,border_radius,shadow,created_at,updated_at)
-           SELECT $1,$2,autoplay,muted,loop,show_controls,primary_color,border_radius,shadow,created_at,updated_at
-           FROM video_player_settings WHERE video_id=$3 ON CONFLICT (video_id) DO NOTHING`,
-          [tgt.id, newId, v.id]);
+          `INSERT INTO video_player_settings
+             (video_id,show_seek_bar,show_elapsed_time,show_remaining_time,show_playback_speed,
+              show_mute_button,show_play_pause_btn,show_fullscreen_btn,show_pip_btn,click_to_play_pause,
+              autoplay,autoplay_muted,loop,available_speeds,default_speed,player_theme,accent_color,
+              show_branding,resume_playback,show_controls,show_volume_control,show_rewind_forward,
+              created_at,updated_at)
+           SELECT $1,show_seek_bar,show_elapsed_time,show_remaining_time,show_playback_speed,
+              show_mute_button,show_play_pause_btn,show_fullscreen_btn,show_pip_btn,click_to_play_pause,
+              autoplay,autoplay_muted,loop,available_speeds,default_speed,player_theme,accent_color,
+              show_branding,resume_playback,show_controls,show_volume_control,show_rewind_forward,
+              created_at,updated_at
+           FROM video_player_settings WHERE video_id=$2
+           ON CONFLICT (video_id) DO NOTHING`,
+          [newId, v.id]);
 
         // ── embed configs ──────────────────────────────────────────────────
         await client.query(
-          `INSERT INTO embed_configs (video_id,allowed_domains,require_domain_match,created_at,updated_at)
-           SELECT $1,allowed_domains,require_domain_match,created_at,updated_at
+          `INSERT INTO embed_configs (video_id,allowed_domains,custom_thumbnail_url,created_at,updated_at)
+           SELECT $1,allowed_domains,custom_thumbnail_url,created_at,updated_at
            FROM embed_configs WHERE video_id=$2 ON CONFLICT (video_id) DO NOTHING`,
           [newId, v.id]);
 
