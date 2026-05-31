@@ -191,6 +191,7 @@ function AppSidebar({ onClose }) {
             />
             <SidebarItem to="/admin/help"        icon={<HelpIcon />}     label="Help Editor"  active={active('/admin/help')} />
             <SidebarItem to="/admin/onboarding"  icon={<HeartIcon />}    label="Onboarding"   active={active('/admin/onboarding')} />
+            <SidebarItem to="/admin/copy-data"   icon={<CopyDataIcon />} label="Copy Data"    active={active('/admin/copy-data')} />
           </>
         )}
       </nav>
@@ -484,3 +485,4 @@ function UTMIcon()      { return I(<><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.
 function EmbedIcon()    { return I(<><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></>); }
 function PlayerIcon()   { return I(<><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></>); }
 function DomainIcon()   { return I(<><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></>); }
+function CopyDataIcon() { return I(<><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>); }

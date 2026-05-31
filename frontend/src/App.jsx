@@ -33,6 +33,7 @@ import CTATrackingPage   from './pages/CTATrackingPage';
 import AdminWebhookLog   from './pages/AdminWebhookLog';
 import AdminPromotionPage from './pages/AdminPromotionPage';
 import AdminRevenue       from './pages/AdminRevenue';
+import AdminCopyData     from './pages/AdminCopyData';
 import UpgradePage       from './pages/UpgradePage';
 import PaymentSuccess    from './pages/PaymentSuccess';
 import BillingPage       from './pages/BillingPage';
@@ -275,6 +276,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <OnboardingHealth />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/copy-data"
+            element={
+              <AdminRoute>
+                <AdminCopyData />
               </AdminRoute>
             }
           />
