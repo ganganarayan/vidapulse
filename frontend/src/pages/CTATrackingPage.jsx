@@ -129,7 +129,7 @@ export default function CTATrackingPage() {
         {/* Body */}
         <div className="flex-1 overflow-y-auto">
 
-            <div className="max-w-2xl mx-auto px-6 py-6 space-y-4">
+            <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4">
 
               {/* How it works banner */}
               <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl px-4 py-3 flex gap-3">
