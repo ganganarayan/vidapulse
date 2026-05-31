@@ -37,6 +37,8 @@ const { fetchDuration }          = require('../services/durationService');
  */
 const IFRAME_SOURCES  = new Set(['youtube', 'vimeo', 'loom', 'zoom', 'google_drive']);
 const DIRECT_SOURCES  = new Set(['hls_stream', 'mp4_direct', 'amazon_s3', 'azure_blob']);
+// Sources that need server-side URL resolution at creation time
+const RESOLVE_SOURCES = new Set(['veed', 'mega']);
 
 /**
  * Detect the source_type ENUM value from a video URL.
@@ -56,6 +58,8 @@ function detectSourceType(rawUrl) {
     if (host === 'onedrive.live.com' || host === '1drv.ms') return 'onedrive';
     if (host.endsWith('.amazonaws.com') || host === 's3.amazonaws.com') return 'amazon_s3';
     if (host.endsWith('.blob.core.windows.net'))             return 'azure_blob';
+    if (host === 'veed.io' || host.endsWith('.veed.io'))    return 'veed';
+    if (host === 'mega.nz')                                  return 'mega';
 
     const ext = pathname.split('.').pop().toLowerCase();
     if (['mp4', 'webm', 'mov', 'avi', 'mkv', 'flv'].includes(ext)) return 'mp4_direct';
@@ -83,6 +87,8 @@ function generateDefaultTitle(rawUrl) {
     if (host === 'zoom.us'  || host.endsWith('.zoom.us'))  return 'Zoom Recording';
     if (host === 'drive.google.com')                    return 'Google Drive Video';
     if (host === 'dropbox.com')                         return 'Dropbox Video';
+    if (host === 'veed.io' || host.endsWith('.veed.io')) return 'Veed Video';
+    if (host === 'mega.nz')                              return 'Mega Video';
 
     // Fall back to the last path segment, cleaned up
     const segments = pathname.split('/').filter(Boolean);
@@ -98,6 +104,67 @@ function generateDefaultTitle(rawUrl) {
     return 'My Video';
   } catch {
     return 'My Video';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// URL resolvers for veed.io and mega.nz
+// Returns { playableUrl, notPublic }
+// ─────────────────────────────────────────────────────────────────────────
+
+const RESOLVE_TIMEOUT_MS = 6000;
+
+async function resolveVeedUrl(url) {
+  try {
+    const { pathname } = new URL(url);
+    // Accept /view/UUID or /view/UUID/any-title-slug
+    const match = pathname.match(/\/view\/([a-f0-9-]{8,})/i);
+    if (!match) return { playableUrl: null, notPublic: true };
+
+    const videoId  = match[1];
+    const embedUrl = `https://www.veed.io/embed/${videoId}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), RESOLVE_TIMEOUT_MS);
+    try {
+      const resp = await fetch(url, {
+        method : 'GET',
+        signal : controller.signal,
+        redirect: 'follow',
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; VidaPulse/1.0; +https://vidapulse.com)' },
+      });
+      clearTimeout(timer);
+      // Veed redirects private/workspace videos to /workspaces or /login
+      const finalUrl = resp.url || '';
+      const notPublic = !resp.ok || finalUrl.includes('/workspaces') || finalUrl.includes('/login');
+      return { playableUrl: embedUrl, notPublic };
+    } catch {
+      clearTimeout(timer);
+      // Network error or timeout — flag not_public so user sees the warning
+      return { playableUrl: embedUrl, notPublic: true };
+    }
+  } catch {
+    return { playableUrl: null, notPublic: true };
+  }
+}
+
+function resolveMegaUrl(url) {
+  try {
+    const parsed = new URL(url);
+    // Supported path forms: /file/HASH, /video/HASH, /embed/HASH
+    const pathMatch = parsed.pathname.match(/\/(file|video|embed)\/([A-Za-z0-9_-]+)/);
+    if (!pathMatch) return { playableUrl: null, notPublic: true };
+
+    const fileId = pathMatch[2];
+    const key    = parsed.hash; // '#KEY' — needed for client-side decryption
+
+    // Without the decryption key the file is completely inaccessible
+    if (!key || key.length < 5) return { playableUrl: null, notPublic: true };
+
+    const embedUrl = `https://mega.nz/embed/${fileId}${key}`;
+    return { playableUrl: embedUrl, notPublic: false };
+  } catch {
+    return { playableUrl: null, notPublic: true };
   }
 }
 
@@ -122,6 +189,7 @@ router.get('/', requireAuth, async (req, res, next) => {
               v.unique_viewers,
               v.avg_watch_pct,
               v.processing_status,
+              v.processing_error,
               v.insight_status,
               v.story_status,
               v.primary_drop_off_second,
@@ -231,12 +299,28 @@ router.post('/', requireAuth, videoLimitGate, async (req, res, next) => {
 
     // Sources that need no server-side processing — mark as completed
     // immediately so the frontend skips the animation and shows the dashboard.
-    const isIframe         = IFRAME_SOURCES.has(sourceType);
-    const isDirect         = DIRECT_SOURCES.has(sourceType);
-    const isReadyNow       = isIframe || isDirect;
-    const processingStatus = isReadyNow ? 'completed' : 'pending';
-    const playableUrl      = isReadyNow ? url : null;
-    const usingIframe      = isIframe;
+    const isIframe   = IFRAME_SOURCES.has(sourceType);
+    const isDirect   = DIRECT_SOURCES.has(sourceType);
+    const isResolve  = RESOLVE_SOURCES.has(sourceType);
+
+    let processingStatus = 'pending';
+    let processingError  = null;
+    let playableUrl      = null;
+    let usingIframe      = isIframe;
+
+    if (isIframe || isDirect) {
+      processingStatus = 'completed';
+      playableUrl      = url;
+    } else if (isResolve) {
+      const resolved = sourceType === 'veed'
+        ? await resolveVeedUrl(url)
+        : resolveMegaUrl(url);
+
+      playableUrl      = resolved.playableUrl;
+      processingStatus = resolved.notPublic ? 'failed' : 'completed';
+      processingError  = resolved.notPublic ? 'not_public' : null;
+      usingIframe      = !resolved.notPublic;
+    }
 
     // ── Fetch duration (non-blocking, best-effort) ────────────────────────
     // Run before the INSERT so the value is available immediately in the
@@ -250,20 +334,20 @@ router.post('/', requireAuth, videoLimitGate, async (req, res, next) => {
     const { rows: [video] } = await pool.query(
       `INSERT INTO videos
          (user_id, title, original_url, source_type,
-          processing_status, using_iframe_fallback, playable_url,
+          processing_status, processing_error, using_iframe_fallback, playable_url,
           duration_seconds,
           insight_status, story_status)
        VALUES
-         ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', 'pending')
+         ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', 'pending')
        RETURNING
          id, title, original_url, source_type, playable_url, thumbnail_url,
          duration_seconds,
          total_plays, unique_viewers, avg_watch_pct,
-         processing_status, using_iframe_fallback,
+         processing_status, processing_error, using_iframe_fallback,
          insight_status, story_status,
          created_at`,
-      [req.user.id, videoTitle, url, sourceType, processingStatus, usingIframe, playableUrl,
-       durationSeconds ?? null]
+      [req.user.id, videoTitle, url, sourceType, processingStatus, processingError,
+       usingIframe, playableUrl, durationSeconds ?? null]
     );
 
     logger.info(`[videos] Created video ${video.id} (${sourceType}) for user ${req.user.id}`);
@@ -578,6 +662,44 @@ router.patch('/:id/archive', requireAuth, async (req, res, next) => {
     if (rowCount === 0) return res.status(404).json({ error: 'Video not found' });
     logger.info(`[videos] ${archive ? 'Archived' : 'Restored'} video ${req.params.id} for user ${req.user.id}`);
     return res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// ── POST /api/videos/:id/recheck — re-verify public accessibility ────────────
+router.post('/:id/recheck', requireAuth, async (req, res, next) => {
+  try {
+    const { rows: [video] } = await pool.query(
+      `SELECT id, original_url, source_type FROM videos WHERE id=$1 AND user_id=$2 AND is_active=TRUE`,
+      [req.params.id, req.user.id]
+    );
+    if (!video) return res.status(404).json({ error: 'Video not found' });
+    if (!RESOLVE_SOURCES.has(video.source_type)) {
+      return res.status(400).json({ error: 'Recheck not supported for this source type' });
+    }
+
+    const resolved = video.source_type === 'veed'
+      ? await resolveVeedUrl(video.original_url)
+      : resolveMegaUrl(video.original_url);
+
+    const { rows: [updated] } = await pool.query(
+      `UPDATE videos
+       SET processing_status      = $1,
+           processing_error       = $2,
+           playable_url           = $3,
+           using_iframe_fallback  = $4,
+           updated_at             = NOW()
+       WHERE id = $5
+       RETURNING id, processing_status, processing_error, playable_url`,
+      [
+        resolved.notPublic ? 'failed' : 'completed',
+        resolved.notPublic ? 'not_public' : null,
+        resolved.playableUrl,
+        !resolved.notPublic,
+        video.id,
+      ]
+    );
+    logger.info(`[videos] Recheck ${video.id} (${video.source_type}): ${resolved.notPublic ? 'still not public' : 'now public'}`);
+    return res.json({ video: updated });
   } catch (err) { next(err); }
 });
 

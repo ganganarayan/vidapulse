@@ -240,6 +240,8 @@ const SOURCE_LABELS = {
   hls_stream  : 'HLS Stream',
   amazon_s3   : 'Amazon S3',
   azure_blob  : 'Azure Blob',
+  veed        : 'Veed',
+  mega        : 'Mega',
   other       : 'Video',
 };
 
@@ -311,6 +313,9 @@ function VideoList({ videos, setVideos, user, promoVideos = [], onArchive, onDel
                 onArchive={() => onArchive(video.id)}
                 onDelete={() => onDelete(video.id)}
                 archiveFull={archiveFull}
+                onVideoUpdate={(updated) =>
+                  setVideos(prev => prev.map(v => v.id === updated.id ? { ...v, ...updated } : v))
+                }
               />
             ))}
           </div>
@@ -342,7 +347,7 @@ function VideoList({ videos, setVideos, user, promoVideos = [], onArchive, onDel
 // VideoCard — redesigned with thumbnail, duration, embed btn, edit pencil
 // ─────────────────────────────────────────────────────────────────────────
 
-function VideoCard({ video, onClick, onTitleUpdate, onArchive, onDelete, archiveFull }) {
+function VideoCard({ video, onClick, onTitleUpdate, onArchive, onDelete, archiveFull, onVideoUpdate }) {
   const { user }        = useAuth();
   const { showUpgrade } = useUpgrade();
   const { showToast }   = useToast();
@@ -352,6 +357,27 @@ function VideoCard({ video, onClick, onTitleUpdate, onArchive, onDelete, archive
   const [embedCopied,  setEmbedCopied]  = useState(false);
   const [archiving,    setArchiving]    = useState(false);
   const [deleting,     setDeleting]     = useState(false);
+  const [rechecking,   setRechecking]   = useState(false);
+
+  const isNotPublic = video.processing_error === 'not_public';
+
+  async function handleRecheck(e) {
+    e.stopPropagation();
+    setRechecking(true);
+    try {
+      const { data } = await api.post(`/videos/${video.id}/recheck`);
+      if (data.video.processing_error === 'not_public') {
+        showToast('Still not publicly accessible', 'error');
+      } else {
+        showToast('Video is now public — reloading…', 'success');
+        onVideoUpdate?.(data.video);
+      }
+    } catch {
+      showToast('Recheck failed', 'error');
+    } finally {
+      setRechecking(false);
+    }
+  }
 
   const sourceLabel    = SOURCE_LABELS[video.source_type] ?? 'Video';
   const duration       = fmtDuration(video.duration_seconds);
@@ -444,6 +470,22 @@ function VideoCard({ video, onClick, onTitleUpdate, onArchive, onDelete, archive
               <span className="sm:hidden text-gray-400">·</span>
               <span className="sm:hidden">{uniqueViewers} viewers</span>
             </p>
+            {/* Not Public Link warning */}
+            {isNotPublic && (
+              <div className="mt-1.5 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/15 text-red-400 border border-red-500/30">
+                  <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>
+                  Not Public Link
+                </span>
+                <button
+                  onClick={handleRecheck}
+                  disabled={rechecking}
+                  className="text-[10px] font-semibold text-gray-500 hover:text-amber-400 transition-colors disabled:opacity-50"
+                >
+                  {rechecking ? 'Checking…' : 'Re-check'}
+                </button>
+              </div>
+            )}
           </button>
 
           {/* Metric columns */}
