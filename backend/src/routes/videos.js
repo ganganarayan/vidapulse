@@ -222,7 +222,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     // For any video that still has no duration and is a queryable platform,
     // kick off a background fetch so it appears on next page load.
     const needsDuration = rows.filter(
-      v => v.duration_seconds == null && ['youtube', 'vimeo', 'loom'].includes(v.source_type)
+      v => v.duration_seconds == null && ['youtube', 'vimeo', 'loom', 'google_drive'].includes(v.source_type)
     );
     if (needsDuration.length > 0) {
       Promise.allSettled(
