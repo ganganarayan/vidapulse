@@ -521,6 +521,45 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 // Verifies ownership.
 // ─────────────────────────────────────────────────────────────────────────
 
+// ── PATCH /api/videos/:id/archive — toggle archive/restore ───────────────────
+router.patch('/:id/archive', requireAuth, async (req, res, next) => {
+  try {
+    const { archive } = req.body;           // true = archive, false = restore
+    const { rowCount } = await pool.query(
+      `UPDATE videos
+       SET    is_archived = $1,
+              updated_at  = NOW()
+       WHERE  id       = $2
+         AND  user_id  = $3
+         AND  is_active = TRUE`,
+      [!!archive, req.params.id, req.user.id]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'Video not found' });
+    logger.info(`[videos] ${archive ? 'Archived' : 'Restored'} video ${req.params.id} for user ${req.user.id}`);
+    return res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// ── GET /api/videos/archived — archived videos list ───────────────────────────
+router.get('/archived', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT v.id, v.title, v.description, v.original_url, v.source_type,
+              v.thumbnail_url, v.duration_seconds, v.total_plays, v.unique_viewers,
+              v.processing_status, v.is_archived, v.created_at, v.updated_at,
+              0 AS total_views, 0 AS unique_views, 0 AS total_viewers, 0 AS unique_session_viewers
+       FROM   videos v
+       WHERE  v.user_id     = $1
+         AND  v.is_active   = TRUE
+         AND  v.is_archived = TRUE
+       ORDER  BY v.updated_at DESC
+       LIMIT  100`,
+      [req.user.id]
+    );
+    return res.json({ videos: rows });
+  } catch (err) { next(err); }
+});
+
 router.delete('/:id', requireAuth, async (req, res, next) => {
   try {
     const { rowCount } = await pool.query(
