@@ -15,10 +15,6 @@
  *                                       on all pending/stale videos
  *                                       (re-entrance guarded — skips if still running)
  *
- *   no_video_after_48hrs every hour   — emits event for users who signed up
- *                                       > 48 hours ago but have added no video
- *                                       (weekly cap in emitEvent: fires max 1×/7 days)
- *
  *   no_return_after_wow  every hour   — emits event for users who saw the wow
  *                                       moment but haven't logged in for 72 hours
  *                                       and haven't converted to paid
@@ -53,7 +49,6 @@ const DAILY_STATS_DELAY    = 10 * 60_000;   // daily stats backfill starts 10 mi
 const EXPIRY_CHECK_DELAY   = 15 * 60_000;   // expiry check starts 15 min after server ready
 
 // Thresholds for behavioral event jobs
-const NO_VIDEO_HOURS       = 48;            // user must have signed up 48+ hrs ago
 const NO_RETURN_HOURS      = 72;            // 3 days after wow moment without return
 
 // ── Runtime state ─────────────────────────────────────────────────────────
@@ -170,44 +165,7 @@ async function _jobInsightBatch() {
 // ─────────────────────────────────────────────────────────────────────────
 
 async function _jobHourly() {
-  await _jobNoVideoAfter48hrs();
   await _jobNoReturnAfterWow();
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// JOB: no_video_after_48hrs
-//
-// Finds users who signed up more than 48 hours ago and have never added a
-// video. Emits 'no_video_after_48hrs' via emitEvent, which enforces the
-// WEEKLY_CAP (won't fire again for the same user within 7 days).
-//
-// Intent: prompts divineleads to send a "you haven't added your first video"
-// email, giving the user a nudge to experience the product.
-// ─────────────────────────────────────────────────────────────────────────
-
-async function _jobNoVideoAfter48hrs() {
-  const { rows: users } = await pool.query(
-    `SELECT u.id
-     FROM   users u
-     WHERE  u.is_active   = TRUE
-       AND  u.created_at  < NOW() - ($1 || ' hours')::INTERVAL
-       AND  u.first_video_id IS NULL
-       AND  NOT EXISTS (
-         SELECT 1
-         FROM   videos v
-         WHERE  v.user_id  = u.id
-           AND  v.is_active = TRUE
-       )`,
-    [NO_VIDEO_HOURS]
-  );
-
-  if (users.length === 0) return;
-  logger.info(`[scheduledJobs] no_video_after_48hrs — ${users.length} eligible user(s)`);
-
-  for (const { id } of users) {
-    await emitEvent(id, 'no_video_after_48hrs');
-    // emitEvent checks WEEKLY_CAP_EVENTS — skips silently if fired within 7 days
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
