@@ -66,7 +66,7 @@ router.get('/:videoId', async (req, res) => {
     const DEFAULTS = {
       autoplay: false, autoplay_muted: true, start_muted: true,
       show_seek_bar: true, show_play_pause_btn: true, show_playback_speed: true,
-      show_fullscreen_btn: true, show_volume_control: true,
+      show_fullscreen_btn: true, show_volume_control: true, show_rewind_forward: true,
       resume_playback: false, loop: false, accent_color: '#F59E0B',
     };
     let playerSettings = { ...DEFAULTS };
@@ -74,7 +74,7 @@ router.get('/:videoId', async (req, res) => {
       const { rows: [ps] } = await pool.query(
         `SELECT autoplay, autoplay_muted, start_muted, show_seek_bar,
                 show_play_pause_btn, show_playback_speed, show_fullscreen_btn,
-                show_volume_control, resume_playback, loop, accent_color
+                show_volume_control, show_rewind_forward, resume_playback, loop, accent_color
          FROM   video_player_settings WHERE video_id = $1`,
         [videoId]
       );
