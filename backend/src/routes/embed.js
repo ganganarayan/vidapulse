@@ -847,13 +847,36 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
       var v=document.getElementById('vp-vid');
 
       ${isHls ? `
-      var s=document.createElement('script');
-      s.src='https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js';
-      s.onload=function(){
-        if(Hls.isSupported()){var hls=new Hls();hls.loadSource(${JSON.stringify(videoUrl)});hls.attachMedia(v);}
-        else if(v.canPlayType('application/vnd.apple.mpegurl')){v.src=${JSON.stringify(videoUrl)};}
+      var HLS_URL=${JSON.stringify(videoUrl)};
+      function startNativeHls(){
+        /* Safari / iOS play HLS natively */
+        if(v.canPlayType('application/vnd.apple.mpegurl')){v.src=HLS_URL;}
         attachVideoEvents(v);sess();
+      }
+      var s=document.createElement('script');
+      /* Pinned to a stable hls.js version — NEVER use @latest in production:
+         a new upstream release can break playback for every viewer at once. */
+      s.src='https://cdn.jsdelivr.net/npm/hls.js@1.5/dist/hls.min.js';
+      s.onload=function(){
+        if(window.Hls&&Hls.isSupported()){
+          var hls=new Hls({enableWorker:true});
+          hls.loadSource(HLS_URL);
+          hls.attachMedia(v);
+          /* Recover from transient network/media errors instead of going black */
+          hls.on(Hls.Events.ERROR,function(evt,data){
+            if(!data||!data.fatal)return;
+            if(data.type===Hls.ErrorTypes.NETWORK_ERROR){hls.startLoad();}
+            else if(data.type===Hls.ErrorTypes.MEDIA_ERROR){hls.recoverMediaError();}
+            else{try{hls.destroy();}catch(_){}startNativeHls();}
+          });
+          attachVideoEvents(v);sess();
+        } else {
+          startNativeHls();
+        }
       };
+      /* If the CDN script fails to load, still wire up native playback +
+         analytics so the play button works on Safari/iOS. */
+      s.onerror=function(){startNativeHls();};
       document.head.appendChild(s);
       ` : `attachVideoEvents(v);sess();`}
 
