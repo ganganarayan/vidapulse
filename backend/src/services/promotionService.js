@@ -146,12 +146,21 @@ async function getVisiblePromotionVideos(userId, userPlan) {
               FROM promotion_video_hidden
              WHERE user_id = $1
           )
-      AND CASE pv.visibility
-            WHEN 'free'    THEN $2 >= 0
-            WHEN 'starter' THEN $2 >= 1
-            WHEN 'pro'     THEN $2 >= 2
-            ELSE                 $2 >= 99
-          END
+      AND (
+            -- Admin sees everything, including 'noshow' previews
+            $2 >= 99
+            -- Otherwise the tier is the AUDIENCE CEILING: a user sees a video
+            -- only if their plan rank is at or below the tier's rank.
+            --   free    → Free only            (rank 0)
+            --   starter → Free + Starter        (rank ≤ 1)
+            --   pro      → everyone             (rank ≤ 2)
+            OR CASE pv.visibility
+                 WHEN 'free'    THEN $2 <= 0
+                 WHEN 'starter' THEN $2 <= 1
+                 WHEN 'pro'     THEN $2 <= 2
+                 ELSE                FALSE      -- noshow: admin only (handled above)
+               END
+          )
     ORDER BY pv.sort_order ASC, pv.created_at ASC
   `, [userId, userRank]);
 

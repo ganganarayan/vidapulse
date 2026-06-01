@@ -30,7 +30,7 @@ const VISIBILITY_OPTIONS = [
   {
     value: 'free',
     label: 'Free',
-    desc : 'Everyone',
+    desc : 'Free only',
     color: 'text-emerald-400',
     ring : 'ring-emerald-500/60',
     dot  : 'bg-emerald-400',
@@ -38,7 +38,7 @@ const VISIBILITY_OPTIONS = [
   {
     value: 'starter',
     label: 'Starter',
-    desc : 'Starter + Pro',
+    desc : 'Free + Starter',
     color: 'text-amber-400',
     ring : 'ring-amber-500/60',
     dot  : 'bg-amber-400',
@@ -46,7 +46,7 @@ const VISIBILITY_OPTIONS = [
   {
     value: 'pro',
     label: 'Pro',
-    desc : 'Pro only',
+    desc : 'Everyone',
     color: 'text-indigo-400',
     ring : 'ring-indigo-500/60',
     dot  : 'bg-indigo-400',
