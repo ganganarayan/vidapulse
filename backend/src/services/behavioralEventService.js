@@ -55,7 +55,6 @@ const ONE_TIME_USER_EVENTS = new Set([
 
 // Max once per 7 days per user
 const WEEKLY_CAP_EVENTS = new Set([
-  'no_video_after_48hrs',
   'no_return_after_wow',
 ]);
 
@@ -342,7 +341,6 @@ async function _updateOnboardingState(client, userId, eventKey, payload = {}) {
       break;
 
     // These events have no onboarding_state columns to update:
-    //   no_video_after_48hrs   — tracked via behavioral_events only
     //   no_return_after_wow    — tracked via behavioral_events only
     //   payment_failed         — tracked via behavioral_events only
     //   password_reset_requested — transactional, not a funnel milestone
