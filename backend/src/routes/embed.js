@@ -64,7 +64,7 @@ router.get('/:videoId', async (req, res) => {
 
     // Load player settings (non-fatal — falls back to defaults)
     const DEFAULTS = {
-      autoplay: false, autoplay_muted: true,
+      autoplay: false, autoplay_muted: true, start_muted: true,
       show_seek_bar: true, show_play_pause_btn: true, show_playback_speed: true,
       show_fullscreen_btn: true, show_volume_control: true,
       resume_playback: false, loop: false, accent_color: '#F59E0B',
@@ -72,7 +72,7 @@ router.get('/:videoId', async (req, res) => {
     let playerSettings = { ...DEFAULTS };
     try {
       const { rows: [ps] } = await pool.query(
-        `SELECT autoplay, autoplay_muted, show_seek_bar,
+        `SELECT autoplay, autoplay_muted, start_muted, show_seek_bar,
                 show_play_pause_btn, show_playback_speed, show_fullscreen_btn,
                 show_volume_control, resume_playback, loop, accent_color
          FROM   video_player_settings WHERE video_id = $1`,
@@ -98,6 +98,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
 
   // Individual player settings — every control has its own toggle
   const autoplay          = ps.autoplay              ?? false;
+  const startMuted        = ps.start_muted           ?? true;
   const showPlayPause     = ps.show_play_pause_btn   ?? true;
   const showSeekBar       = ps.show_seek_bar         ?? true;
   const showSpeed         = ps.show_playback_speed   ?? true;
@@ -314,12 +315,14 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
             playsinline:1,      /* inline play on iOS */
             disablekb:1,        /* we handle keyboard */
             fs:0,               /* we handle fullscreen */
+            mute:${(autoplay || startMuted) ? 1 : 0}, /* start muted per setting */
             origin:window.location.origin
           },
           events:{
             onReady:function(){
               ytDur=player.getDuration()||0;
               if(ytDur>0)dur=ytDur;
+              if(${startMuted ? 'true' : 'false'}&&player.mute)player.mute();
               sess();
               /* Fine-grained seek bar update (4×/s) */
               setInterval(function(){
@@ -592,7 +595,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
   else if (source_type === 'vimeo') {
     const vmId = extractVimeoId(videoUrl);
     playerHtml = `<iframe id="vm-player"
-      src="https://player.vimeo.com/video/${esc(vmId)}?api=1&controls=${anyControls ? 1 : 0}"
+      src="https://player.vimeo.com/video/${esc(vmId)}?api=1&controls=${anyControls ? 1 : 0}&muted=${(autoplay || startMuted) ? 1 : 0}"
       style="width:100%;height:100%;border:none"
       allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
     extraScript = `
@@ -698,7 +701,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
 
     playerHtml = `
       <video id="vp-vid" preload="metadata"
-        ${autoplay ? 'autoplay muted playsinline' : 'playsinline'}
+        ${autoplay ? 'autoplay ' : ''}${(autoplay || startMuted) ? 'muted ' : ''}playsinline
         ${loopVideo ? 'loop' : ''}
         style="width:100%;height:100%;display:block;background:#000">
         ${isHls ? '' : `<source src="${esc(videoUrl)}" />`}
