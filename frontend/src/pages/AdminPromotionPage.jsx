@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
+import { generateEmbedSnippet } from '../lib/embed';
 import { useToast } from '../contexts/ToastContext';
 
 /**
@@ -325,8 +326,7 @@ function PromotionVideoRow({ promo, index, total, onVisibilityChange, onMove, on
 
   function handleEmbedCopy(e) {
     e.stopPropagation();
-    const origin  = window.location.origin;
-    const snippet = `<iframe\n  src="${origin}/embed/${promo.video_id}"\n  width="560"\n  height="315"\n  frameborder="0"\n  allow="autoplay; fullscreen; picture-in-picture"\n  allowfullscreen>\n</iframe>`;
+    const snippet = generateEmbedSnippet(promo.video_id);
     navigator.clipboard.writeText(snippet)
       .then(() => { setEmbedCopied(true); setTimeout(() => setEmbedCopied(false), 2500); })
       .catch(() => {});

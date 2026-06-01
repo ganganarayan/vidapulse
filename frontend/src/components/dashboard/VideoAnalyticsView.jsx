@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link }                from 'react-router-dom';
 import api                     from '../../lib/api';
+import { generateEmbedSnippet } from '../../lib/embed';
 import { useToast }            from '../../contexts/ToastContext';
 import { ThemeToggle }         from '../../contexts/ThemeContext';
 import InsightsSection         from './InsightsSection';
@@ -532,9 +533,6 @@ function ActionBar({ video, onEmbedView }) {
 // EmbedView — full embed code panel
 // ─────────────────────────────────────────────────────────────────────────
 
-function generateEmbedSnippet(videoId, origin) {
-  return `<iframe\n  src="${origin}/embed/${videoId}"\n  width="560"\n  height="315"\n  frameborder="0"\n  allow="autoplay; fullscreen; picture-in-picture"\n  allowfullscreen>\n</iframe>`;
-}
 
 function EmbedView({ video, user }) {
   const { showToast } = useToast();
