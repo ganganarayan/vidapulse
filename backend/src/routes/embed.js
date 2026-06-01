@@ -1197,6 +1197,29 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
     var sid=null, pq=[], on=false,t0=0,maxP=0,secs=0,ivs=[],dur=0,curPos=0;
     var dv=window.innerWidth<768?'mobile':window.innerWidth<1024?'tablet':'desktop';
 
+    /* ── UTM capture ──────────────────────────────────────────────────────
+       The iframe is cross-origin, so it cannot read the parent page's URL
+       directly. UTM params reach us one of two ways:
+         1. The embed snippet forwards them onto the iframe src → location.search
+         2. The browser passes the full referrer (lenient Referrer-Policy)
+       We read both and prefer whichever has a value. */
+    function _getUTM(){
+      var keys=['utm_source','utm_medium','utm_campaign','utm_term','utm_content'];
+      var out={};
+      function scan(url){
+        if(!url)return;
+        try{
+          var qs=new URL(url,location.href).searchParams;
+          keys.forEach(function(k){ if(!out[k]){var v=qs.get(k); if(v)out[k]=v;} });
+        }catch(_){}
+      }
+      scan(location.href);       /* iframe's own URL (forwarded by snippet) */
+      scan(document.referrer);   /* parent page URL when referrer is full */
+      return out;
+    }
+    var UTM=_getUTM();
+    console.log('[VidaPulse] UTM:', JSON.stringify(UTM));
+
     function sess(){
       console.log('[VidaPulse] creating session...');
       fetch(API+'/analytics/session',{method:'POST',
@@ -1205,7 +1228,12 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
           page_url:document.referrer||location.href,
           referrer:document.referrer,device_type:dv,
           screen_width:screen.width,screen_height:screen.height,
-          user_agent:navigator.userAgent})
+          user_agent:navigator.userAgent,
+          utm_source:UTM.utm_source||null,
+          utm_medium:UTM.utm_medium||null,
+          utm_campaign:UTM.utm_campaign||null,
+          utm_term:UTM.utm_term||null,
+          utm_content:UTM.utm_content||null})
       }).then(function(r){
         console.log('[VidaPulse] session HTTP status:', r.status);
         return r.json();

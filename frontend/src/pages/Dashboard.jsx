@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
+import { generateEmbedSnippet } from '../lib/embed';
 import { useAuth } from '../contexts/AuthContext';
 import { useUpgrade } from '../contexts/UpgradeContext';
 import { useToast } from '../contexts/ToastContext';
@@ -388,8 +389,7 @@ function VideoCard({ video, onClick, onTitleUpdate, onArchive, onDelete, archive
 
   function handleEmbedCopy(e) {
     e.stopPropagation();
-    const origin  = window.location.origin;
-    const snippet = `<iframe\n  src="${origin}/embed/${video.id}"\n  width="560"\n  height="315"\n  frameborder="0"\n  allow="autoplay; fullscreen; picture-in-picture"\n  allowfullscreen>\n</iframe>`;
+    const snippet = generateEmbedSnippet(video.id);
     navigator.clipboard.writeText(snippet)
       .then(() => { setEmbedCopied(true); setTimeout(() => setEmbedCopied(false), 2500); })
       .catch(() => {});
