@@ -5,7 +5,7 @@ import { initPixel, pixelPageView } from './lib/pixel';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider }         from './contexts/ToastContext';
 import { ThemeProvider }         from './contexts/ThemeContext';
-import { UpgradeProvider }       from './contexts/UpgradeContext';
+import { UpgradeProvider, useUpgrade } from './contexts/UpgradeContext';
 import ImpersonationBanner       from './components/ImpersonationBanner';
 import UpgradeModal              from './components/UpgradeModal';
 import { useVersionWatcher }     from './hooks/useVersionWatcher';
@@ -114,6 +114,45 @@ function PixelTracker() {
 // No-op when VITE_META_PIXEL_ID is blank.
 initPixel();
 
+// ─────────────────────────────────────────────────────────────────────────
+// Email upgrade-intent capture
+//
+// Marketing emails link to /dashboard?upgrade=starter (or ?upgrade=pro).
+// We stash the intent in localStorage at first page load — BEFORE the
+// login redirect strips the query string — so it survives the round trip
+// through /login. After the user is authenticated, UpgradeIntentHandler
+// reads it and opens the upgrade modal pre-focused on the chosen plan.
+// ─────────────────────────────────────────────────────────────────────────
+const PENDING_UPGRADE_KEY = 'vp_pending_upgrade';
+(function captureUpgradeIntent() {
+  try {
+    const plan = new URLSearchParams(window.location.search).get('upgrade');
+    if (plan === 'starter' || plan === 'pro') {
+      localStorage.setItem(PENDING_UPGRADE_KEY, plan);
+    }
+  } catch { /* localStorage blocked — ignore */ }
+})();
+
+/**
+ * Opens the upgrade modal once after login when an email upgrade-intent
+ * is pending. Fires only for authenticated users, then clears the flag so
+ * it never re-opens on subsequent navigations or refreshes.
+ */
+function UpgradeIntentHandler() {
+  const { user } = useAuth();
+  const { showUpgrade } = useUpgrade();
+  useEffect(() => {
+    if (!user) return;
+    let plan = null;
+    try { plan = localStorage.getItem(PENDING_UPGRADE_KEY); } catch { /* ignore */ }
+    if (plan === 'starter' || plan === 'pro') {
+      try { localStorage.removeItem(PENDING_UPGRADE_KEY); } catch { /* ignore */ }
+      showUpgrade(plan);
+    }
+  }, [user, showUpgrade]);
+  return null;
+}
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -128,6 +167,7 @@ export default function App() {
         */}
         <VersionWatcher />
         <PixelTracker />
+        <UpgradeIntentHandler />
         <ImpersonationBanner />
         <UpgradeModal />
         <Routes>
