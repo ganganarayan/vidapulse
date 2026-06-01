@@ -546,6 +546,8 @@ function OverviewPromoRow({ video, onClick }) {
   const duration      = fmtDurationOv(video.duration_seconds);
   const totalViewers  = (video.total_viewers  ?? 0).toLocaleString();
   const uniqueViewers = (video.unique_session_viewers ?? video.unique_viewers ?? 0).toLocaleString();
+  const totalViews    = (video.total_views  ?? 0).toLocaleString();
+  const uniqueViews   = (video.unique_views ?? 0).toLocaleString();
 
   return (
     <div className="bg-gray-800 border border-amber-500/25 rounded-xl hover:border-amber-500/50 transition-colors">
@@ -573,9 +575,11 @@ function OverviewPromoRow({ video, onClick }) {
           <p className="text-xs text-gray-400 mt-0.5">{sourceLabel}</p>
         </button>
 
-        <div className="hidden sm:flex items-center gap-5 flex-shrink-0">
-          <OvStatCol label="Total Plays"    value={totalViewers}  />
-          <OvStatCol label="Unique Viewers" value={uniqueViewers} />
+        <div className="hidden sm:flex items-center gap-4 lg:gap-5 flex-shrink-0">
+          <OvStatCol label="Player Loads"    value={totalViews}    />
+          <OvStatCol label="Unique Visitors" value={uniqueViews}   />
+          <OvStatCol label="Total Plays"     value={totalViewers}  className="hidden lg:block" />
+          <OvStatCol label="Unique Viewers"  value={uniqueViewers} className="hidden lg:block" />
         </div>
 
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400/50 flex-shrink-0 ml-2">
@@ -586,9 +590,9 @@ function OverviewPromoRow({ video, onClick }) {
   );
 }
 
-function OvStatCol({ label, value }) {
+function OvStatCol({ label, value, className = '' }) {
   return (
-    <div className="text-center">
+    <div className={`text-center ${className}`}>
       <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
       <p className="text-sm font-bold text-gray-200 mt-0.5">{value}</p>
     </div>
