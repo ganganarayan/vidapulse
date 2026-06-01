@@ -456,12 +456,15 @@ router.get('/:id', requireAuth, async (req, res, next) => {
                    WHERE pvh.promotion_video_id = pv.id
                      AND pvh.user_id = $2
                 )
-            AND CASE pv.visibility
-                  WHEN 'free'    THEN $3 >= 0
-                  WHEN 'starter' THEN $3 >= 1
-                  WHEN 'pro'     THEN $3 >= 2
-                  ELSE                $3 >= 99
-                END
+            AND (
+                  $3 >= 99   -- admin sees everything (incl. noshow)
+                  OR CASE pv.visibility
+                       WHEN 'free'    THEN $3 <= 0
+                       WHEN 'starter' THEN $3 <= 1
+                       WHEN 'pro'     THEN $3 <= 2
+                       ELSE                FALSE
+                     END
+                )
           LIMIT 1
        ) pv_check ON TRUE
        WHERE  v.id        = $1
@@ -991,9 +994,12 @@ async function fetchPlayerSettings(videoId) {
 
 router.get('/:id/player-settings', requireAuth, async (req, res, next) => {
   try {
+    // Owner OR admin can read settings — admins manage promotion videos
+    // which they may not own directly.
+    const isAdmin = req.user.role === 'admin' || req.user.plan === 'admin_lifetime';
     const { rows: [video] } = await pool.query(
-      `SELECT id FROM videos WHERE id=$1 AND user_id=$2`,
-      [req.params.id, req.user.id]
+      `SELECT id FROM videos WHERE id=$1 AND (user_id=$2 OR $3::boolean)`,
+      [req.params.id, req.user.id, isAdmin]
     );
     if (!video) return res.status(404).json({ error: 'Video not found' });
     const settings = await fetchPlayerSettings(req.params.id);
@@ -1036,10 +1042,12 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'Validation failed', message: 'Invalid settings values', fields: fieldErrors });
     }
 
-    // Check ownership only — is_active not required (settings can be edited regardless)
+    // Owner OR admin can edit settings — admins manage promotion videos
+    // which they may not own directly. (is_active not required.)
+    const isAdmin = req.user.role === 'admin' || req.user.plan === 'admin_lifetime';
     const { rows: [video] } = await pool.query(
-      `SELECT id FROM videos WHERE id=$1 AND user_id=$2`,
-      [req.params.id, req.user.id]
+      `SELECT id FROM videos WHERE id=$1 AND (user_id=$2 OR $3::boolean)`,
+      [req.params.id, req.user.id, isAdmin]
     );
     if (!video) return res.status(404).json({ error: 'Video not found', message: 'Video not found' });
 
