@@ -454,11 +454,10 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         pw&&pw.addEventListener('mousemove',function(){_ytSetUI(true);});
         pw&&pw.addEventListener('touchstart',function(){_ytSetUI(true);},{passive:true});
 
-        /* Click anywhere on wrap = play/pause */
+        /* Click anywhere on wrap = play/pause (only when Play/Pause enabled) */
         pw&&pw.addEventListener('click',function(e){
           if(e.target.closest('button,input,select'))return;
-          if(player.getPlayerState()===YT.PlayerState.PLAYING){player.pauseVideo();}
-          else{player.playVideo();}
+          ${showPlayPause ? 'if(player.getPlayerState()===YT.PlayerState.PLAYING){player.pauseVideo();}else{player.playVideo();}' : ''}
           _ytSetUI(true);
         });
 
@@ -955,9 +954,11 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
         }
 
         /* ── Click anywhere on video = play/pause ───── */
+        /* Only when the Play/Pause control is enabled — otherwise clicking
+           must not toggle playback (it would override autoplay). */
         pw&&pw.addEventListener('click',function(e){
           if(e.target.closest('button,input,select'))return;
-          v.paused?v.play():v.pause();
+          ${showPlayPause ? 'v.paused?v.play():v.pause();' : ''}
           setUI(true);
         });
 
