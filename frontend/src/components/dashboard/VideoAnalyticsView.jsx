@@ -637,7 +637,7 @@ function EmbedView({ video, user }) {
 // ─────────────────────────────────────────────────────────────────────────
 
 const PLAYER_DEFAULTS = {
-  autoplay: false, autoplay_muted: true,
+  autoplay: false, autoplay_muted: true, start_muted: true,
   show_seek_bar: true, show_play_pause_btn: true, show_playback_speed: true,
   show_fullscreen_btn: true, show_volume_control: true,
   show_rewind_forward: true,
@@ -646,6 +646,7 @@ const PLAYER_DEFAULTS = {
 
 const PLAYER_ROWS = [
   { key: 'autoplay',            label: 'Autoplay',            desc: 'Start playing when the page loads' },
+  { key: 'start_muted',         label: 'Start Muted',         desc: 'Begin playback muted; viewers can unmute' },
   { key: 'show_play_pause_btn', label: 'Play / Pause Button', desc: 'Show the play and pause button in the control bar' },
   { key: 'show_seek_bar',       label: 'Seek Bar',            desc: 'Allow viewers to scrub through the video' },
   { key: 'show_volume_control', label: 'Volume Control',      desc: 'Show volume slider and mute toggle' },

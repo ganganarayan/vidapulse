@@ -954,6 +954,7 @@ router.get('/:id/heatmap', requireAuth, planGate('heatmap'), async (req, res, ne
 const PLAYER_DEFAULTS = {
   autoplay              : false,
   autoplay_muted        : true,
+  start_muted           : true,
   show_seek_bar         : true,
   show_play_pause_btn   : true,
   show_playback_speed   : true,
@@ -966,7 +967,7 @@ const PLAYER_DEFAULTS = {
 };
 
 const PLAYER_COLS = [
-  'autoplay', 'autoplay_muted', 'show_seek_bar',
+  'autoplay', 'autoplay_muted', 'start_muted', 'show_seek_bar',
   'show_play_pause_btn', 'show_playback_speed', 'show_fullscreen_btn',
   'show_volume_control', 'show_rewind_forward', 'resume_playback', 'loop', 'accent_color',
 ];
@@ -1022,6 +1023,7 @@ const nullBool = z.boolean().nullish().transform(v => v ?? undefined);
 const playerSettingsSchema = z.object({
   autoplay              : nullBool,
   autoplay_muted        : nullBool,
+  start_muted           : nullBool,
   show_seek_bar         : nullBool,
   show_play_pause_btn   : nullBool,
   show_playback_speed   : nullBool,
@@ -1059,13 +1061,14 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
     // Note: no user_id in INSERT — CHECK constraint forbids video_id + user_id both non-null.
     await pool.query(
       `INSERT INTO video_player_settings
-         (video_id, autoplay, autoplay_muted, show_seek_bar,
+         (video_id, autoplay, autoplay_muted, start_muted, show_seek_bar,
           show_play_pause_btn, show_playback_speed, show_fullscreen_btn,
           show_volume_control, show_rewind_forward, resume_playback, loop, accent_color)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        ON CONFLICT (video_id) DO UPDATE SET
          autoplay              = EXCLUDED.autoplay,
          autoplay_muted        = EXCLUDED.autoplay_muted,
+         start_muted           = EXCLUDED.start_muted,
          show_seek_bar         = EXCLUDED.show_seek_bar,
          show_play_pause_btn   = EXCLUDED.show_play_pause_btn,
          show_playback_speed   = EXCLUDED.show_playback_speed,
@@ -1078,7 +1081,7 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
          updated_at            = NOW()`,
       [
         req.params.id,
-        merged.autoplay, merged.autoplay_muted,
+        merged.autoplay, merged.autoplay_muted, merged.start_muted,
         merged.show_seek_bar, merged.show_play_pause_btn, merged.show_playback_speed,
         merged.show_fullscreen_btn, merged.show_volume_control, merged.show_rewind_forward,
         merged.resume_playback, merged.loop, merged.accent_color,
