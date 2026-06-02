@@ -43,7 +43,7 @@ export default function CTATrackingPage() {
   function exportClicksCsv() {
     const header = ['#', 'Timestamp', 'Button', 'Page', 'Device', 'Browser', 'Country', 'Viewer ID'];
     const rows = clicks.map((c, i) => [
-      i + 1,
+      clicks.length - i,
       new Date(c.occurred_at).toISOString(),
       c.cta_name || '',
       c.page_name || '',
@@ -381,7 +381,7 @@ export default function CTATrackingPage() {
                         <tbody className="divide-y divide-gray-700/30">
                           {clicks.map((c, i) => (
                             <tr key={i} className="text-gray-300 hover:bg-gray-800/40">
-                              <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                              <td className="px-3 py-2 text-gray-500">{clicks.length - i}</td>
                               <td className="px-3 py-2 whitespace-nowrap text-gray-400">
                                 {new Date(c.occurred_at).toLocaleString()}
                               </td>
