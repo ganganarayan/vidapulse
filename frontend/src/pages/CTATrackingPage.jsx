@@ -41,7 +41,7 @@ export default function CTATrackingPage() {
   }, [isPro]);
 
   function exportClicksCsv() {
-    const header = ['#', 'Timestamp', 'Button', 'Page', 'Device', 'Browser', 'Country', 'Viewer ID'];
+    const header = ['#', 'Timestamp', 'Button', 'Page', 'Device', 'Browser', 'Country', 'Clicker ID'];
     const rows = clicks.map((c, i) => [
       clicks.length - i,
       new Date(c.occurred_at).toISOString(),
@@ -375,7 +375,7 @@ export default function CTATrackingPage() {
                             <th className="px-3 py-2.5 font-semibold">Device</th>
                             <th className="px-3 py-2.5 font-semibold">Browser</th>
                             <th className="px-3 py-2.5 font-semibold">Country</th>
-                            <th className="px-3 py-2.5 font-semibold">Viewer ID</th>
+                            <th className="px-3 py-2.5 font-semibold">Clicker ID</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-700/30">
