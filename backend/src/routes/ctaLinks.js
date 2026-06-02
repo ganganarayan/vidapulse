@@ -125,6 +125,40 @@ router.post('/', requireAuth, async (req, res, next) => {
   }
 });
 
+// ── GET /api/cta-links/clicks ────────────────────────────────────────────
+// Full per-click log across all of the user's CTA links, newest first.
+// Each row: timestamp, button (cta_name), page, device, browser, country,
+// destination, and viewer_id (only present for player-session-linked clicks;
+// null for redirect-based clicks which carry no viewer cookie).
+
+router.get('/clicks', requireAuth, async (req, res, next) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 500, 2000);
+    const { rows } = await pool.query(
+      `SELECT ae.occurred_at,
+              ae.metadata->>'cta_name'        AS cta_name,
+              ae.metadata->>'page_name'       AS page_name,
+              ae.metadata->>'device'          AS device,
+              ae.metadata->>'browser'         AS browser,
+              ae.metadata->>'country'         AS country,
+              ae.metadata->>'city'            AS city,
+              ae.metadata->>'destination_url' AS destination_url,
+              s.viewer_id
+       FROM   analytics_events ae
+       JOIN   video_cta_links c ON c.id::text = ae.metadata->>'cta_link_id'
+       LEFT   JOIN analytics_sessions s ON s.id = ae.session_id
+       WHERE  ae.event_type = 'cta_click'
+         AND  c.user_id     = $1
+       ORDER  BY ae.occurred_at DESC
+       LIMIT  $2`,
+      [req.user.id, limit]
+    );
+    return res.json({ clicks: rows, total: rows.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── DELETE /api/cta-links/:id ────────────────────────────────────────────
 // Delete a CTA link. Ownership verified via user_id.
 // Analytics events that recorded this link's clicks are NOT deleted —
