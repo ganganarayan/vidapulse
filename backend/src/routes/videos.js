@@ -420,6 +420,45 @@ const PLAN_RANK = { free: 0, starter: 1, pro: 2, admin_lifetime: 99 };
 // ownership checks treat admins as authorized for read/analytics access.
 const isAdminUser = (req) => req.user.role === 'admin' || req.user.plan === 'admin_lifetime';
 
+/**
+ * True when the video is an active promotion video visible to this user's
+ * plan (and not hidden by them). Lets non-owner subscribers VIEW a promo
+ * video's analytics — they can view but not edit. Uses the same inverted
+ * audience-ceiling model as the promotion list.
+ */
+async function isPromoViewable(videoId, req) {
+  const rank = PLAN_RANK[req.user.plan] ?? 0;
+  try {
+    const { rows: [r] } = await pool.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM promotion_videos pv
+         WHERE pv.video_id = $1
+           AND NOT EXISTS (
+                 SELECT 1 FROM promotion_video_hidden pvh
+                 WHERE pvh.promotion_video_id = pv.id AND pvh.user_id = $2
+               )
+           AND ( $3 >= 99
+                 OR CASE pv.visibility
+                      WHEN 'free'    THEN $3 <= 0
+                      WHEN 'starter' THEN $3 <= 1
+                      WHEN 'pro'     THEN $3 <= 2
+                      ELSE                FALSE
+                    END )
+       ) AS ok`,
+      [videoId, req.user.id, rank]
+    );
+    return !!r?.ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+// Read/analytics access for non-owners: admins, or subscribers viewing a
+// promo video visible to their plan. (Editing stays owner/admin-only.)
+async function canViewNonOwner(videoId, req) {
+  return isAdminUser(req) || await isPromoViewable(videoId, req);
+}
+
 router.get('/:id', requireAuth, async (req, res, next) => {
   try {
     const planRank = PLAN_RANK[req.user.plan] ?? 0;
@@ -750,7 +789,7 @@ router.get('/:id/insights', requireAuth, async (req, res, next) => {
        WHERE  id        = $1
          AND  (user_id  = $2 OR $3::boolean)
          AND  is_active = TRUE`,
-      [req.params.id, req.user.id, isAdminUser(req)]
+      [req.params.id, req.user.id, await canViewNonOwner(req.params.id, req)]
     );
 
     if (!video) return res.status(404).json({ error: 'Video not found' });
@@ -841,7 +880,7 @@ router.get('/:id/stories', requireAuth, async (req, res, next) => {
        WHERE  id        = $1
          AND  (user_id  = $2 OR $3::boolean)
          AND  is_active = TRUE`,
-      [req.params.id, req.user.id, isAdminUser(req)]
+      [req.params.id, req.user.id, await canViewNonOwner(req.params.id, req)]
     );
 
     if (!video) return res.status(404).json({ error: 'Video not found' });
@@ -915,7 +954,7 @@ router.get('/:id/heatmap', requireAuth, planGate('heatmap'), async (req, res, ne
        WHERE  v.id        = $1
          AND  (v.user_id  = $2 OR $3::boolean)
          AND  v.is_active = TRUE`,
-      [req.params.id, req.user.id, isAdminUser(req)]
+      [req.params.id, req.user.id, await canViewNonOwner(req.params.id, req)]
     );
 
     if (!video) return res.status(404).json({ error: 'Video not found' });
@@ -1190,7 +1229,7 @@ router.get('/:id/analytics/daily', requireAuth, async (req, res, next) => {
   try {
     const { rows: [video] } = await pool.query(
       `SELECT id, created_at FROM videos WHERE id=$1 AND (user_id=$2 OR $3::boolean) AND is_active=TRUE`,
-      [req.params.id, req.user.id, isAdminUser(req)]
+      [req.params.id, req.user.id, await canViewNonOwner(req.params.id, req)]
     );
     if (!video) return res.status(404).json({ error: 'Video not found' });
 
@@ -1235,7 +1274,7 @@ router.get('/:id/analytics/breakdown', requireAuth, async (req, res, next) => {
   try {
     const { rows: [video] } = await pool.query(
       `SELECT id FROM videos WHERE id=$1 AND (user_id=$2 OR $3::boolean) AND is_active=TRUE`,
-      [req.params.id, req.user.id, isAdminUser(req)]
+      [req.params.id, req.user.id, await canViewNonOwner(req.params.id, req)]
     );
     if (!video) return res.status(404).json({ error: 'Video not found' });
 
@@ -1309,7 +1348,7 @@ router.get('/:id/cta-analytics', requireAuth, planGate('heatmap'), async (req, r
   try {
     const { rows: [video] } = await pool.query(
       `SELECT id FROM videos WHERE id=$1 AND (user_id=$2 OR $3::boolean) AND is_active=TRUE`,
-      [req.params.id, req.user.id, isAdminUser(req)]
+      [req.params.id, req.user.id, await canViewNonOwner(req.params.id, req)]
     );
     if (!video) return res.status(404).json({ error: 'Video not found' });
 
@@ -1378,7 +1417,7 @@ router.get('/:id/retention', requireAuth, async (req, res, next) => {
                  AND  s.play_count > 0) AS unique_viewers
        FROM   videos v
        WHERE  v.id = $1 AND (v.user_id = $2 OR $3::boolean) AND v.is_active = TRUE`,
-      [req.params.id, req.user.id, isAdminUser(req)]
+      [req.params.id, req.user.id, await canViewNonOwner(req.params.id, req)]
     );
     if (!video) return res.status(404).json({ error: 'Video not found' });
 
@@ -1431,7 +1470,7 @@ router.get('/:id/viewer-engagement', requireAuth, planGate('heatmap'), async (re
       `SELECT id, duration_seconds
        FROM   videos
        WHERE  id = $1 AND (user_id = $2 OR $3::boolean) AND is_active = TRUE`,
-      [req.params.id, req.user.id, isAdminUser(req)]
+      [req.params.id, req.user.id, await canViewNonOwner(req.params.id, req)]
     );
     if (!video) return res.status(404).json({ error: 'Video not found' });
 
