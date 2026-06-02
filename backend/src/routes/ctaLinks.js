@@ -49,10 +49,18 @@ async function requirePro(userId, res) {
 router.get('/', requireAuth, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, cta_name, page_name, destination_url, created_at
-       FROM   video_cta_links
-       WHERE  user_id = $1
-       ORDER  BY created_at ASC`,
+      `SELECT c.id, c.cta_name, c.page_name, c.destination_url, c.created_at,
+              (SELECT COUNT(*)::int
+                 FROM analytics_events ae
+                WHERE ae.event_type = 'cta_click'
+                  AND ae.metadata->>'cta_link_id' = c.id::text) AS clicks,
+              (SELECT MAX(ae.occurred_at)
+                 FROM analytics_events ae
+                WHERE ae.event_type = 'cta_click'
+                  AND ae.metadata->>'cta_link_id' = c.id::text) AS last_click_at
+       FROM   video_cta_links c
+       WHERE  c.user_id = $1
+       ORDER  BY c.created_at ASC`,
       [req.user.id]
     );
     return res.json({

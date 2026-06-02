@@ -260,6 +260,12 @@ export default function CTATrackingPage() {
                             </code>
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <div className="text-center mr-2">
+                              <p className="text-sm font-bold text-amber-400 leading-none">
+                                {(link.clicks ?? 0).toLocaleString()}
+                              </p>
+                              <p className="text-[9px] text-gray-500 uppercase tracking-wider mt-1">clicks</p>
+                            </div>
                             <button
                               onClick={() => copyLink(link.id)}
                               className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-700 hover:bg-gray-600
