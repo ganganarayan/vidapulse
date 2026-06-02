@@ -44,6 +44,15 @@ const AUDIENCE_PANELS = [
   },
 ];
 
+// Combined ad-attribution panel — campaign › ad set › ad, built from UTM params.
+const LEAD_SOURCE_PANEL = {
+  key  : 'campaign_ad',
+  label: 'Campaign › Ad Set › Ad',
+  desc : 'Which campaign, ad set, and ad each visit came from',
+  icon : '🎯',
+  colors: ['#f59e0b','#818cf8','#34d399','#f87171','#38bdf8','#c084fc','#2dd4bf','#facc15','#fb923c'],
+};
+
 const UTM_PANELS = [
   {
     key  : 'referrer',
@@ -158,7 +167,7 @@ function UtmPanel({ videoId, panel }) {
             <div className="flex items-center gap-2 py-3 border border-dashed border-gray-700/50 rounded-lg px-4">
               <span className="text-gray-400 text-sm">—</span>
               <span className="text-xs text-gray-400">
-                {panel.key.startsWith('utm') ? 'No UTM parameters tracked yet' : 'No data yet'}
+                {panel.key.startsWith('utm') || panel.key === 'campaign_ad' ? 'No UTM parameters tracked yet' : 'No data yet'}
               </span>
             </div>
           </div>
@@ -364,6 +373,23 @@ export default function TrafficSourcesSection({ videoId, userPlan }) {
             <UtmPanel key={panel.key} videoId={videoId} panel={panel} />
           ))}
         </div>
+      </div>
+
+      <div className="h-px bg-gray-800/60 my-6" />
+
+      {/* ── Lead Source: combined campaign / ad set / ad ──────────────── */}
+      <div className="mb-6">
+        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-3">
+          Lead Source
+        </p>
+        <p className="text-xs text-gray-400 mb-3 -mt-1">
+          The campaign, ad set, and ad that drove each visit — built from your{' '}
+          <code className="bg-gray-800 px-1 py-0.5 rounded text-indigo-300 text-[11px]">utm_campaign</code>,{' '}
+          <code className="bg-gray-800 px-1 py-0.5 rounded text-indigo-300 text-[11px]">utm_term</code>, and{' '}
+          <code className="bg-gray-800 px-1 py-0.5 rounded text-indigo-300 text-[11px]">utm_content</code> tags.
+          Tag your ad links and this fills in automatically.
+        </p>
+        <UtmPanel videoId={videoId} panel={LEAD_SOURCE_PANEL} />
       </div>
 
       <div className="h-px bg-gray-800/60 my-6" />

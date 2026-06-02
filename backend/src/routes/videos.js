@@ -1291,6 +1291,10 @@ router.get('/:id/analytics/breakdown', requireAuth, async (req, res, next) => {
       utm_campaign: `COALESCE(NULLIF(utm_campaign,''), '(none)')`,
       utm_term    : `COALESCE(NULLIF(utm_term,''), '(none)')`,
       utm_content : `COALESCE(NULLIF(utm_content,''), '(none)')`,
+      // Combined ad-attribution path for the "Lead Source" panel.
+      // Meta-style mapping: campaign = utm_campaign, ad set = utm_term, ad = utm_content.
+      // CONCAT_WS skips empty parts, so partial tagging still produces a useful label.
+      campaign_ad : `COALESCE(NULLIF(CONCAT_WS(' › ', NULLIF(utm_campaign,''), NULLIF(utm_term,''), NULLIF(utm_content,'')), ''), '(none)')`,
       referrer    : `COALESCE(NULLIF(REGEXP_REPLACE(referrer_url, '^https?://([^/]+).*$', '\\1'), ''), '(direct)')`,
       domain      : `COALESCE(NULLIF(domain,''), '(direct)')`,
     };
@@ -1302,7 +1306,7 @@ router.get('/:id/analytics/breakdown', requireAuth, async (req, res, next) => {
 
     // UTM and referrer breakdowns include sessions with 0 plays (page loads)
     // All other breakdowns filter to actual plays only
-    const playFilter = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','referrer','domain'].includes(by)
+    const playFilter = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','campaign_ad','referrer','domain'].includes(by)
       ? ''
       : 'AND play_count > 0';
 

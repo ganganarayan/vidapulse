@@ -338,8 +338,8 @@ export function VideoSidebar({ video, activeView, onViewChange, user, drawerOpen
         {navItem('traffic',     <UTMIcon />,     'Traffic Sources', !isPro,     'pro')}
 
         <SidebarDivider label="Settings" />
-        {navItem('embed',       <EmbedIcon />,   'Share & Embed',   false, null, isPromo, 'Not available for promotion videos')}
-        {navItem('player',      <PlayerIcon />,  'Player Settings', false, null, isPromo, 'Not available for promotion videos')}
+        {navItem('embed',       <EmbedIcon />,   'Share & Embed',   false, null, isPromo && !isAdmin, 'Not available for promotion videos')}
+        {navItem('player',      <PlayerIcon />,  'Player Settings', false, null, isPromo && !isAdmin, 'Not available for promotion videos')}
       </nav>
 
       {/* User section */}
