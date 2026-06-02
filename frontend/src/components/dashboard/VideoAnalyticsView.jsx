@@ -311,12 +311,12 @@ export default function VideoAnalyticsView({
 
         {/* ── Embed view ───────────────────────────────────────────── */}
         {activeView === 'embed' && (
-          <EmbedView video={video} user={user} />
+          video?.is_promo ? <PromoRestricted /> : <EmbedView video={video} user={user} />
         )}
 
         {/* ── Player settings view ─────────────────────────────────── */}
         {activeView === 'player' && (
-          <PlayerSettingsView videoId={video?.id} />
+          video?.is_promo ? <PromoRestricted /> : <PlayerSettingsView videoId={video?.id} />
         )}
 
         {/* ── Overview ─────────────────────────────────────────────── */}
@@ -525,6 +525,27 @@ function ActionBar({ video, onEmbedView }) {
         <CodeIcon />
         Get embed code
       </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PromoRestricted — shown when a non-owner opens embed/player on a promo video
+// ─────────────────────────────────────────────────────────────────────────
+
+function PromoRestricted() {
+  return (
+    <div className="max-w-2xl w-full mx-auto px-6 py-16 text-center">
+      <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-800 border border-gray-700 mb-4">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+      </div>
+      <h2 className="text-lg font-bold text-gray-200">Not available for this video</h2>
+      <p className="text-sm text-gray-400 mt-1.5">
+        This is a featured promotion video. Player settings and embed code are managed
+        by VidaPulse — you can view its analytics, but these settings can't be changed.
+      </p>
     </div>
   );
 }

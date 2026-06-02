@@ -225,6 +225,9 @@ export function VideoSidebar({ video, activeView, onViewChange, user, drawerOpen
   const isAdmin        = user?.role === 'admin' || user?.plan === 'admin_lifetime';
   const isPro          = ['pro','admin_lifetime'].includes(user?.plan);
   const isStarter      = ['starter','pro','admin_lifetime'].includes(user?.plan);
+  // Promotion videos are owned by an admin. Non-owners (incl. starter/pro)
+  // may only view analytics — editing settings / grabbing embed is blocked.
+  const isPromo        = !!video?.is_promo;
   const { isImpersonating } = useAuth();
   const { showUpgrade }     = useUpgrade();
   const [signingOut, setSigningOut] = useState(false);
@@ -235,28 +238,34 @@ export function VideoSidebar({ video, activeView, onViewChange, user, drawerOpen
     navigate('/login', { replace: true });
   }
 
-  function navItem(view, icon, label, locked = false, requiredPlan = null) {
+  function navItem(view, icon, label, locked = false, requiredPlan = null, disabled = false, disabledTitle = '') {
     const isActive = activeView === view;
     return (
       <button
         key={view}
+        disabled={disabled}
         onClick={() => {
+          if (disabled) return;
           if (locked) { showUpgrade(requiredPlan); return; }
           onViewChange(view);
           if (onClose) onClose();
         }}
-        title={locked ? `Upgrade to ${requiredPlan} to access` : label}
+        title={disabled ? disabledTitle : locked ? `Upgrade to ${requiredPlan} to access` : label}
         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left
           ${isActive
             ? 'bg-amber-500/15 text-amber-400'
-            : locked
-              ? 'text-gray-500 cursor-not-allowed'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+            : disabled
+              ? 'text-gray-600 cursor-not-allowed opacity-50'
+              : locked
+                ? 'text-gray-500 cursor-not-allowed'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
           }`}
       >
         <span className="flex-shrink-0 w-4 h-4">{icon}</span>
         <span className="flex-1 truncate">{label}</span>
-        {locked && <LockIcon color={getLockColor(requiredPlan)} />}
+        {disabled
+          ? <LockIcon color="#6b7280" />
+          : locked && <LockIcon color={getLockColor(requiredPlan)} />}
       </button>
     );
   }
@@ -329,8 +338,8 @@ export function VideoSidebar({ video, activeView, onViewChange, user, drawerOpen
         {navItem('traffic',     <UTMIcon />,     'Traffic Sources', !isPro,     'pro')}
 
         <SidebarDivider label="Settings" />
-        {navItem('embed',       <EmbedIcon />,   'Share & Embed')}
-        {navItem('player',      <PlayerIcon />,  'Player Settings')}
+        {navItem('embed',       <EmbedIcon />,   'Share & Embed',   false, null, isPromo, 'Not available for promotion videos')}
+        {navItem('player',      <PlayerIcon />,  'Player Settings', false, null, isPromo, 'Not available for promotion videos')}
       </nav>
 
       {/* User section */}
