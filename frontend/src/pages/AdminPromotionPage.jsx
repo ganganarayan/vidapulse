@@ -322,7 +322,7 @@ function PromotionVideoRow({ promo, index, total, onVisibilityChange, onMove, on
   const totalViews    = (promo.total_views    ?? 0).toLocaleString();
   const uniqueViews   = (promo.unique_views   ?? 0).toLocaleString();
   const totalViewers  = (promo.total_viewers  ?? 0).toLocaleString();
-  const uniqueViewers = (promo.unique_views   ?? 0).toLocaleString(); // promo stat shape
+  const uniqueViewers = (promo.unique_viewers ?? 0).toLocaleString();
 
   function handleEmbedCopy(e) {
     e.stopPropagation();

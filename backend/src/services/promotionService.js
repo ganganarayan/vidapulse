@@ -83,16 +83,21 @@ async function getAdminPromotionVideos() {
       v.duration_seconds,
       v.processing_status,
       v.using_iframe_fallback,
-      COALESCE(s.total_views,  0) AS total_views,
-      COALESCE(s.unique_views, 0) AS unique_views,
+      COALESCE(s.total_views,   0) AS total_views,
+      COALESCE(s.unique_views,  0) AS unique_views,
+      COALESCE(s.total_viewers, 0) AS total_viewers,
+      COALESCE(s.uniq_viewers,  0) AS unique_viewers,
       (SELECT COUNT(*)::int
          FROM promotion_video_hidden pvh
         WHERE pvh.promotion_video_id = pv.id) AS hidden_count
     FROM promotion_videos pv
     JOIN videos v ON v.id = pv.video_id
     LEFT JOIN LATERAL (
-      SELECT COUNT(*)                   AS total_views,
-             COUNT(DISTINCT viewer_id)  AS unique_views
+      SELECT
+        COUNT(*)                                                AS total_views,
+        COUNT(DISTINCT viewer_id)                               AS unique_views,
+        COUNT(*) FILTER (WHERE play_count > 0)                  AS total_viewers,
+        COUNT(DISTINCT viewer_id) FILTER (WHERE play_count > 0) AS uniq_viewers
         FROM analytics_sessions
        WHERE video_id = v.id
     ) s ON TRUE
@@ -239,6 +244,8 @@ async function createPromotionVideo(adminUserId, url, titleOverride) {
       using_iframe_fallback: video.using_iframe_fallback,
       total_views          : 0,
       unique_views         : 0,
+      total_viewers        : 0,
+      unique_viewers       : 0,
       hidden_count         : 0,
     };
   } catch (err) {

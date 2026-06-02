@@ -184,6 +184,10 @@ export default function VideoAnalyticsView({
     };
   }, [animateIn, onAnimationComplete]);
 
+  // Promo videos are owned by the admin — only non-owner subscribers are blocked
+  // from the edit-oriented Share/Player views; the admin owner keeps full access.
+  const isAdmin  = user?.role === 'admin' || user?.plan === 'admin_lifetime';
+
   const plays    = video?.total_plays    ?? 0;
   const viewers  = video?.unique_viewers ?? 0;
   const avgWatch = parseFloat(video?.avg_watch_pct ?? 0);
@@ -311,12 +315,12 @@ export default function VideoAnalyticsView({
 
         {/* ── Embed view ───────────────────────────────────────────── */}
         {activeView === 'embed' && (
-          video?.is_promo ? <PromoRestricted /> : <EmbedView video={video} user={user} />
+          video?.is_promo && !isAdmin ? <PromoRestricted /> : <EmbedView video={video} user={user} />
         )}
 
         {/* ── Player settings view ─────────────────────────────────── */}
         {activeView === 'player' && (
-          video?.is_promo ? <PromoRestricted /> : <PlayerSettingsView videoId={video?.id} />
+          video?.is_promo && !isAdmin ? <PromoRestricted /> : <PlayerSettingsView videoId={video?.id} />
         )}
 
         {/* ── Overview ─────────────────────────────────────────────── */}
