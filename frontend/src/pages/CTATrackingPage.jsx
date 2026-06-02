@@ -22,6 +22,7 @@ export default function CTATrackingPage() {
   const origin         = typeof window !== 'undefined' ? window.location.origin : '';
 
   const [links,       setLinks]       = useState([]);
+  const [clicks,      setClicks]      = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [formOpen,    setFormOpen]    = useState(false);
   const [form,        setForm]        = useState({ cta_name: '', page_name: '', destination_url: '' });
@@ -33,11 +34,33 @@ export default function CTATrackingPage() {
   const load = useCallback(() => {
     if (!isPro) { setLoading(false); return; }
     setLoading(true);
-    api.get('/cta-links')
-      .then(r => setLinks(r.data.cta_links ?? []))
-      .catch(() => setLinks([]))
-      .finally(() => setLoading(false));
+    Promise.all([
+      api.get('/cta-links').then(r => setLinks(r.data.cta_links ?? [])).catch(() => setLinks([])),
+      api.get('/cta-links/clicks').then(r => setClicks(r.data.clicks ?? [])).catch(() => setClicks([])),
+    ]).finally(() => setLoading(false));
   }, [isPro]);
+
+  function exportClicksCsv() {
+    const header = ['#', 'Timestamp', 'Button', 'Page', 'Device', 'Browser', 'Country', 'Viewer ID'];
+    const rows = clicks.map((c, i) => [
+      i + 1,
+      new Date(c.occurred_at).toISOString(),
+      c.cta_name || '',
+      c.page_name || '',
+      c.device || '',
+      c.browser || '',
+      c.country || '',
+      c.viewer_id || '',
+    ]);
+    const csv = [header, ...rows]
+      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = `cta-clicks-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  }
 
   useEffect(() => { load(); }, [load]);
 
@@ -312,6 +335,70 @@ export default function CTATrackingPage() {
                                 rounded-lg text-xs text-red-400">
                   <WarnIcon />
                   You've reached the {MAX_LINKS}-link limit. Delete an existing link to add a new one.
+                </div>
+              )}
+
+              {/* ── Click log ──────────────────────────────────────────── */}
+              {!loading && (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-200">Click Log</h3>
+                      <p className="text-[11px] text-gray-500 mt-0.5">
+                        Every recorded CTA click, newest first.
+                      </p>
+                    </div>
+                    {clicks.length > 0 && (
+                      <button
+                        onClick={exportClicksCsv}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600
+                                   border border-gray-600 text-xs text-gray-200 rounded-lg transition-colors"
+                      >
+                        Export CSV
+                      </button>
+                    )}
+                  </div>
+
+                  {clicks.length === 0 ? (
+                    <div className="py-10 text-center bg-gray-800/30 border border-gray-700/50 rounded-xl">
+                      <p className="text-sm text-gray-400">No clicks recorded yet.</p>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl overflow-hidden overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="text-[10px] uppercase tracking-wider text-gray-500 border-b border-gray-700/50">
+                            <th className="px-3 py-2.5 font-semibold">#</th>
+                            <th className="px-3 py-2.5 font-semibold">Time</th>
+                            <th className="px-3 py-2.5 font-semibold">Button</th>
+                            <th className="px-3 py-2.5 font-semibold">Page</th>
+                            <th className="px-3 py-2.5 font-semibold">Device</th>
+                            <th className="px-3 py-2.5 font-semibold">Browser</th>
+                            <th className="px-3 py-2.5 font-semibold">Country</th>
+                            <th className="px-3 py-2.5 font-semibold">Viewer ID</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-700/30">
+                          {clicks.map((c, i) => (
+                            <tr key={i} className="text-gray-300 hover:bg-gray-800/40">
+                              <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-gray-400">
+                                {new Date(c.occurred_at).toLocaleString()}
+                              </td>
+                              <td className="px-3 py-2 font-medium text-gray-200">{c.cta_name || '—'}</td>
+                              <td className="px-3 py-2 text-gray-400">{c.page_name || '—'}</td>
+                              <td className="px-3 py-2 capitalize">{c.device || '—'}</td>
+                              <td className="px-3 py-2">{c.browser || '—'}</td>
+                              <td className="px-3 py-2">{c.country || '—'}</td>
+                              <td className="px-3 py-2 font-mono text-[10px] text-gray-500">
+                                {c.viewer_id ? c.viewer_id.slice(0, 8) : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
 
