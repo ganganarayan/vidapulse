@@ -82,6 +82,34 @@ const resetSchema = z.object({
     .max(128, 'Password too long'),
 });
 
+// ── Lead-source helpers ───────────────────────────────────────
+// UTM params captured at signup (ad → landing → app). Returns an object with
+// exactly the five utm_* keys, each a trimmed string ≤300 chars or null.
+
+const _UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+
+function normalizeLeadSource(raw) {
+  const out = { utm_source: null, utm_medium: null, utm_campaign: null, utm_term: null, utm_content: null };
+  if (!raw || typeof raw !== 'object') return out;
+  for (const k of _UTM_KEYS) {
+    const v = raw[k];
+    if (typeof v === 'string' && v.trim()) out[k] = v.trim().slice(0, 300);
+  }
+  return out;
+}
+
+// Parse the vp_ls cookie (set client-side before the OAuth redirect) into a
+// normalized lead-source object. Never throws.
+function leadSourceFromCookie(req) {
+  try {
+    const raw = req.cookies?.vp_ls;
+    if (!raw) return normalizeLeadSource(null);
+    return normalizeLeadSource(JSON.parse(decodeURIComponent(raw)));
+  } catch {
+    return normalizeLeadSource(null);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // POST /api/auth/bootstrap
 //
@@ -396,6 +424,9 @@ router.post('/register', async (req, res, next) => {
     // Normalise optional phone (strip to E.164-ish or keep as-is)
     const normalizedPhone = phone ? String(phone).trim() : null;
 
+    // Lead source — UTM params captured from the ad → landing → app signup flow.
+    const ls = normalizeLeadSource(req.body?.lead_source);
+
     // Check duplicate
     const { rows: existing } = await pool.query(
       `SELECT id FROM users WHERE email = $1`, [normalizedEmail]
@@ -416,10 +447,13 @@ router.post('/register', async (req, res, next) => {
       const hash = await require('bcrypt').hash(password, 12);
 
       const { rows: [user] } = await client.query(
-        `INSERT INTO users (email, name, phone, plan_id, role, password_hash, password_set, created_via)
-         VALUES ($1, $2, $3, $4, 'subscriber', $5, TRUE, 'self_signup')
+        `INSERT INTO users (email, name, phone, plan_id, role, password_hash, password_set, created_via,
+                            signup_utm_source, signup_utm_medium, signup_utm_campaign,
+                            signup_utm_term, signup_utm_content)
+         VALUES ($1, $2, $3, $4, 'subscriber', $5, TRUE, 'self_signup', $6, $7, $8, $9, $10)
          RETURNING id`,
-        [normalizedEmail, finalName, normalizedPhone, plans[0].id, hash]
+        [normalizedEmail, finalName, normalizedPhone, plans[0].id, hash,
+         ls.utm_source, ls.utm_medium, ls.utm_campaign, ls.utm_term, ls.utm_content]
       );
 
       await client.query(
@@ -624,7 +658,11 @@ router.get('/oauth/google/callback', async (req, res) => {
 
     const tokens  = await oauth.exchangeGoogleCode(code);
     const profile = await oauth.getGoogleUserInfo(tokens.access_token);
-    const { user, isNew, isFirstLogin } = await authService.findOrCreateOAuthUser('google', profile);
+    // Lead source rides along in the vp_ls cookie set on the app domain before
+    // the redirect; only applied when this OAuth call creates a brand-new user.
+    const leadSource = leadSourceFromCookie(req);
+    const { user, isNew, isFirstLogin } = await authService.findOrCreateOAuthUser('google', profile, leadSource);
+    res.clearCookie('vp_ls');
     const jwt = await authService.buildJwt(user.id);
     authService.setJwtCookie(res, jwt);
 

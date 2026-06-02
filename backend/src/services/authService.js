@@ -310,7 +310,7 @@ async function resetPassword(token, newPassword) {
  *
  * Emits user_signed_up for new users (non-blocking, after commit).
  */
-async function findOrCreateOAuthUser(provider, providerProfile) {
+async function findOrCreateOAuthUser(provider, providerProfile, leadSource = null) {
   const { id: providerId, email: providerEmail, name } = providerProfile;
   const normalizedEmail = providerEmail.toLowerCase().trim();
 
@@ -380,15 +380,23 @@ async function findOrCreateOAuthUser(provider, providerProfile) {
       );
       if (!freePlan.rows.length) throw new Error('Free plan not found in database');
 
+      const ls = leadSource || {};
       const newUser = await client.query(
-        `INSERT INTO users (email, name, plan_id, created_via, password_set)
-         VALUES ($1, $2, $3, $4, FALSE)
+        `INSERT INTO users (email, name, plan_id, created_via, password_set,
+                            signup_utm_source, signup_utm_medium, signup_utm_campaign,
+                            signup_utm_term, signup_utm_content)
+         VALUES ($1, $2, $3, $4, FALSE, $5, $6, $7, $8, $9)
          RETURNING id, email, role`,
         [
           normalizedEmail,
           name || normalizedEmail.split('@')[0],
           freePlan.rows[0].id,
           `oauth_${provider}`,
+          ls.utm_source  ?? null,
+          ls.utm_medium  ?? null,
+          ls.utm_campaign ?? null,
+          ls.utm_term    ?? null,
+          ls.utm_content ?? null,
         ]
       );
       user  = newUser.rows[0];

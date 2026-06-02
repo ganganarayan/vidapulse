@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { pixelTrack } from '../lib/pixel';
+import { getLeadSource, clearLeadSource } from '../lib/leadSource';
 
 /**
  * Register — self-signup for new subscribers (free plan).
@@ -46,9 +47,11 @@ export default function Register() {
     setLoading(true);
     try {
       await api.post('/auth/register', {
-        email   : email.trim(),
+        email      : email.trim(),
         password,
+        lead_source: getLeadSource() || undefined,
       });
+      clearLeadSource();
       await refetch();
       pixelTrack('CompleteRegistration');
       navigate('/dashboard', { replace: true });

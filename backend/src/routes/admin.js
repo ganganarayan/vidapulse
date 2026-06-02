@@ -507,6 +507,11 @@ router.get('/users', async (req, res, next) => {
          u.last_login_at,
          u.last_seen_at,
          u.plan_expires_at,
+         u.signup_utm_source,
+         u.signup_utm_medium,
+         u.signup_utm_campaign,
+         u.signup_utm_term,
+         u.signup_utm_content,
          COALESCE(vc.video_count, 0)::int AS video_count
        FROM users u
        LEFT JOIN plans p ON p.id = u.plan_id

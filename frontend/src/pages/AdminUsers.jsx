@@ -42,6 +42,22 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+// Build a display label for a user's signup lead source from the stored UTM
+// fields. Mapping: campaign = utm_campaign, ad set = utm_term, ad = utm_content.
+// Returns null when no UTM params were captured (i.e. a direct signup).
+function formatLeadSource(user) {
+  const path = [user.signup_utm_campaign, user.signup_utm_term, user.signup_utm_content]
+    .map(v => (v && String(v).trim()) || null)
+    .filter(Boolean);
+  const src = (user.signup_utm_source && String(user.signup_utm_source).trim()) || null;
+  const med = (user.signup_utm_medium && String(user.signup_utm_medium).trim()) || null;
+  if (path.length === 0 && !src && !med) return null;
+  return {
+    primary  : path.length ? path.join(' › ') : (src || med),
+    secondary: [src, med].filter(Boolean).join(' · ') || null,
+  };
+}
+
 function formatRelative(iso) {
   if (!iso) return 'Never';
   const diff = Date.now() - new Date(iso).getTime();
@@ -536,6 +552,22 @@ function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick }) {
         {formatRelative(user.last_login_at)}
       </td>
 
+      {/* Lead Source */}
+      <td className="px-4 py-3 hidden xl:table-cell">
+        {(() => {
+          const ls = formatLeadSource(user);
+          if (!ls) return <span className="text-gray-600 text-xs">Direct</span>;
+          return (
+            <div className="min-w-0 max-w-[200px]">
+              <p className="text-gray-200 text-xs font-medium truncate" title={ls.primary}>{ls.primary}</p>
+              {ls.secondary && (
+                <p className="text-gray-500 text-[11px] truncate" title={ls.secondary}>{ls.secondary}</p>
+              )}
+            </div>
+          );
+        })()}
+      </td>
+
       {/* Action */}
       <td className="px-4 py-3 text-right">
         <div className="flex items-center justify-end gap-2">
@@ -755,6 +787,7 @@ export default function AdminUsers() {
                   <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Plan Expires</th>
                   <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">Videos</th>
                   <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Last Login</th>
+                  <th className="px-4 py-3 text-left font-medium hidden xl:table-cell">Lead Source</th>
                   <th className="px-4 py-3 text-right font-medium">Action</th>
                 </tr>
               </thead>
@@ -775,12 +808,13 @@ export default function AdminUsers() {
                       <td className="px-4 py-3 hidden lg:table-cell"><div className="h-3 w-20 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3 hidden sm:table-cell"><div className="h-3 w-6 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3 hidden lg:table-cell"><div className="h-3 w-16 bg-gray-700 rounded" /></td>
+                      <td className="px-4 py-3 hidden xl:table-cell"><div className="h-3 w-24 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3"><div className="h-7 w-24 bg-gray-700 rounded ml-auto" /></td>
                     </tr>
                   ))
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                    <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
                       {search ? 'No users match your search.' : 'No users found.'}
                     </td>
                   </tr>
