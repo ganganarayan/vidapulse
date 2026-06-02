@@ -143,7 +143,7 @@ router.get('/clicks', requireAuth, async (req, res, next) => {
               ae.metadata->>'country'         AS country,
               ae.metadata->>'city'            AS city,
               ae.metadata->>'destination_url' AS destination_url,
-              s.viewer_id
+              COALESCE(s.viewer_id::text, ae.metadata->>'viewer_id') AS viewer_id
        FROM   analytics_events ae
        JOIN   video_cta_links c ON c.id::text = ae.metadata->>'cta_link_id'
        LEFT   JOIN analytics_sessions s ON s.id = ae.session_id

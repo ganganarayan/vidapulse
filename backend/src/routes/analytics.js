@@ -28,6 +28,46 @@ function getClientIp(req) {
   return req.ip || null;
 }
 
+const crypto = require('crypto');
+
+const CTA_VID_COOKIE = 'vp_cta_vid';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Read a single cookie value from the raw Cookie header (no cookie-parser dep). */
+function readCookie(req, name) {
+  const raw = req.headers.cookie;
+  if (!raw) return null;
+  for (const part of raw.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx === -1) continue;
+    if (part.slice(0, idx).trim() === name) {
+      return decodeURIComponent(part.slice(idx + 1).trim());
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolve a stable, first-party CTA viewer id for this browser.
+ * Reads the vp_cta_vid cookie; mints a new UUID + sets the cookie on the
+ * response when absent. Independent of the video player's viewer id.
+ * Returns the id (caller stores it on the click event).
+ */
+function resolveCtaViewerId(req, res) {
+  let id = readCookie(req, CTA_VID_COOKIE);
+  if (!id || !UUID_RE.test(id)) {
+    id = crypto.randomUUID();
+    res.cookie(CTA_VID_COOKIE, id, {
+      maxAge  : 1000 * 60 * 60 * 24 * 365 * 2, // 2 years
+      httpOnly: true,
+      secure  : true,
+      sameSite: 'lax', // sent on top-level navigation (the click)
+      path    : '/',
+    });
+  }
+  return id;
+}
+
 /** Parse browser name from a User-Agent string */
 function parseBrowser(ua) {
   if (!ua) return null;
@@ -653,6 +693,10 @@ router.get('/cta/link/:ctaId', async (req, res) => {
     return res.status(404).send('CTA link not found.');
   }
 
+  // Resolve the first-party CTA viewer id (sets cookie if new) BEFORE redirect
+  // so the Set-Cookie header rides on the 302 response.
+  const ctaViewerId = resolveCtaViewerId(req, res);
+
   // Redirect immediately — tracking is fire-and-forget
   res.redirect(302, ctaLink.destination_url);
 
@@ -678,6 +722,7 @@ router.get('/cta/link/:ctaId', async (req, res) => {
           cta_name       : ctaLink.cta_name,
           page_name      : ctaLink.page_name || null,
           destination_url: ctaLink.destination_url,
+          viewer_id      : ctaViewerId,
           device         : clickDevice,
           browser        : clickBrowser,
           country        : clickGeo.name,
