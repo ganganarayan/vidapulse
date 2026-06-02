@@ -12,9 +12,7 @@ export default function Register() {
   const navigate = useNavigate();
   const { refetch } = useAuth();
 
-  const [name,      setName]      = useState('');
   const [email,     setEmail]     = useState('');
-  const [phone,     setPhone]     = useState('');
   const [password,  setPassword]  = useState('');
   const [confirm,   setConfirm]   = useState('');
   const [showPw,    setShowPw]    = useState(false);
@@ -48,10 +46,8 @@ export default function Register() {
     setLoading(true);
     try {
       await api.post('/auth/register', {
-        name    : name.trim(),
         email   : email.trim(),
         password,
-        ...(phone.trim() ? { phone: phone.trim() } : {}),
       });
       await refetch();
       pixelTrack('CompleteRegistration');
@@ -119,23 +115,6 @@ export default function Register() {
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
-            {/* Name */}
-            <div>
-              <label className="block text-xs text-gray-400 mb-1.5 font-medium">Full name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Your full name"
-                required
-                disabled={loading}
-                autoComplete="name"
-                className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
-                           text-gray-100 placeholder-gray-500 text-sm rounded-lg
-                           px-3 py-2.5 focus:outline-none transition-colors"
-              />
-            </div>
-
             {/* Email */}
             <div>
               <label className="block text-xs text-gray-400 mb-1.5 font-medium">Email address</label>
@@ -147,24 +126,6 @@ export default function Register() {
                 required
                 disabled={loading}
                 autoComplete="email"
-                className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
-                           text-gray-100 placeholder-gray-500 text-sm rounded-lg
-                           px-3 py-2.5 focus:outline-none transition-colors"
-              />
-            </div>
-
-            {/* Phone (optional) */}
-            <div>
-              <label className="block text-xs text-gray-400 mb-1.5 font-medium">
-                Phone number <span className="text-gray-400">(optional)</span>
-              </label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                placeholder="+91 98765 43210"
-                disabled={loading}
-                autoComplete="tel"
                 className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
                            text-gray-100 placeholder-gray-500 text-sm rounded-lg
                            px-3 py-2.5 focus:outline-none transition-colors"
@@ -232,7 +193,7 @@ export default function Register() {
 
             <button
               type="submit"
-              disabled={loading || !name || !email || !password || password !== confirm}
+              disabled={loading || !email || !password || password !== confirm}
               className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:bg-amber-500/40
                          text-gray-900 font-semibold text-sm rounded-lg transition-colors
                          disabled:cursor-not-allowed mt-1"
