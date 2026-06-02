@@ -121,6 +121,44 @@ function lookupCountry(ip) {
   }
 }
 
+// ── UTM forwarding for CTA redirect links ────────────────────────────────
+// When a CTA tracking link is clicked WITH utm_* query params (typically
+// forwarded from a landing page), carry those params through to the
+// destination URL so downstream pages/funnels keep the campaign attribution.
+//
+// Safety: this is a no-op unless utm_* params are actually present, and it
+// only ADDS keys the destination doesn't already define (never overwrites the
+// owner's own UTMs). If the destination isn't a parseable absolute URL it is
+// returned unchanged — the redirect must never break because of this.
+const UTM_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+
+function mergeUtmIntoUrl(destUrl, query) {
+  if (!destUrl || !query) return destUrl;
+  if (!UTM_PARAMS.some(k => typeof query[k] === 'string' && query[k])) return destUrl; // nothing to forward
+  try {
+    const u = new URL(destUrl);
+    for (const k of UTM_PARAMS) {
+      const v = query[k];
+      if (typeof v === 'string' && v && !u.searchParams.has(k)) {
+        u.searchParams.set(k, v.slice(0, 300));
+      }
+    }
+    return u.toString();
+  } catch {
+    return destUrl; // relative/invalid URL — leave as-is
+  }
+}
+
+// Extract a clean { utm_* } object from a query for analytics metadata.
+function pickUtm(query) {
+  const out = {};
+  for (const k of UTM_PARAMS) {
+    const v = query?.[k];
+    out[k] = (typeof v === 'string' && v) ? v.slice(0, 300) : null;
+  }
+  return out;
+}
+
 /**
  * Analytics Ingestion API — public, no authentication
  *
@@ -697,8 +735,12 @@ router.get('/cta/link/:ctaId', async (req, res) => {
   // so the Set-Cookie header rides on the 302 response.
   const ctaViewerId = resolveCtaViewerId(req, res);
 
+  // Forward any inbound utm_* params (e.g. from the landing page) onto the
+  // destination so the campaign attribution survives the redirect hop.
+  const finalDest = mergeUtmIntoUrl(ctaLink.destination_url, req.query);
+
   // Redirect immediately — tracking is fire-and-forget
-  res.redirect(302, ctaLink.destination_url);
+  res.redirect(302, finalDest);
 
   // Record click with full metadata (Pro/admin_lifetime plan only)
   if (ctaLink.plan_name === 'pro' || ctaLink.plan_name === 'admin_lifetime') {
@@ -728,6 +770,7 @@ router.get('/cta/link/:ctaId', async (req, res) => {
           country        : clickGeo.name,
           country_code   : clickGeo.code,
           city           : clickGeo.city,
+          ...pickUtm(req.query),
         }),
       ]
     ).catch(err => logger.warn(`[analytics/cta/link] insert failed: ${err.message}`));
@@ -762,13 +805,17 @@ router.get('/cta/:videoId', async (req, res) => {
     return res.status(400).send('Missing or invalid "to" destination URL. Usage: /api/analytics/cta/VIDEO_ID?to=https://your-page.com');
   }
 
+  // Forward any inbound utm_* params onto the destination (campaign attribution
+  // survives the redirect). No-op when no utm_* params are present.
+  const finalDest = mergeUtmIntoUrl(safeDest, req.query);
+
   // Validate videoId is UUID-shaped
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(videoId)) {
-    return res.redirect(safeDest);
+    return res.redirect(finalDest);
   }
 
   // Redirect first (< 50 ms) — tracking is fire-and-forget
-  res.redirect(302, safeDest);
+  res.redirect(302, finalDest);
 
   // Background: record the click — only tracked for Pro / admin_lifetime plan owners.
   // The redirect always happens regardless of plan; only the analytics recording is gated.
