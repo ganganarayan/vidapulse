@@ -379,13 +379,16 @@ router.post('/register', async (req, res, next) => {
   try {
     const { email, name, password, phone } = req.body ?? {};
 
-    if (!email || !name || !password) {
-      return res.status(400).json({ error: 'Validation Error', message: 'email, name and password are required' });
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Validation Error', message: 'email and password are required' });
     }
     const normalizedEmail = String(email).toLowerCase().trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       return res.status(400).json({ error: 'Validation Error', message: 'Enter a valid email address' });
     }
+    // Name is collected later (onboarding). Until then default to the email's
+    // local part so the NOT NULL column + dashboard greeting have a value.
+    const finalName = (name && String(name).trim()) || normalizedEmail.split('@')[0];
     if (String(password).length < 8) {
       return res.status(400).json({ error: 'Validation Error', message: 'Password must be at least 8 characters' });
     }
@@ -416,7 +419,7 @@ router.post('/register', async (req, res, next) => {
         `INSERT INTO users (email, name, phone, plan_id, role, password_hash, password_set, created_via)
          VALUES ($1, $2, $3, $4, 'subscriber', $5, TRUE, 'self_signup')
          RETURNING id`,
-        [normalizedEmail, String(name).trim(), normalizedPhone, plans[0].id, hash]
+        [normalizedEmail, finalName, normalizedPhone, plans[0].id, hash]
       );
 
       await client.query(
