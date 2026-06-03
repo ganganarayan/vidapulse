@@ -43,6 +43,8 @@ const DAILY_STATS_MS       = 24 * 60 * 60_000; // 24 hours
 const EXPIRY_CHECK_MS      = 24 * 60 * 60_000; // 24 hours
 const INACTIVITY_CHECK_MS  = 24 * 60 * 60_000; // 24 hours
 const INACTIVITY_DAYS      = 180;              // deactivate after 180 days idle
+const REMINDER_10D_DAYS    = 170;              // 10 days before deactivation
+const REMINDER_3D_DAYS     = 177;              //  3 days before deactivation
 
 // Startup delays — stagger jobs to avoid hitting the DB all at once
 const INSIGHT_BATCH_DELAY  = 2  * 60_000;   // insight starts 2 min after server ready
@@ -352,24 +354,51 @@ async function _jobPlanExpiryCheck() {
 // ─────────────────────────────────────────────────────────────────────────
 
 async function _jobInactivityDeactivation() {
+  // Most-recent activity per user, reused across all queries below.
+  const LAST_ACTIVITY = `GREATEST(COALESCE(u.last_seen_at, u.created_at), COALESCE(u.last_login_at, u.created_at))`;
+
+  // ── 1. Reminder webhooks ────────────────────────────────────────────────
+  // Fire once per inactivity cycle: dedup against behavioral_events created
+  // AFTER the user's last activity, so the reminders reset if the user returns.
+  async function sendReminders(eventKey, idleDays) {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.email
+         FROM users u
+        WHERE u.is_active = TRUE AND u.role <> 'admin'
+          AND ${LAST_ACTIVITY} < NOW() - ($1 || ' days')::interval
+          AND NOT EXISTS (
+                SELECT 1 FROM behavioral_events be
+                 WHERE be.user_id = u.id
+                   AND be.event_key = $2
+                   AND be.created_at > ${LAST_ACTIVITY})`,
+      [String(idleDays), eventKey]
+    );
+    for (const u of rows) {
+      emitEvent(u.id, eventKey, null, { email: u.email, days_until_deactivation: INACTIVITY_DAYS - idleDays });
+    }
+    if (rows.length) logger.info(`[scheduledJobs] ${eventKey} — sent to ${rows.length} user(s)`);
+  }
+  await sendReminders('inactivity_reminder_10d', REMINDER_10D_DAYS);
+  await sendReminders('inactivity_reminder_3d',  REMINDER_3D_DAYS);
+
+  // ── 2. Deactivate users past the threshold + fire user_deactivated ──────
   const { rows } = await pool.query(
-    `UPDATE users
+    `UPDATE users u
         SET is_active          = FALSE,
             deactivated_at     = NOW(),
             deactivated_reason = 'inactivity_180d',
             updated_at         = NOW()
-      WHERE is_active = TRUE
-        AND role <> 'admin'
-        AND GREATEST(
-              COALESCE(last_seen_at,  created_at),
-              COALESCE(last_login_at, created_at)
-            ) < NOW() - ($1 || ' days')::interval
+      WHERE u.is_active = TRUE
+        AND u.role <> 'admin'
+        AND ${LAST_ACTIVITY} < NOW() - ($1 || ' days')::interval
       RETURNING id, email`,
     [String(INACTIVITY_DAYS)]
   );
 
-  if (rows.length === 0) return;
-  logger.info(`[scheduledJobs] inactivity_deactivation — deactivated ${rows.length} user(s) idle > ${INACTIVITY_DAYS} days`);
+  for (const u of rows) {
+    emitEvent(u.id, 'user_deactivated', null, { email: u.email, reason: 'inactivity_180d' });
+  }
+  if (rows.length) logger.info(`[scheduledJobs] inactivity_deactivation — deactivated ${rows.length} user(s) idle > ${INACTIVITY_DAYS} days`);
 }
 
 /**
