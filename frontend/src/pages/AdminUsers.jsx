@@ -645,10 +645,15 @@ export default function AdminUsers() {
   // Promotion visibility modal state
   const [promoModalUser,  setPromoModalUser]  = useState(null);
 
-  // Bulk-delete selection state
-  const [selectedIds,      setSelectedIds]      = useState(() => new Set());
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting,         setDeleting]         = useState(false);
+  // Bulk-deactivate selection state
+  const [selectedIds,          setSelectedIds]          = useState(() => new Set());
+  const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
+  const [working,              setWorking]              = useState(false);
+
+  // Shared refresh signal — bumping it reloads the active list AND the
+  // Deactivated section (so a user moves between them immediately).
+  const [refreshTick, setRefreshTick] = useState(0);
+  const bumpRefresh = () => setRefreshTick(t => t + 1);
 
   // Admin accounts can't be deleted — only these rows are selectable.
   const selectableUsers = users.filter(u => u.role !== 'admin');
@@ -665,21 +670,21 @@ export default function AdminUsers() {
     setSelectedIds(allSelected ? new Set() : new Set(selectableUsers.map(u => u.id)));
   }
 
-  async function handleConfirmDelete() {
+  async function handleConfirmDeactivate() {
     const ids = [...selectedIds];
     if (!ids.length) return;
-    setDeleting(true);
+    setWorking(true);
     try {
-      const { data } = await api.post('/admin/users/delete', { user_ids: ids });
+      const { data } = await api.post('/admin/users/deactivate', { user_ids: ids });
       const skippedNote = data.skipped?.length ? ` · ${data.skipped.length} skipped` : '';
-      showToast(`Deleted ${data.deleted} user${data.deleted !== 1 ? 's' : ''}${skippedNote}`);
+      showToast(`Deactivated ${data.deactivated} user${data.deactivated !== 1 ? 's' : ''}${skippedNote}`);
       setSelectedIds(new Set());
-      setConfirmingDelete(false);
-      loadUsers();
+      setConfirmingDeactivate(false);
+      bumpRefresh();
     } catch (err) {
-      showToast(err.response?.data?.message ?? 'Delete failed', 'error');
+      showToast(err.response?.data?.message ?? 'Deactivation failed', 'error');
     } finally {
-      setDeleting(false);
+      setWorking(false);
     }
   }
 
@@ -694,7 +699,7 @@ export default function AdminUsers() {
     setLoading(true);
     setFetchError('');
     try {
-      const params = new URLSearchParams({ page, limit: 25 });
+      const params = new URLSearchParams({ page, limit: 25, status: 'active' });
       if (search) params.set('search', search);
       const { data } = await api.get(`/admin/users?${params}`);
       setUsers(data.users);
@@ -705,7 +710,7 @@ export default function AdminUsers() {
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, search, refreshTick]);
 
   useEffect(() => { loadUsers(); }, [loadUsers]);
 
@@ -823,12 +828,12 @@ export default function AdminUsers() {
           )}
           {selectedIds.size > 0 && (
             <button
-              onClick={() => setConfirmingDelete(true)}
+              onClick={() => setConfirmingDeactivate(true)}
               className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold
-                         bg-red-600/90 hover:bg-red-500 text-white transition-colors"
+                         bg-amber-600/90 hover:bg-amber-500 text-white transition-colors"
             >
-              <TrashIcon />
-              Delete ({selectedIds.size})
+              <PauseIcon />
+              Deactivate ({selectedIds.size})
             </button>
           )}
         </div>
@@ -941,6 +946,9 @@ export default function AdminUsers() {
           )}
         </div>
 
+        {/* Deactivated users section */}
+        <DeactivatedSection refreshTick={refreshTick} onChanged={bumpRefresh} showToast={showToast} />
+
         {/* Modal error (displayed inside the table area if modal is closed but there was an error) */}
         {modalError && !modalUser && (
           <p className="mt-3 text-red-400 text-sm">{modalError}</p>
@@ -966,13 +974,13 @@ export default function AdminUsers() {
         />
       )}
 
-      {/* Bulk-delete confirmation */}
-      {confirmingDelete && (
-        <DeleteUsersModal
+      {/* Bulk-deactivate confirmation (reversible) */}
+      {confirmingDeactivate && (
+        <DeactivateUsersModal
           users={users.filter(u => selectedIds.has(u.id))}
-          loading={deleting}
-          onConfirm={handleConfirmDelete}
-          onCancel={() => setConfirmingDelete(false)}
+          loading={working}
+          onConfirm={handleConfirmDeactivate}
+          onCancel={() => setConfirmingDeactivate(false)}
         />
       )}
 
@@ -981,11 +989,10 @@ export default function AdminUsers() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DeleteUsersModal — irreversible bulk-delete confirmation
+// UserListModal — shared shell listing the affected accounts
 // ─────────────────────────────────────────────────────────────────────────────
 
-function DeleteUsersModal({ users, loading, onConfirm, onCancel }) {
-  const count = users.length;
+function UserListModal({ users, loading, onCancel, accent, icon, title, children, confirmEl }) {
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape' && !loading) onCancel(); }
     window.addEventListener('keydown', onKey);
@@ -1000,19 +1007,12 @@ function DeleteUsersModal({ users, loading, onConfirm, onCancel }) {
       <div className="bg-gray-800 border border-gray-700 rounded-xl w-full max-w-md shadow-2xl">
         <div className="p-6 pb-4">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-full bg-red-600/20 flex items-center justify-center flex-shrink-0 text-red-400">
-              <TrashIcon />
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${accent.iconWrap}`}>
+              {icon}
             </div>
-            <h2 className="text-lg font-bold text-white">
-              Delete {count} {count === 1 ? 'account' : 'accounts'}?
-            </h2>
+            <h2 className="text-lg font-bold text-white">{title}</h2>
           </div>
-          <p className="text-gray-400 text-sm">
-            This permanently removes {count === 1 ? 'this account' : 'these accounts'} and{' '}
-            <span className="text-red-300 font-medium">all of their data</span> — videos, analytics,
-            sessions and settings. This <span className="text-red-300 font-medium">cannot be undone</span>.
-          </p>
-
+          {children}
           <div className="mt-3 max-h-40 overflow-y-auto rounded-lg border border-gray-700 divide-y divide-gray-700/60">
             {users.map(u => (
               <div key={u.id} className="px-3 py-2 text-sm">
@@ -1022,25 +1022,99 @@ function DeleteUsersModal({ users, loading, onConfirm, onCancel }) {
             ))}
           </div>
         </div>
-
         <div className="px-6 pb-6 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={loading}
-            className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-gray-300 border border-gray-600 hover:border-gray-400 transition-colors disabled:opacity-50"
-          >
+          <button type="button" onClick={onCancel} disabled={loading}
+            className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-gray-300 border border-gray-600 hover:border-gray-400 transition-colors disabled:opacity-50">
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={loading}
-            className="flex-1 px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-          >
+          {confirmEl}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── DeactivateUsersModal — reversible ────────────────────────────────────────
+function DeactivateUsersModal({ users, loading, onConfirm, onCancel }) {
+  const count = users.length;
+  return (
+    <UserListModal
+      users={users} loading={loading} onCancel={onCancel}
+      accent={{ iconWrap: 'bg-amber-600/20 text-amber-400' }}
+      icon={<PauseIcon />}
+      title={`Deactivate ${count} ${count === 1 ? 'account' : 'accounts'}?`}
+      confirmEl={
+        <button type="button" onClick={onConfirm} disabled={loading}
+          className="flex-1 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-600 text-white hover:bg-amber-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+          {loading
+            ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Deactivating…</>
+            : `Deactivate ${count === 1 ? 'account' : count + ' accounts'}`}
+        </button>
+      }
+    >
+      <p className="text-gray-400 text-sm">
+        {count === 1 ? 'This account moves' : 'These accounts move'} to the{' '}
+        <span className="text-gray-200 font-medium">Deactivated</span> section. All data is kept and
+        they can be <span className="text-emerald-300 font-medium">restored anytime</span>. They won't
+        be able to log in until restored.
+      </p>
+    </UserListModal>
+  );
+}
+
+// ── PurgeUsersModal — irreversible, type-to-confirm ──────────────────────────
+function PurgeUsersModal({ users, loading, onConfirm, onCancel }) {
+  const count = users.length;
+  const [typed, setTyped] = useState('');
+  const armed = typed.trim().toUpperCase() === 'PURGE';
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+      onClick={e => { if (e.target === e.currentTarget && !loading) onCancel(); }}
+    >
+      <div className="bg-gray-800 border border-gray-700 rounded-xl w-full max-w-md shadow-2xl">
+        <div className="p-6 pb-4">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-full bg-red-600/20 flex items-center justify-center flex-shrink-0 text-red-400">
+              <TrashIcon />
+            </div>
+            <h2 className="text-lg font-bold text-white">Purge {count} {count === 1 ? 'account' : 'accounts'}?</h2>
+          </div>
+          <p className="text-gray-400 text-sm">
+            This permanently deletes {count === 1 ? 'this account' : 'these accounts'} and{' '}
+            <span className="text-red-300 font-medium">all their data</span> — videos, analytics, settings.
+            Logs (webhooks, CTA clicks, payments, subscription history) are kept. This{' '}
+            <span className="text-red-300 font-medium">cannot be undone</span>.
+          </p>
+          <div className="mt-3 max-h-32 overflow-y-auto rounded-lg border border-gray-700 divide-y divide-gray-700/60">
+            {users.map(u => (
+              <div key={u.id} className="px-3 py-2 text-sm">
+                <p className="text-gray-200 truncate">{u.name || <span className="italic text-gray-500">No name</span>}</p>
+                <p className="text-gray-500 text-xs truncate">{u.email}</p>
+              </div>
+            ))}
+          </div>
+          <label className="block mt-4 text-xs text-gray-400">
+            Type <span className="font-mono font-bold text-red-300">PURGE</span> to confirm
+            <input
+              value={typed}
+              onChange={e => setTyped(e.target.value)}
+              disabled={loading}
+              autoFocus
+              className="mt-1 w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-red-500"
+            />
+          </label>
+        </div>
+        <div className="px-6 pb-6 flex items-center gap-3">
+          <button type="button" onClick={onCancel} disabled={loading}
+            className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-gray-300 border border-gray-600 hover:border-gray-400 transition-colors disabled:opacity-50">
+            Cancel
+          </button>
+          <button type="button" onClick={onConfirm} disabled={loading || !armed}
+            className="flex-1 px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
             {loading
-              ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Deleting…</>
-              : `Delete ${count === 1 ? 'account' : count + ' accounts'}`}
+              ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Purging…</>
+              : `Purge ${count === 1 ? 'account' : count + ' accounts'}`}
           </button>
         </div>
       </div>
@@ -1055,5 +1129,186 @@ function TrashIcon() {
       <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
       <path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
     </svg>
+  );
+}
+
+function PauseIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" />
+    </svg>
+  );
+}
+
+function RestoreIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><polyline points="3 3 3 8 8 8" />
+    </svg>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DeactivatedSection — deactivated users with Restore / Purge
+// ─────────────────────────────────────────────────────────────────────────────
+
+function deactivatedReasonLabel(reason) {
+  if (reason === 'inactivity_180d') return 'Inactive 180+ days';
+  if (reason === 'manual')          return 'Deactivated by admin';
+  return 'Deactivated';
+}
+
+function DeactivatedSection({ refreshTick, onChanged, showToast }) {
+  const [users,       setUsers]       = useState([]);
+  const [pagination,  setPagination]  = useState(null);
+  const [page,        setPage]        = useState(1);
+  const [loading,     setLoading]     = useState(true);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [working,     setWorking]     = useState(false);
+  const [confirmingPurge, setConfirmingPurge] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page, limit: 25, status: 'deactivated' });
+      const { data } = await api.get(`/admin/users?${params}`);
+      setUsers(data.users);
+      setPagination(data.pagination);
+      setSelectedIds(new Set());
+    } catch {
+      /* soft-fail — section shows empty */
+    } finally {
+      setLoading(false);
+    }
+  }, [page]);
+
+  useEffect(() => { load(); }, [load, refreshTick]);
+
+  const allSelected = users.length > 0 && users.every(u => selectedIds.has(u.id));
+  function toggleSelect(id) {
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleAll() { setSelectedIds(allSelected ? new Set() : new Set(users.map(u => u.id))); }
+
+  async function doRestore() {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    setWorking(true);
+    try {
+      const { data } = await api.post('/admin/users/restore', { user_ids: ids });
+      showToast(`Restored ${data.restored} user${data.restored !== 1 ? 's' : ''}`);
+      setSelectedIds(new Set());
+      onChanged();
+    } catch (err) {
+      showToast(err.response?.data?.message ?? 'Restore failed', 'error');
+    } finally { setWorking(false); }
+  }
+
+  async function doPurge() {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    setWorking(true);
+    try {
+      const { data } = await api.post('/admin/users/purge', { user_ids: ids });
+      const skippedNote = data.skipped?.length ? ` · ${data.skipped.length} skipped` : '';
+      showToast(`Purged ${data.purged} user${data.purged !== 1 ? 's' : ''}${skippedNote}`);
+      setSelectedIds(new Set());
+      setConfirmingPurge(false);
+      onChanged();
+    } catch (err) {
+      showToast(err.response?.data?.message ?? 'Purge failed', 'error');
+    } finally { setWorking(false); }
+  }
+
+  const total = pagination?.total ?? 0;
+
+  return (
+    <section className="mt-8">
+      <div className="flex items-center gap-3 mb-3">
+        <h2 className="text-lg font-bold text-gray-200">Deactivated</h2>
+        {total > 0 && <span className="text-gray-500 text-sm">{total}</span>}
+        {selectedIds.size > 0 && (
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={doRestore} disabled={working}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-emerald-600/90 hover:bg-emerald-500 text-white transition-colors disabled:opacity-50">
+              <RestoreIcon /> Restore ({selectedIds.size})
+            </button>
+            <button onClick={() => setConfirmingPurge(true)} disabled={working}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-red-600/90 hover:bg-red-500 text-white transition-colors disabled:opacity-50">
+              <TrashIcon /> Purge ({selectedIds.size})
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-gray-800/40 border border-gray-700 rounded-xl overflow-hidden">
+        {loading ? (
+          <div className="px-4 py-8 text-center text-gray-500 text-sm">Loading…</div>
+        ) : users.length === 0 ? (
+          <div className="px-4 py-8 text-center text-gray-600 text-sm">No deactivated accounts.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase tracking-wider">
+                  <th className="px-4 py-3 w-px">
+                    <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                      className="w-4 h-4 rounded border-gray-600 bg-gray-700 accent-amber-500 cursor-pointer" />
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium">User</th>
+                  <th className="px-4 py-3 text-left font-medium">Plan</th>
+                  <th className="px-4 py-3 text-left font-medium hidden md:table-cell">Deactivated</th>
+                  <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Last Login</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700/50">
+                {users.map(u => {
+                  const sel = selectedIds.has(u.id);
+                  return (
+                    <tr key={u.id} className={sel ? 'bg-amber-500/5' : 'hover:bg-gray-700/30'}>
+                      <td className="px-4 py-3 w-px">
+                        <input type="checkbox" checked={sel} onChange={() => toggleSelect(u.id)}
+                          className="w-4 h-4 rounded border-gray-600 bg-gray-700 accent-amber-500 cursor-pointer" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-gray-200 truncate">{u.name || <span className="italic text-gray-500">No name</span>}</p>
+                        <p className="text-gray-500 text-xs truncate">{u.email}</p>
+                      </td>
+                      <td className="px-4 py-3"><PlanChip plan={u.plan} /></td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <p className="text-gray-300 text-xs">{deactivatedReasonLabel(u.deactivated_reason)}</p>
+                        <p className="text-gray-500 text-xs">{formatDate(u.deactivated_at)}</p>
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">{formatRelative(u.last_login_at)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {pagination && pagination.total_pages > 1 && (
+          <div className="px-4 py-3 border-t border-gray-700 flex items-center justify-between text-sm">
+            <span className="text-gray-400">Page {pagination.page} of {pagination.total_pages}</span>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPage(p => p - 1)} disabled={!pagination.has_prev || loading}
+                className="px-3 py-1.5 rounded-lg border border-gray-600 text-gray-300 hover:border-gray-400 disabled:opacity-40 transition-colors">← Prev</button>
+              <button onClick={() => setPage(p => p + 1)} disabled={!pagination.has_next || loading}
+                className="px-3 py-1.5 rounded-lg border border-gray-600 text-gray-300 hover:border-gray-400 disabled:opacity-40 transition-colors">Next →</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {confirmingPurge && (
+        <PurgeUsersModal
+          users={users.filter(u => selectedIds.has(u.id))}
+          loading={working}
+          onConfirm={doPurge}
+          onCancel={() => setConfirmingPurge(false)}
+        />
+      )}
+    </section>
   );
 }
