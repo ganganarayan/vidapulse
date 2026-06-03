@@ -1242,6 +1242,38 @@ router.post('/contact-webhook/discard-entry/:id', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /api/admin/contact-webhook/delete-entries
+//
+// Permanently deletes one or more log entries by ID.
+// Body: { ids: number[] }. Returns { ok, deleted }.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/contact-webhook/delete-entries', async (req, res, next) => {
+  try {
+    const rawIds = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const ids = [...new Set(
+      rawIds
+        .map(v => parseInt(v, 10))
+        .filter(n => Number.isInteger(n) && n > 0)
+    )];
+
+    if (ids.length === 0) {
+      return res.status(400).json({ ok: false, message: 'No valid ids provided' });
+    }
+
+    const { rowCount } = await pool.query(
+      `DELETE FROM contact_webhook_log WHERE id = ANY($1::int[])`,
+      [ids]
+    );
+
+    logger.info(`[admin] Deleted ${rowCount} webhook log entr${rowCount === 1 ? 'y' : 'ies'} by user ${req.user.id}`);
+    return res.json({ ok: true, deleted: rowCount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/contact-webhook-log
 //
 // Paginated log of every outbound contact webhook fire.

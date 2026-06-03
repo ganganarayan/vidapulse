@@ -32,6 +32,8 @@ export default function AdminWebhookLog() {
   const [selectedIds,  setSelectedIds]  = useState(new Set());
   const [bulkRetrying, setBulkRetrying] = useState(null); // null | { total, current, done[], failed[] }
   const [bulkCountdown,setBulkCountdown]= useState(0);    // seconds to next retry
+  const [deleting,     setDeleting]     = useState(false);
+  const [deleteMsg,    setDeleteMsg]    = useState('');
 
   const load = useCallback(async (pg = 1, status = '') => {
     setLoading(true);
@@ -127,6 +129,29 @@ export default function AdminWebhookLog() {
     setBulkRetrying(null);
     webhookAlerts.refresh();
     load(page, filter);
+  }
+
+  // Bulk delete — permanently remove selected log entries
+  async function handleBulkDelete() {
+    const ids = [...selectedIds];
+    if (!ids.length || deleting) return;
+    if (!window.confirm(
+      `Permanently delete ${ids.length} webhook log ${ids.length === 1 ? 'entry' : 'entries'}? This cannot be undone.`
+    )) return;
+
+    setDeleting(true);
+    setDeleteMsg('');
+    try {
+      const { data } = await api.post('/admin/contact-webhook/delete-entries', { ids });
+      setDeleteMsg(`✓ Deleted ${data.deleted} ${data.deleted === 1 ? 'entry' : 'entries'}.`);
+      setSelectedIds(new Set());
+      await webhookAlerts.refresh();
+      load(page, filter);
+    } catch {
+      setDeleteMsg('Delete failed. Check your connection.');
+    } finally {
+      setDeleting(false);
+    }
   }
 
   function toggleSelect(id) {
@@ -257,13 +282,35 @@ export default function AdminWebhookLog() {
             {selectedIds.size > 0 && !bulkRetrying && (
               <button
                 onClick={handleBulkRetry}
+                disabled={deleting}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border
                            bg-amber-500/15 text-amber-300 border-amber-500/30
-                           hover:bg-amber-500/25 transition-colors"
+                           hover:bg-amber-500/25 disabled:opacity-50 transition-colors"
               >
                 ↺ Retry selected ({selectedIds.size})
                 <span className="text-amber-400/60 font-normal">· 1 min apart</span>
               </button>
+            )}
+            {/* Bulk delete — shown when rows are selected */}
+            {selectedIds.size > 0 && !bulkRetrying && (
+              <button
+                onClick={handleBulkDelete}
+                disabled={deleting}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border
+                           bg-red-500/10 text-red-300 border-red-500/30
+                           hover:bg-red-500/20 hover:text-red-200 disabled:opacity-50 transition-colors"
+                title="Permanently delete the selected log entries"
+              >
+                {deleting
+                  ? <><span className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" /> Deleting…</>
+                  : <>🗑 Delete selected ({selectedIds.size})</>
+                }
+              </button>
+            )}
+            {deleteMsg && resolving === '' && (
+              <span className={`text-xs ${deleteMsg.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'}`}>
+                {deleteMsg}
+              </span>
             )}
             {/* Bulk retry progress */}
             {bulkRetrying && (
@@ -444,13 +491,13 @@ function LogRow({ row, selected, onToggle, onRefresh }) {
         className={`hover:bg-gray-800/20 transition-colors cursor-pointer ${selected ? 'bg-amber-500/5' : ''}`}
         onClick={() => setExpanded(e => !e)}
       >
-        {/* Checkbox */}
-        <td className="px-3 py-3 align-top" onClick={e => { e.stopPropagation(); onToggle(); }}>
+        {/* Checkbox — stop row-expand on the cell; the input's onChange is the sole toggle */}
+        <td className="px-3 py-3 align-top" onClick={e => e.stopPropagation()}>
           <input
             type="checkbox"
             checked={!!selected}
             onChange={onToggle}
-            className="w-3.5 h-3.5 accent-amber-500 cursor-pointer"
+            className="w-4 h-4 accent-amber-500 cursor-pointer"
           />
         </td>
 
