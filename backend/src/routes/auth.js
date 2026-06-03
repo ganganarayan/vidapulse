@@ -671,6 +671,38 @@ router.get('/providers', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// GET /api/auth/email-status?email=...
+//
+// Lightweight lookup used by the register page when the email is prefilled
+// from a CTA link. Tells the frontend whether that email already exists and
+// whether it's linked to Google — so a returning Google user can be sent
+// straight through OAuth to the dashboard instead of the password form.
+// (Account existence is already discoverable via /register's 409 response,
+// so this exposes nothing new.)
+// ─────────────────────────────────────────────────────────────
+
+router.get('/email-status', async (req, res, next) => {
+  try {
+    const email = String(req.query.email || '').toLowerCase().trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.json({ exists: false, google: false });
+    }
+    const { rows: [row] } = await pool.query(
+      `SELECT u.id,
+              EXISTS(SELECT 1 FROM user_oauth_accounts o
+                      WHERE o.user_id = u.id AND o.provider = 'google') AS google
+         FROM users u
+        WHERE u.email = $1
+        LIMIT 1`,
+      [email]
+    );
+    return res.json({ exists: !!row, google: !!(row && row.google) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
 // OAuth — Google
 // ─────────────────────────────────────────────────────────────
 
@@ -692,7 +724,8 @@ router.get('/oauth/google', (req, res) => {
     maxAge  : 10 * 60 * 1000, // 10-minute window to complete the flow
   });
 
-  return res.redirect(oauth.getGoogleAuthUrl(state));
+  const loginHint = typeof req.query.login_hint === 'string' ? req.query.login_hint : undefined;
+  return res.redirect(oauth.getGoogleAuthUrl(state, loginHint));
 });
 
 router.get('/oauth/google/callback', async (req, res) => {

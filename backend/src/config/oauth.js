@@ -27,7 +27,7 @@ const logger = require('./logger');
  * prompt=select_account forces the account picker even if the user is
  * already signed in — ensures they can switch Google accounts.
  */
-function getGoogleAuthUrl(state) {
+function getGoogleAuthUrl(state, loginHint) {
   const params = new URLSearchParams({
     client_id    : env.GOOGLE_CLIENT_ID,
     redirect_uri : `${env.APP_URL}/api/auth/oauth/google/callback`,
@@ -37,6 +37,11 @@ function getGoogleAuthUrl(state) {
     access_type  : 'online',
     prompt       : 'select_account',
   });
+  // Pre-select the account when we already know the email (e.g. a lead landing
+  // on /register whose email is already a Google account).
+  if (loginHint && typeof loginHint === 'string') {
+    params.set('login_hint', loginHint.slice(0, 254));
+  }
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 

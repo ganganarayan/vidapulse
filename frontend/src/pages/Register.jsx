@@ -17,6 +17,8 @@ export default function Register() {
   // Prefill email from the link (?email=...) — forwarded by the CTA tracking
   // redirect from the landing opt-in / Thank-You button / registration email.
   const prefillEmail = (searchParams.get('email') || '').trim();
+  const emailLocked  = !!prefillEmail;   // came from the link → not editable
+
   const [email,     setEmail]     = useState(prefillEmail);
   const [password,  setPassword]  = useState('');
   const [confirm,   setConfirm]   = useState('');
@@ -24,12 +26,40 @@ export default function Register() {
   const [loading,       setLoading]       = useState(false);
   const [error,         setError]         = useState('');
   const [googleEnabled, setGoogleEnabled] = useState(false);
+  // While true we show a spinner instead of the form — covers the existing-
+  // account lookup and the redirect to Google for known Google accounts.
+  const [checking,      setChecking]      = useState(!!prefillEmail);
+  // 'register' (new account) | 'signin' (prefilled email already has a password account)
+  const [mode,          setMode]          = useState('register');
 
   useEffect(() => {
     api.get('/auth/providers')
       .then(res => setGoogleEnabled(!!res.data.google))
       .catch(() => {});
   }, []);
+
+  // When the email is prefilled, check whether it already belongs to a Google
+  // account. If so, send the user straight through Google OAuth → dashboard
+  // (no password form). Otherwise reveal the password form.
+  useEffect(() => {
+    if (!prefillEmail) return;
+    let cancelled = false;
+    api.get(`/auth/email-status?email=${encodeURIComponent(prefillEmail)}`)
+      .then(({ data }) => {
+        if (cancelled) return;
+        if (data?.google) {
+          // Keep the spinner up — we're leaving the SPA for Google.
+          window.location.href =
+            `/api/auth/oauth/google?login_hint=${encodeURIComponent(prefillEmail)}`;
+          return;
+        }
+        // Existing password account → show sign-in instead of register.
+        if (data?.exists) setMode('signin');
+        setChecking(false);
+      })
+      .catch(() => { if (!cancelled) setChecking(false); });
+    return () => { cancelled = true; };
+  }, [prefillEmail]);
 
   function handleGoogleSignup() {
     window.location.href = '/api/auth/oauth/google';
@@ -66,12 +96,134 @@ export default function Register() {
     }
   }
 
+  // Sign-in for a prefilled email that already has a password account.
+  async function handleSignIn(e) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const { data } = await api.post('/auth/login', { email: email.trim(), password });
+      await refetch();
+      navigate(data.redirect || '/dashboard', { replace: true });
+    } catch (err) {
+      // Deactivated account → hand off to the full login page (restore flow lives there).
+      if (err.response?.status === 403 && err.response?.data?.deactivated) {
+        navigate(`/login?email=${encodeURIComponent(email.trim())}`, { replace: true });
+        return;
+      }
+      setError(err.response?.data?.error ?? err.response?.data?.message ?? 'Sign in failed. Please try again.');
+      setLoading(false);
+    }
+  }
+
   // Password strength score
   const pw = password;
   const strength = [pw.length >= 8, pw.length >= 12, /[A-Z]/.test(pw), /[0-9]/.test(pw), /[^A-Za-z0-9]/.test(pw)].filter(Boolean).length;
   const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Very strong'][strength];
   const strengthColor = ['', 'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-emerald-500', 'bg-emerald-400'][strength];
   const strengthText  = ['', 'text-red-400', 'text-orange-400', 'text-amber-400', 'text-emerald-400', 'text-emerald-300'][strength];
+
+  // Checking the prefilled email (and possibly redirecting to Google) — show a
+  // spinner instead of flashing the password form.
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center px-4 gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-amber-500 text-2xl select-none">{'▶︎'}</span>
+          <span className="text-xl font-bold text-amber-500 tracking-tight">VidaPulse</span>
+        </div>
+        <span className="w-6 h-6 border-2 border-gray-600 border-t-amber-500 rounded-full animate-spin" />
+        <p className="text-sm text-gray-400">Checking your account…</p>
+      </div>
+    );
+  }
+
+  // Prefilled email already has a password account → sign in (not register).
+  if (mode === 'signin') {
+    return (
+      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center px-4">
+        <div className="w-full max-w-sm">
+
+          {/* Logo */}
+          <div className="flex items-center justify-center gap-2 mb-8">
+            <span className="text-amber-500 text-2xl select-none">{'▶︎'}</span>
+            <span className="text-xl font-bold text-amber-500 tracking-tight">VidaPulse</span>
+          </div>
+
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl p-8">
+            <h1 className="text-xl font-bold text-gray-50 mb-1">Welcome back</h1>
+            <p className="text-sm text-gray-400 mb-6">You already have an account — just enter your password to continue.</p>
+
+            {error && (
+              <div className="mb-4 px-4 py-3 bg-red-900/30 border border-red-700/40 rounded-lg text-red-300 text-sm">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSignIn} className="flex flex-col gap-4">
+              {/* Email — locked, from the link */}
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5 font-medium">Email address</label>
+                <input
+                  type="email"
+                  value={email}
+                  readOnly
+                  autoComplete="email"
+                  className="w-full bg-gray-800 border border-gray-700 text-gray-400 text-sm rounded-lg
+                             px-3 py-2.5 focus:outline-none cursor-not-allowed"
+                />
+              </div>
+
+              {/* Password */}
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5 font-medium">Password</label>
+                <div className="relative">
+                  <input
+                    type={showPw ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="Your password"
+                    required
+                    autoFocus
+                    disabled={loading}
+                    autoComplete="current-password"
+                    className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
+                               text-gray-100 placeholder-gray-500 text-sm rounded-lg
+                               px-3 py-2.5 pr-10 focus:outline-none transition-colors"
+                  />
+                  <button type="button" onClick={() => setShowPw(v => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                    {showPw ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || !password}
+                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:bg-amber-500/40
+                           text-gray-900 font-semibold text-sm rounded-lg transition-colors
+                           disabled:cursor-not-allowed mt-1"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-gray-900/40 border-t-gray-900 rounded-full animate-spin" />
+                    Signing in…
+                  </span>
+                ) : 'Sign in'}
+              </button>
+            </form>
+
+            <p className="text-center text-xs text-gray-500 mt-5">
+              <Link to="/login" className="text-amber-400 hover:text-amber-300 font-medium transition-colors">
+                Forgot password?
+              </Link>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center px-4">
@@ -132,11 +284,18 @@ export default function Register() {
                 placeholder="you@example.com"
                 required
                 disabled={loading}
+                readOnly={emailLocked}
                 autoComplete="email"
-                className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
-                           text-gray-100 placeholder-gray-500 text-sm rounded-lg
-                           px-3 py-2.5 focus:outline-none transition-colors"
+                title={emailLocked ? 'Email taken from your invitation link' : undefined}
+                className={`w-full border text-sm rounded-lg px-3 py-2.5 focus:outline-none transition-colors
+                           ${emailLocked
+                             ? 'bg-gray-800 border-gray-700 text-gray-400 cursor-not-allowed'
+                             : 'bg-gray-700 border-gray-600 focus:border-amber-500 text-gray-100 placeholder-gray-500'
+                           }`}
               />
+              {emailLocked && (
+                <p className="text-[11px] text-gray-500 mt-1">From your invitation link — just set a password below.</p>
+              )}
             </div>
 
             {/* Password */}
