@@ -712,7 +712,7 @@ router.get('/cta/link/:ctaId', async (req, res) => {
   try {
     const { rows: [row] } = await pool.query(
       `SELECT c.id, c.cta_name, c.page_name, c.destination_url, c.video_id,
-              p.name AS plan_name
+              c.user_id, p.name AS plan_name
        FROM   video_cta_links c
        JOIN   users  u ON u.id = c.user_id
        JOIN   plans  p ON p.id = u.plan_id
@@ -753,25 +753,20 @@ router.get('/cta/link/:ctaId', async (req, res) => {
                        : /tablet/.test(uaStr)                      ? 'tablet'
                        : 'desktop';
 
+    const utm = pickUtm(req.query);
+    // CTA logs live in their own table, independent of the video library.
     pool.query(
-      `INSERT INTO analytics_events
-         (session_id, video_id, event_type, occurred_at, metadata)
-       VALUES (NULL, $1, 'cta_click', NOW(), $2::jsonb)`,
+      `INSERT INTO cta_click_logs
+         (cta_link_id, user_id, video_id, cta_name, page_name, destination_url,
+          viewer_id, device, browser, country, country_code, city,
+          utm_source, utm_medium, utm_campaign, utm_term, utm_content)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
       [
-        ctaLink.video_id,
-        JSON.stringify({
-          cta_link_id    : ctaId,
-          cta_name       : ctaLink.cta_name,
-          page_name      : ctaLink.page_name || null,
-          destination_url: ctaLink.destination_url,
-          viewer_id      : ctaViewerId,
-          device         : clickDevice,
-          browser        : clickBrowser,
-          country        : clickGeo.name,
-          country_code   : clickGeo.code,
-          city           : clickGeo.city,
-          ...pickUtm(req.query),
-        }),
+        ctaId, ctaLink.user_id, ctaLink.video_id,
+        ctaLink.cta_name, ctaLink.page_name || null, ctaLink.destination_url,
+        ctaViewerId, clickDevice, clickBrowser,
+        clickGeo.name, clickGeo.code, clickGeo.city,
+        utm.utm_source, utm.utm_medium, utm.utm_campaign, utm.utm_term, utm.utm_content,
       ]
     ).catch(err => logger.warn(`[analytics/cta/link] insert failed: ${err.message}`));
   }
@@ -814,22 +809,45 @@ router.get('/cta/:videoId', async (req, res) => {
     return res.redirect(finalDest);
   }
 
+  // Resolve the first-party CTA viewer id (sets a cookie) BEFORE the redirect
+  // so the Set-Cookie header rides on the 302 — never touch res after redirect.
+  const ctaViewerId  = resolveCtaViewerId(req, res);
+
   // Redirect first (< 50 ms) — tracking is fire-and-forget
   res.redirect(302, finalDest);
 
   // Background: record the click — only tracked for Pro / admin_lifetime plan owners.
   // The redirect always happens regardless of plan; only the analytics recording is gated.
+  // Capture device/browser/geo for the independent CTA log.
+  const clickGeo     = lookupCountry(getClientIp(req));
+  const clickBrowser = parseBrowser(req.headers['user-agent']);
+  const uaStr        = (req.headers['user-agent'] || '').toLowerCase();
+  const clickDevice  = /mobile|android|iphone|ipad/.test(uaStr) ? 'mobile'
+                     : /tablet/.test(uaStr)                      ? 'tablet'
+                     : 'desktop';
+  const utm          = pickUtm(req.query);
+
+  // Record into the independent cta_click_logs table — Pro/admin owners only.
+  // The owner is resolved from the video; the log keeps video_id only as an
+  // informational reference (no FK), so it survives any future video purge.
   pool.query(
-    `INSERT INTO analytics_events
-       (session_id, video_id, event_type, occurred_at)
-     SELECT NULL, v.id, 'cta_click', NOW()
+    `INSERT INTO cta_click_logs
+       (cta_link_id, user_id, video_id, cta_name, page_name, destination_url,
+        viewer_id, device, browser, country, country_code, city,
+        utm_source, utm_medium, utm_campaign, utm_term, utm_content)
+     SELECT NULL, v.user_id, v.id, NULL, NULL, $2,
+            $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
      FROM   videos v
      JOIN   users u ON u.id = v.user_id
      JOIN   plans p ON p.id = u.plan_id
      WHERE  v.id = $1
        AND  v.is_active = TRUE
        AND  p.name IN ('pro', 'admin_lifetime')`,
-    [videoId]
+    [
+      videoId, safeDest, ctaViewerId, clickDevice, clickBrowser,
+      clickGeo.name, clickGeo.code, clickGeo.city,
+      utm.utm_source, utm.utm_medium, utm.utm_campaign, utm.utm_term, utm.utm_content,
+    ]
   ).catch(err => logger.warn(`[analytics/cta] insert failed: ${err.message}`));
 });
 
