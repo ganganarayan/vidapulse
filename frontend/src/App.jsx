@@ -8,6 +8,7 @@ import { ThemeProvider }         from './contexts/ThemeContext';
 import { UpgradeProvider, useUpgrade } from './contexts/UpgradeContext';
 import ImpersonationBanner       from './components/ImpersonationBanner';
 import UpgradeModal              from './components/UpgradeModal';
+import AccountLifecycleNotices   from './components/AccountLifecycleNotices';
 import { useVersionWatcher }     from './hooks/useVersionWatcher';
 import Login             from './pages/Login';
 import Register          from './pages/Register';
@@ -170,6 +171,7 @@ export default function App() {
         <UpgradeIntentHandler />
         <ImpersonationBanner />
         <UpgradeModal />
+        <AccountLifecycleNotices />
         <Routes>
 
           {/* ── Auth pages (public) ─────────────────────────── */}

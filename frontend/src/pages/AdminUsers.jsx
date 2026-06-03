@@ -59,6 +59,12 @@ function formatLeadSource(user) {
   };
 }
 
+// Whole days since a timestamp (e.g. account creation → the "DAYS" column).
+function daysSince(iso) {
+  if (!iso) return '—';
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+}
+
 function formatRelative(iso) {
   if (!iso) return 'Never';
   const diff = Date.now() - new Date(iso).getTime();
@@ -561,6 +567,11 @@ function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick, selected, onT
         {user.video_count}
       </td>
 
+      {/* DAYS — days since account creation */}
+      <td className="px-4 py-3 hidden sm:table-cell text-gray-300 text-xs tabular-nums">
+        {daysSince(user.created_at)}
+      </td>
+
       {/* Last Login */}
       <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">
         {formatRelative(user.last_login_at)}
@@ -866,6 +877,7 @@ export default function AdminUsers() {
                   <th className="px-4 py-3 text-left font-medium">Plan</th>
                   <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Plan Expires</th>
                   <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">Videos</th>
+                  <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">DAYS</th>
                   <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Last Login</th>
                   <th className="px-4 py-3 text-left font-medium hidden xl:table-cell">
                     Lead Source
@@ -891,6 +903,7 @@ export default function AdminUsers() {
                       <td className="px-4 py-3"><div className="h-5 w-14 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3 hidden lg:table-cell"><div className="h-3 w-20 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3 hidden sm:table-cell"><div className="h-3 w-6 bg-gray-700 rounded" /></td>
+                      <td className="px-4 py-3 hidden sm:table-cell"><div className="h-3 w-6 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3 hidden lg:table-cell"><div className="h-3 w-16 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3 hidden xl:table-cell"><div className="h-3 w-24 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3"><div className="h-7 w-24 bg-gray-700 rounded ml-auto" /></td>
@@ -898,7 +911,7 @@ export default function AdminUsers() {
                   ))
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
+                    <td colSpan={9} className="px-4 py-12 text-center text-gray-500">
                       {search ? 'No users match your search.' : 'No users found.'}
                     </td>
                   </tr>
@@ -948,6 +961,9 @@ export default function AdminUsers() {
 
         {/* Deactivated users section */}
         <DeactivatedSection refreshTick={refreshTick} onChanged={bumpRefresh} showToast={showToast} />
+
+        {/* Purged accounts log */}
+        <PurgedSection refreshTick={refreshTick} />
 
         {/* Modal error (displayed inside the table area if modal is closed but there was an error) */}
         {modalError && !modalUser && (
@@ -1308,6 +1324,78 @@ function DeactivatedSection({ refreshTick, onChanged, showToast }) {
           onConfirm={doPurge}
           onCancel={() => setConfirmingPurge(false)}
         />
+      )}
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PurgedSection — read-only log of purged accounts (data is gone; this is the record)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function purgeReasonLabel(reason) {
+  if (reason === 'inactivity_180d')  return 'Inactive 180 days';
+  if (reason === 'deactivated_180d') return 'Deactivated 180 days';
+  if (reason === 'manual')           return 'Manual';
+  return reason || '—';
+}
+
+function PurgedSection({ refreshTick }) {
+  const [rows, setRows]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen]       = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api.get('/admin/purged-accounts')
+      .then(r => { if (!cancelled) setRows(r.data.purged ?? []); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [refreshTick]);
+
+  return (
+    <section className="mt-8">
+      <button onClick={() => setOpen(o => !o)} className="flex items-center gap-2 mb-3 text-gray-300 hover:text-white">
+        <h2 className="text-lg font-bold">Purged accounts</h2>
+        <span className="text-gray-500 text-sm">{rows.length}</span>
+        <span className="text-gray-500 text-xs">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="bg-gray-800/40 border border-gray-700 rounded-xl overflow-hidden">
+          {loading ? (
+            <div className="px-4 py-8 text-center text-gray-500 text-sm">Loading…</div>
+          ) : rows.length === 0 ? (
+            <div className="px-4 py-8 text-center text-gray-600 text-sm">No purged accounts.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left font-medium">Account</th>
+                    <th className="px-4 py-3 text-left font-medium">Reason</th>
+                    <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">Created</th>
+                    <th className="px-4 py-3 text-left font-medium">Purged</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700/50">
+                  {rows.map((r, i) => (
+                    <tr key={i} className="hover:bg-gray-700/30">
+                      <td className="px-4 py-3">
+                        <p className="text-gray-200 truncate">{r.name || <span className="italic text-gray-500">No name</span>}</p>
+                        <p className="text-gray-500 text-xs truncate">{r.email}</p>
+                      </td>
+                      <td className="px-4 py-3 text-gray-300 text-xs">{purgeReasonLabel(r.reason)}</td>
+                      <td className="px-4 py-3 hidden sm:table-cell text-gray-400 text-xs">{formatDate(r.original_created_at)}</td>
+                      <td className="px-4 py-3 text-gray-400 text-xs">{formatDate(r.purged_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
     </section>
   );
