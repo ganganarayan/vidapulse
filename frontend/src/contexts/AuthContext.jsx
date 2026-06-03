@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import api, { IMPERSONATION_KEY } from '../lib/api';
+import { loadClarity, stopClarity } from '../lib/clarity';
 
 /**
  * AuthContext
@@ -80,6 +81,14 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => { fetchUser(); }, [fetchUser]);
+
+  // Clarity records the pre-login funnel only. Once auth resolves: if logged
+  // in, stop recording (don't track the dashboard); if logged out, load it.
+  useEffect(() => {
+    if (loading) return;
+    if (user) stopClarity();
+    else      loadClarity();
+  }, [user, loading]);
 
   // refetch — call after login or plan upgrade to refresh user data
   const refetch = useCallback(() => fetchUser(), [fetchUser]);
