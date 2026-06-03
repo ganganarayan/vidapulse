@@ -1356,12 +1356,12 @@ router.get('/:id/cta-analytics', requireAuth, planGate('heatmap'), async (req, r
     );
     if (!video) return res.status(404).json({ error: 'Video not found' });
 
-    // All CTA click events for this video
+    // All CTA click logs for this video — from the independent cta_click_logs
+    // table (decoupled from the video library / analytics_events).
     const { rows: events } = await pool.query(
-      `SELECT metadata
-       FROM   analytics_events
-       WHERE  video_id   = $1
-         AND  event_type = 'cta_click'
+      `SELECT cta_name, device, browser, country
+       FROM   cta_click_logs
+       WHERE  video_id = $1
        ORDER  BY occurred_at DESC
        LIMIT  5000`,
       [req.params.id]
@@ -1375,7 +1375,7 @@ router.get('/:id/cta-analytics', requireAuth, planGate('heatmap'), async (req, r
     function breakdownFrom(key, fallback = 'Unknown') {
       const counts = {};
       events.forEach(e => {
-        const v = e.metadata?.[key] || fallback;
+        const v = e[key] || fallback;
         counts[v] = (counts[v] || 0) + 1;
       });
       return Object.entries(counts)

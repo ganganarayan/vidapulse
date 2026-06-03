@@ -32,6 +32,8 @@ const { pool }        = require('../config/database');
 const env             = require('../config/env');
 const logger          = require('../config/logger');
 const { requireAuth, requireAdmin } = require('../middleware/requireAuth');
+const { emitEvent }   = require('../services/behavioralEventService');
+const { purgeUsers }  = require('../services/purgeService');
 const { testWebhook } = require('../services/webhookSender');
 const {
   resendQueuedWebhooks,
@@ -476,8 +478,16 @@ router.get('/users', async (req, res, next) => {
     const search = (req.query.search ?? '').trim();
     const offset = (page - 1) * limit;
 
+    // status filter: 'active' (is_active=TRUE) | 'deactivated' (is_active=FALSE)
+    // | omitted (all). Lets the UI show the active list and the Deactivated
+    // section as two independent, paginated queries.
+    const status = req.query.status;
+
     const params  = [];
     let   whereClause = `WHERE u.role != 'admin'`; // Never list admin accounts
+
+    if (status === 'active')      whereClause += ` AND u.is_active = TRUE`;
+    else if (status === 'deactivated') whereClause += ` AND u.is_active = FALSE`;
 
     if (search) {
       params.push(`%${search}%`);
@@ -507,6 +517,13 @@ router.get('/users', async (req, res, next) => {
          u.last_login_at,
          u.last_seen_at,
          u.plan_expires_at,
+         u.deactivated_at,
+         u.deactivated_reason,
+         u.signup_utm_source,
+         u.signup_utm_medium,
+         u.signup_utm_campaign,
+         u.signup_utm_term,
+         u.signup_utm_content,
          COALESCE(vc.video_count, 0)::int AS video_count
        FROM users u
        LEFT JOIN plans p ON p.id = u.plan_id
@@ -616,6 +633,136 @@ router.patch('/users/:id/plan', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User deactivation lifecycle — deactivate → (restore | purge)
+//
+// deactivate : soft — sets is_active=FALSE + deactivated_at/reason. ALL data
+//              kept. Blocks login (requireAuth/login already gate is_active).
+// restore    : reactivate a deactivated user (is_active=TRUE, clears markers)
+//              and fire a user_restored event.
+// purge      : IRREVERSIBLE hard-delete of a *deactivated* user's data. Logs are
+//              always kept — webhook logs, CTA click logs (own table), payments,
+//              subscription history, behavioral events, impersonation audit all
+//              survive (their user pointer is unlinked, the row stays).
+//
+// All three: admin-only, never act on an admin account or the caller's own.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const userIdsSchema = z.object({
+  user_ids: z.array(z.string().uuid()).min(1).max(100),
+});
+
+// Split requested ids into actionable vs skipped (with reason). `requireActive`
+// / `requireInactive` enforce the correct lifecycle state for the action.
+function classifyTargets(ids, rows, callerId, { requireActive, requireInactive } = {}) {
+  const found = new Map(rows.map(t => [t.id, t]));
+  const skipped = [], actionable = [];
+  for (const id of ids) {
+    const t = found.get(id);
+    if (!t)                                  { skipped.push({ id, reason: 'not_found' }); continue; }
+    if (t.role === 'admin')                  { skipped.push({ id, reason: 'is_admin'  }); continue; }
+    if (id === callerId)                     { skipped.push({ id, reason: 'self'      }); continue; }
+    if (requireActive   && !t.is_active)     { skipped.push({ id, reason: 'already_deactivated' }); continue; }
+    if (requireInactive &&  t.is_active)     { skipped.push({ id, reason: 'not_deactivated' });     continue; }
+    actionable.push(id);
+  }
+  return { skipped, actionable };
+}
+
+// ── POST /api/admin/users/deactivate ─────────────────────────────────────────
+router.post('/users/deactivate', async (req, res, next) => {
+  const parsed = userIdsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Validation failed', message: 'user_ids must be a non-empty array of UUIDs (max 100)' });
+  const ids = [...new Set(parsed.data.user_ids)];
+  try {
+    const { rows } = await pool.query(`SELECT id, role, is_active FROM users WHERE id = ANY($1::uuid[])`, [ids]);
+    const { skipped, actionable } = classifyTargets(ids, rows, req.user.id, { requireActive: true });
+
+    let deactivated = 0;
+    if (actionable.length) {
+      const r = await pool.query(
+        `UPDATE users
+            SET is_active = FALSE, deactivated_at = NOW(), deactivated_reason = 'manual', updated_at = NOW()
+          WHERE id = ANY($1::uuid[]) AND role <> 'admin' AND is_active = TRUE`,
+        [actionable]
+      );
+      deactivated = r.rowCount;
+      logger.info(`[admin] Deactivated ${deactivated} user(s) by admin ${req.user.id}`);
+    }
+    return res.json({ deactivated, skipped });
+  } catch (err) { next(err); }
+});
+
+// ── POST /api/admin/users/restore ────────────────────────────────────────────
+router.post('/users/restore', async (req, res, next) => {
+  const parsed = userIdsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Validation failed', message: 'user_ids must be a non-empty array of UUIDs (max 100)' });
+  const ids = [...new Set(parsed.data.user_ids)];
+  try {
+    const { rows } = await pool.query(`SELECT id, role, is_active FROM users WHERE id = ANY($1::uuid[])`, [ids]);
+    const { skipped, actionable } = classifyTargets(ids, rows, req.user.id, { requireInactive: true });
+
+    let restored = 0;
+    if (actionable.length) {
+      const r = await pool.query(
+        `UPDATE users
+            SET is_active = TRUE, deactivated_at = NULL, deactivated_reason = NULL, updated_at = NOW()
+          WHERE id = ANY($1::uuid[]) AND role <> 'admin'
+        RETURNING id, name, email`,
+        [actionable]
+      );
+      restored = r.rowCount;
+      // Fire user_restored for each (non-blocking). Event registered in M5.
+      for (const u of r.rows) {
+        emitEvent(u.id, 'user_restored', null, { email: u.email, restored_by: 'admin' });
+      }
+      logger.info(`[admin] Restored ${restored} user(s) by admin ${req.user.id}`);
+    }
+    return res.json({ restored, skipped });
+  } catch (err) { next(err); }
+});
+
+// ── POST /api/admin/users/purge ──────────────────────────────────────────────
+// Admin manual purge — only purges users that are ALREADY deactivated. Uses the
+// shared purgeService (same routine as the automatic 180-day purge): keeps every
+// log + payments/subscriptions, logs to purged_accounts, deletes the rest.
+router.post('/users/purge', async (req, res, next) => {
+  const parsed = userIdsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Validation failed', message: 'user_ids must be a non-empty array of UUIDs (max 100)' });
+  const ids = [...new Set(parsed.data.user_ids)];
+
+  try {
+    const { rows } = await pool.query(`SELECT id, role, is_active FROM users WHERE id = ANY($1::uuid[])`, [ids]);
+    // requireInactive: only deactivated users can be purged.
+    const { skipped, actionable } = classifyTargets(ids, rows, req.user.id, { requireInactive: true });
+
+    let purged = 0;
+    if (actionable.length) {
+      purged = await purgeUsers(actionable, 'manual');
+      logger.warn(`[admin] PURGED ${purged} user(s) (data deleted, logs kept) by admin ${req.user.id}: ${actionable.join(', ')}`);
+    }
+    return res.json({ purged, skipped });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── GET /api/admin/purged-accounts ───────────────────────────────────────────
+// Purge history (manual + automatic). Data is gone; this is the record.
+router.get('/purged-accounts', async (req, res, next) => {
+  try {
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit ?? '50', 10) || 50));
+    const { rows } = await pool.query(
+      `SELECT email, name, reason, original_created_at, purged_at
+         FROM purged_accounts
+        ORDER BY purged_at DESC
+        LIMIT $1`,
+      [limit]
+    );
+    return res.json({ purged: rows });
+  } catch (err) { next(err); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

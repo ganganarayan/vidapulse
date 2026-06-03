@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 
 /**
  * AdminUsers — /admin/users
@@ -40,6 +41,28 @@ function PlanChip({ plan }) {
 function formatDate(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// Build a display label for a user's signup lead source from the stored UTM
+// fields. Mapping: campaign = utm_campaign, ad set = utm_term, ad = utm_content.
+// Returns null when no UTM params were captured (i.e. a direct signup).
+function formatLeadSource(user) {
+  const path = [user.signup_utm_campaign, user.signup_utm_term, user.signup_utm_content]
+    .map(v => (v && String(v).trim()) || null)
+    .filter(Boolean);
+  const src = (user.signup_utm_source && String(user.signup_utm_source).trim()) || null;
+  const med = (user.signup_utm_medium && String(user.signup_utm_medium).trim()) || null;
+  if (path.length === 0 && !src && !med) return null;
+  return {
+    primary  : path.length ? path.join(' / ') : (src || med),
+    secondary: [src, med].filter(Boolean).join(' · ') || null,
+  };
+}
+
+// Whole days since a timestamp (e.g. account creation → the "DAYS" column).
+function daysSince(iso) {
+  if (!iso) return '—';
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 }
 
 function formatRelative(iso) {
@@ -362,7 +385,7 @@ function isoToDateInput(iso) {
   return new Date(iso).toISOString().slice(0, 10); // YYYY-MM-DD
 }
 
-function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick }) {
+function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick, selected, onToggleSelect, selectable }) {
   const [planVal,      setPlanVal]      = useState(user.plan ?? 'free');
   const [dateVal,      setDateVal]      = useState(isoToDateInput(user.plan_expires_at));
   const [saving,       setSaving]       = useState(false);
@@ -443,7 +466,20 @@ function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick }) {
   }
 
   return (
-    <tr className="hover:bg-gray-700/30 transition-colors">
+    <tr className={`transition-colors ${selected ? 'bg-amber-500/5' : 'hover:bg-gray-700/30'}`}>
+
+      {/* Select */}
+      <td className="px-4 py-3 w-px">
+        <input
+          type="checkbox"
+          checked={!!selected}
+          disabled={!selectable}
+          onChange={() => onToggleSelect(user.id)}
+          title={selectable ? 'Select user' : 'Admin accounts cannot be deleted'}
+          className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-amber-500
+                     focus:ring-amber-500/40 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed accent-amber-500"
+        />
+      </td>
 
       {/* User */}
       <td className="px-4 py-3">
@@ -531,9 +567,30 @@ function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick }) {
         {user.video_count}
       </td>
 
+      {/* DAYS — days since account creation */}
+      <td className="px-4 py-3 hidden sm:table-cell text-gray-300 text-xs tabular-nums">
+        {daysSince(user.created_at)}
+      </td>
+
       {/* Last Login */}
       <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">
         {formatRelative(user.last_login_at)}
+      </td>
+
+      {/* Lead Source */}
+      <td className="px-4 py-3 hidden xl:table-cell">
+        {(() => {
+          const ls = formatLeadSource(user);
+          if (!ls) return <span className="text-gray-600 text-xs">Direct</span>;
+          return (
+            <div className="min-w-0 max-w-[200px]">
+              <p className="text-gray-200 text-xs font-medium truncate" title={ls.primary}>{ls.primary}</p>
+              {ls.secondary && (
+                <p className="text-gray-500 text-[11px] truncate" title={ls.secondary}>{ls.secondary}</p>
+              )}
+            </div>
+          );
+        })()}
       </td>
 
       {/* Action */}
@@ -581,6 +638,7 @@ export default function AdminUsers() {
   const navigate            = useNavigate();
   const [searchParams]      = useSearchParams();
   const { startImpersonation } = useAuth();
+  const { showToast }       = useToast();
 
   const [users,       setUsers]       = useState([]);
   const [pagination,  setPagination]  = useState(null);
@@ -598,6 +656,49 @@ export default function AdminUsers() {
   // Promotion visibility modal state
   const [promoModalUser,  setPromoModalUser]  = useState(null);
 
+  // Bulk-deactivate selection state
+  const [selectedIds,          setSelectedIds]          = useState(() => new Set());
+  const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
+  const [working,              setWorking]              = useState(false);
+
+  // Shared refresh signal — bumping it reloads the active list AND the
+  // Deactivated section (so a user moves between them immediately).
+  const [refreshTick, setRefreshTick] = useState(0);
+  const bumpRefresh = () => setRefreshTick(t => t + 1);
+
+  // Admin accounts can't be deleted — only these rows are selectable.
+  const selectableUsers = users.filter(u => u.role !== 'admin');
+  const allSelected = selectableUsers.length > 0 && selectableUsers.every(u => selectedIds.has(u.id));
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+  function toggleSelectAll() {
+    setSelectedIds(allSelected ? new Set() : new Set(selectableUsers.map(u => u.id)));
+  }
+
+  async function handleConfirmDeactivate() {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    setWorking(true);
+    try {
+      const { data } = await api.post('/admin/users/deactivate', { user_ids: ids });
+      const skippedNote = data.skipped?.length ? ` · ${data.skipped.length} skipped` : '';
+      showToast(`Deactivated ${data.deactivated} user${data.deactivated !== 1 ? 's' : ''}${skippedNote}`);
+      setSelectedIds(new Set());
+      setConfirmingDeactivate(false);
+      bumpRefresh();
+    } catch (err) {
+      showToast(err.response?.data?.message ?? 'Deactivation failed', 'error');
+    } finally {
+      setWorking(false);
+    }
+  }
+
   // "Session expired" notice from api.js redirect param
   const [expiredNotice, setExpiredNotice] = useState(
     searchParams.get('impersonation_expired') === '1'
@@ -609,17 +710,18 @@ export default function AdminUsers() {
     setLoading(true);
     setFetchError('');
     try {
-      const params = new URLSearchParams({ page, limit: 25 });
+      const params = new URLSearchParams({ page, limit: 25, status: 'active' });
       if (search) params.set('search', search);
       const { data } = await api.get(`/admin/users?${params}`);
       setUsers(data.users);
       setPagination(data.pagination);
+      setSelectedIds(new Set());
     } catch (err) {
       setFetchError(err.response?.data?.message ?? 'Failed to load users');
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, search, refreshTick]);
 
   useEffect(() => { loadUsers(); }, [loadUsers]);
 
@@ -735,6 +837,16 @@ export default function AdminUsers() {
               {pagination.total.toLocaleString()} user{pagination.total !== 1 ? 's' : ''}
             </span>
           )}
+          {selectedIds.size > 0 && (
+            <button
+              onClick={() => setConfirmingDeactivate(true)}
+              className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold
+                         bg-amber-600/90 hover:bg-amber-500 text-white transition-colors"
+            >
+              <PauseIcon />
+              Deactivate ({selectedIds.size})
+            </button>
+          )}
         </div>
 
         {/* Error state */}
@@ -750,11 +862,27 @@ export default function AdminUsers() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase tracking-wider">
+                  <th className="px-4 py-3 w-px">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && !allSelected; }}
+                      onChange={toggleSelectAll}
+                      disabled={selectableUsers.length === 0}
+                      title="Select all"
+                      className="w-4 h-4 rounded border-gray-600 bg-gray-700 accent-amber-500 cursor-pointer disabled:opacity-30"
+                    />
+                  </th>
                   <th className="px-4 py-3 text-left font-medium">User</th>
                   <th className="px-4 py-3 text-left font-medium">Plan</th>
                   <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Plan Expires</th>
                   <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">Videos</th>
+                  <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">DAYS</th>
                   <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Last Login</th>
+                  <th className="px-4 py-3 text-left font-medium hidden xl:table-cell">
+                    Lead Source
+                    <span className="block text-[10px] font-normal normal-case tracking-normal text-gray-600">Campaign / Ad Set / Ad</span>
+                  </th>
                   <th className="px-4 py-3 text-right font-medium">Action</th>
                 </tr>
               </thead>
@@ -762,6 +890,7 @@ export default function AdminUsers() {
                 {loading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i} className="animate-pulse">
+                      <td className="px-4 py-3"><div className="w-4 h-4 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-gray-700" />
@@ -774,13 +903,15 @@ export default function AdminUsers() {
                       <td className="px-4 py-3"><div className="h-5 w-14 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3 hidden lg:table-cell"><div className="h-3 w-20 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3 hidden sm:table-cell"><div className="h-3 w-6 bg-gray-700 rounded" /></td>
+                      <td className="px-4 py-3 hidden sm:table-cell"><div className="h-3 w-6 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3 hidden lg:table-cell"><div className="h-3 w-16 bg-gray-700 rounded" /></td>
+                      <td className="px-4 py-3 hidden xl:table-cell"><div className="h-3 w-24 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3"><div className="h-7 w-24 bg-gray-700 rounded ml-auto" /></td>
                     </tr>
                   ))
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                    <td colSpan={9} className="px-4 py-12 text-center text-gray-500">
                       {search ? 'No users match your search.' : 'No users found.'}
                     </td>
                   </tr>
@@ -789,6 +920,9 @@ export default function AdminUsers() {
                     <UserRow
                       key={user.id}
                       user={user}
+                      selected={selectedIds.has(user.id)}
+                      selectable={user.role !== 'admin'}
+                      onToggleSelect={toggleSelect}
                       onPlanUpdate={handlePlanUpdate}
                       onPromoClick={() => setPromoModalUser(user)}
                       onEnterClick={() => { setModalUser(user); setModalError(''); }}
@@ -825,6 +959,12 @@ export default function AdminUsers() {
           )}
         </div>
 
+        {/* Deactivated users section */}
+        <DeactivatedSection refreshTick={refreshTick} onChanged={bumpRefresh} showToast={showToast} />
+
+        {/* Purged accounts log */}
+        <PurgedSection refreshTick={refreshTick} />
+
         {/* Modal error (displayed inside the table area if modal is closed but there was an error) */}
         {modalError && !modalUser && (
           <p className="mt-3 text-red-400 text-sm">{modalError}</p>
@@ -850,6 +990,413 @@ export default function AdminUsers() {
         />
       )}
 
+      {/* Bulk-deactivate confirmation (reversible) */}
+      {confirmingDeactivate && (
+        <DeactivateUsersModal
+          users={users.filter(u => selectedIds.has(u.id))}
+          loading={working}
+          onConfirm={handleConfirmDeactivate}
+          onCancel={() => setConfirmingDeactivate(false)}
+        />
+      )}
+
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UserListModal — shared shell listing the affected accounts
+// ─────────────────────────────────────────────────────────────────────────────
+
+function UserListModal({ users, loading, onCancel, accent, icon, title, children, confirmEl }) {
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape' && !loading) onCancel(); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel, loading]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+      onClick={e => { if (e.target === e.currentTarget && !loading) onCancel(); }}
+    >
+      <div className="bg-gray-800 border border-gray-700 rounded-xl w-full max-w-md shadow-2xl">
+        <div className="p-6 pb-4">
+          <div className="flex items-center gap-3 mb-3">
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${accent.iconWrap}`}>
+              {icon}
+            </div>
+            <h2 className="text-lg font-bold text-white">{title}</h2>
+          </div>
+          {children}
+          <div className="mt-3 max-h-40 overflow-y-auto rounded-lg border border-gray-700 divide-y divide-gray-700/60">
+            {users.map(u => (
+              <div key={u.id} className="px-3 py-2 text-sm">
+                <p className="text-gray-200 truncate">{u.name || <span className="italic text-gray-500">No name</span>}</p>
+                <p className="text-gray-500 text-xs truncate">{u.email}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="px-6 pb-6 flex items-center gap-3">
+          <button type="button" onClick={onCancel} disabled={loading}
+            className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-gray-300 border border-gray-600 hover:border-gray-400 transition-colors disabled:opacity-50">
+            Cancel
+          </button>
+          {confirmEl}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── DeactivateUsersModal — reversible ────────────────────────────────────────
+function DeactivateUsersModal({ users, loading, onConfirm, onCancel }) {
+  const count = users.length;
+  return (
+    <UserListModal
+      users={users} loading={loading} onCancel={onCancel}
+      accent={{ iconWrap: 'bg-amber-600/20 text-amber-400' }}
+      icon={<PauseIcon />}
+      title={`Deactivate ${count} ${count === 1 ? 'account' : 'accounts'}?`}
+      confirmEl={
+        <button type="button" onClick={onConfirm} disabled={loading}
+          className="flex-1 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-600 text-white hover:bg-amber-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+          {loading
+            ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Deactivating…</>
+            : `Deactivate ${count === 1 ? 'account' : count + ' accounts'}`}
+        </button>
+      }
+    >
+      <p className="text-gray-400 text-sm">
+        {count === 1 ? 'This account moves' : 'These accounts move'} to the{' '}
+        <span className="text-gray-200 font-medium">Deactivated</span> section. All data is kept and
+        they can be <span className="text-emerald-300 font-medium">restored anytime</span>. They won't
+        be able to log in until restored.
+      </p>
+    </UserListModal>
+  );
+}
+
+// ── PurgeUsersModal — irreversible, type-to-confirm ──────────────────────────
+function PurgeUsersModal({ users, loading, onConfirm, onCancel }) {
+  const count = users.length;
+  const [typed, setTyped] = useState('');
+  const armed = typed.trim().toUpperCase() === 'PURGE';
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+      onClick={e => { if (e.target === e.currentTarget && !loading) onCancel(); }}
+    >
+      <div className="bg-gray-800 border border-gray-700 rounded-xl w-full max-w-md shadow-2xl">
+        <div className="p-6 pb-4">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-full bg-red-600/20 flex items-center justify-center flex-shrink-0 text-red-400">
+              <TrashIcon />
+            </div>
+            <h2 className="text-lg font-bold text-white">Purge {count} {count === 1 ? 'account' : 'accounts'}?</h2>
+          </div>
+          <p className="text-gray-400 text-sm">
+            This permanently deletes {count === 1 ? 'this account' : 'these accounts'} and{' '}
+            <span className="text-red-300 font-medium">all their data</span> — videos, analytics, settings.
+            Logs (webhooks, CTA clicks, payments, subscription history) are kept. This{' '}
+            <span className="text-red-300 font-medium">cannot be undone</span>.
+          </p>
+          <div className="mt-3 max-h-32 overflow-y-auto rounded-lg border border-gray-700 divide-y divide-gray-700/60">
+            {users.map(u => (
+              <div key={u.id} className="px-3 py-2 text-sm">
+                <p className="text-gray-200 truncate">{u.name || <span className="italic text-gray-500">No name</span>}</p>
+                <p className="text-gray-500 text-xs truncate">{u.email}</p>
+              </div>
+            ))}
+          </div>
+          <label className="block mt-4 text-xs text-gray-400">
+            Type <span className="font-mono font-bold text-red-300">PURGE</span> to confirm
+            <input
+              value={typed}
+              onChange={e => setTyped(e.target.value)}
+              disabled={loading}
+              autoFocus
+              className="mt-1 w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-red-500"
+            />
+          </label>
+        </div>
+        <div className="px-6 pb-6 flex items-center gap-3">
+          <button type="button" onClick={onCancel} disabled={loading}
+            className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-gray-300 border border-gray-600 hover:border-gray-400 transition-colors disabled:opacity-50">
+            Cancel
+          </button>
+          <button type="button" onClick={onConfirm} disabled={loading || !armed}
+            className="flex-1 px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            {loading
+              ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Purging…</>
+              : `Purge ${count === 1 ? 'account' : count + ' accounts'}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Trash icon used by the toolbar delete button and the confirm modal
+function TrashIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+  );
+}
+
+function PauseIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" />
+    </svg>
+  );
+}
+
+function RestoreIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><polyline points="3 3 3 8 8 8" />
+    </svg>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DeactivatedSection — deactivated users with Restore / Purge
+// ─────────────────────────────────────────────────────────────────────────────
+
+function deactivatedReasonLabel(reason) {
+  if (reason === 'inactivity_180d') return 'Inactive 180+ days';
+  if (reason === 'manual')          return 'Deactivated by admin';
+  return 'Deactivated';
+}
+
+function DeactivatedSection({ refreshTick, onChanged, showToast }) {
+  const [users,       setUsers]       = useState([]);
+  const [pagination,  setPagination]  = useState(null);
+  const [page,        setPage]        = useState(1);
+  const [loading,     setLoading]     = useState(true);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [working,     setWorking]     = useState(false);
+  const [confirmingPurge, setConfirmingPurge] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page, limit: 25, status: 'deactivated' });
+      const { data } = await api.get(`/admin/users?${params}`);
+      setUsers(data.users);
+      setPagination(data.pagination);
+      setSelectedIds(new Set());
+    } catch {
+      /* soft-fail — section shows empty */
+    } finally {
+      setLoading(false);
+    }
+  }, [page]);
+
+  useEffect(() => { load(); }, [load, refreshTick]);
+
+  const allSelected = users.length > 0 && users.every(u => selectedIds.has(u.id));
+  function toggleSelect(id) {
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleAll() { setSelectedIds(allSelected ? new Set() : new Set(users.map(u => u.id))); }
+
+  async function doRestore() {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    setWorking(true);
+    try {
+      const { data } = await api.post('/admin/users/restore', { user_ids: ids });
+      showToast(`Restored ${data.restored} user${data.restored !== 1 ? 's' : ''}`);
+      setSelectedIds(new Set());
+      onChanged();
+    } catch (err) {
+      showToast(err.response?.data?.message ?? 'Restore failed', 'error');
+    } finally { setWorking(false); }
+  }
+
+  async function doPurge() {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    setWorking(true);
+    try {
+      const { data } = await api.post('/admin/users/purge', { user_ids: ids });
+      const skippedNote = data.skipped?.length ? ` · ${data.skipped.length} skipped` : '';
+      showToast(`Purged ${data.purged} user${data.purged !== 1 ? 's' : ''}${skippedNote}`);
+      setSelectedIds(new Set());
+      setConfirmingPurge(false);
+      onChanged();
+    } catch (err) {
+      showToast(err.response?.data?.message ?? 'Purge failed', 'error');
+    } finally { setWorking(false); }
+  }
+
+  const total = pagination?.total ?? 0;
+
+  return (
+    <section className="mt-8">
+      <div className="flex items-center gap-3 mb-3">
+        <h2 className="text-lg font-bold text-gray-200">Deactivated</h2>
+        {total > 0 && <span className="text-gray-500 text-sm">{total}</span>}
+        {selectedIds.size > 0 && (
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={doRestore} disabled={working}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-emerald-600/90 hover:bg-emerald-500 text-white transition-colors disabled:opacity-50">
+              <RestoreIcon /> Restore ({selectedIds.size})
+            </button>
+            <button onClick={() => setConfirmingPurge(true)} disabled={working}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-red-600/90 hover:bg-red-500 text-white transition-colors disabled:opacity-50">
+              <TrashIcon /> Purge ({selectedIds.size})
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-gray-800/40 border border-gray-700 rounded-xl overflow-hidden">
+        {loading ? (
+          <div className="px-4 py-8 text-center text-gray-500 text-sm">Loading…</div>
+        ) : users.length === 0 ? (
+          <div className="px-4 py-8 text-center text-gray-600 text-sm">No deactivated accounts.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase tracking-wider">
+                  <th className="px-4 py-3 w-px">
+                    <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                      className="w-4 h-4 rounded border-gray-600 bg-gray-700 accent-amber-500 cursor-pointer" />
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium">User</th>
+                  <th className="px-4 py-3 text-left font-medium">Plan</th>
+                  <th className="px-4 py-3 text-left font-medium hidden md:table-cell">Deactivated</th>
+                  <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Last Login</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700/50">
+                {users.map(u => {
+                  const sel = selectedIds.has(u.id);
+                  return (
+                    <tr key={u.id} className={sel ? 'bg-amber-500/5' : 'hover:bg-gray-700/30'}>
+                      <td className="px-4 py-3 w-px">
+                        <input type="checkbox" checked={sel} onChange={() => toggleSelect(u.id)}
+                          className="w-4 h-4 rounded border-gray-600 bg-gray-700 accent-amber-500 cursor-pointer" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-gray-200 truncate">{u.name || <span className="italic text-gray-500">No name</span>}</p>
+                        <p className="text-gray-500 text-xs truncate">{u.email}</p>
+                      </td>
+                      <td className="px-4 py-3"><PlanChip plan={u.plan} /></td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <p className="text-gray-300 text-xs">{deactivatedReasonLabel(u.deactivated_reason)}</p>
+                        <p className="text-gray-500 text-xs">{formatDate(u.deactivated_at)}</p>
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">{formatRelative(u.last_login_at)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {pagination && pagination.total_pages > 1 && (
+          <div className="px-4 py-3 border-t border-gray-700 flex items-center justify-between text-sm">
+            <span className="text-gray-400">Page {pagination.page} of {pagination.total_pages}</span>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPage(p => p - 1)} disabled={!pagination.has_prev || loading}
+                className="px-3 py-1.5 rounded-lg border border-gray-600 text-gray-300 hover:border-gray-400 disabled:opacity-40 transition-colors">← Prev</button>
+              <button onClick={() => setPage(p => p + 1)} disabled={!pagination.has_next || loading}
+                className="px-3 py-1.5 rounded-lg border border-gray-600 text-gray-300 hover:border-gray-400 disabled:opacity-40 transition-colors">Next →</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {confirmingPurge && (
+        <PurgeUsersModal
+          users={users.filter(u => selectedIds.has(u.id))}
+          loading={working}
+          onConfirm={doPurge}
+          onCancel={() => setConfirmingPurge(false)}
+        />
+      )}
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PurgedSection — read-only log of purged accounts (data is gone; this is the record)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function purgeReasonLabel(reason) {
+  if (reason === 'inactivity_180d')  return 'Inactive 180 days';
+  if (reason === 'deactivated_180d') return 'Deactivated 180 days';
+  if (reason === 'manual')           return 'Manual';
+  return reason || '—';
+}
+
+function PurgedSection({ refreshTick }) {
+  const [rows, setRows]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen]       = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api.get('/admin/purged-accounts')
+      .then(r => { if (!cancelled) setRows(r.data.purged ?? []); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [refreshTick]);
+
+  return (
+    <section className="mt-8">
+      <button onClick={() => setOpen(o => !o)} className="flex items-center gap-2 mb-3 text-gray-300 hover:text-white">
+        <h2 className="text-lg font-bold">Purged accounts</h2>
+        <span className="text-gray-500 text-sm">{rows.length}</span>
+        <span className="text-gray-500 text-xs">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="bg-gray-800/40 border border-gray-700 rounded-xl overflow-hidden">
+          {loading ? (
+            <div className="px-4 py-8 text-center text-gray-500 text-sm">Loading…</div>
+          ) : rows.length === 0 ? (
+            <div className="px-4 py-8 text-center text-gray-600 text-sm">No purged accounts.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left font-medium">Account</th>
+                    <th className="px-4 py-3 text-left font-medium">Reason</th>
+                    <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">Created</th>
+                    <th className="px-4 py-3 text-left font-medium">Purged</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700/50">
+                  {rows.map((r, i) => (
+                    <tr key={i} className="hover:bg-gray-700/30">
+                      <td className="px-4 py-3">
+                        <p className="text-gray-200 truncate">{r.name || <span className="italic text-gray-500">No name</span>}</p>
+                        <p className="text-gray-500 text-xs truncate">{r.email}</p>
+                      </td>
+                      <td className="px-4 py-3 text-gray-300 text-xs">{purgeReasonLabel(r.reason)}</td>
+                      <td className="px-4 py-3 hidden sm:table-cell text-gray-400 text-xs">{formatDate(r.original_created_at)}</td>
+                      <td className="px-4 py-3 text-gray-400 text-xs">{formatDate(r.purged_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

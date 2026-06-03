@@ -82,6 +82,34 @@ const resetSchema = z.object({
     .max(128, 'Password too long'),
 });
 
+// ── Lead-source helpers ───────────────────────────────────────
+// UTM params captured at signup (ad → landing → app). Returns an object with
+// exactly the five utm_* keys, each a trimmed string ≤300 chars or null.
+
+const _UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+
+function normalizeLeadSource(raw) {
+  const out = { utm_source: null, utm_medium: null, utm_campaign: null, utm_term: null, utm_content: null };
+  if (!raw || typeof raw !== 'object') return out;
+  for (const k of _UTM_KEYS) {
+    const v = raw[k];
+    if (typeof v === 'string' && v.trim()) out[k] = v.trim().slice(0, 300);
+  }
+  return out;
+}
+
+// Parse the vp_ls cookie (set client-side before the OAuth redirect) into a
+// normalized lead-source object. Never throws.
+function leadSourceFromCookie(req) {
+  try {
+    const raw = req.cookies?.vp_ls;
+    if (!raw) return normalizeLeadSource(null);
+    return normalizeLeadSource(JSON.parse(decodeURIComponent(raw)));
+  } catch {
+    return normalizeLeadSource(null);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // POST /api/auth/bootstrap
 //
@@ -235,12 +263,58 @@ router.post('/login', async (req, res, next) => {
       redirect   : '/dashboard',
     });
   } catch (err) {
+    if (err.code === 'ACCOUNT_DEACTIVATED') {
+      // Correct password on a deactivated account — offer self-service restore.
+      const msg = err.reason === 'inactivity_180d'
+        ? 'Your account was deactivated after more than 180 days of inactivity.'
+        : 'Your account has been deactivated.';
+      return res.status(403).json({
+        error      : 'account_deactivated',
+        deactivated: true,
+        name       : err.userName || null,
+        message    : `${msg} Would you like to restore it?`,
+      });
+    }
     if (err.code === 'INVALID_CREDENTIALS') {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
     if (err.code === 'VALIDATION_ERROR') {
       // First-login password validation failure (too short, no number)
       return res.status(400).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/auth/restore-account
+//
+// Self-service restore from the login screen. Body: { email, password }.
+// Re-verifies the password, reactivates the account, fires user_restored,
+// and logs the user in (sets the JWT cookie).
+// ─────────────────────────────────────────────────────────────
+
+router.post('/restore-account', async (req, res, next) => {
+  // Reuse the login rate limiter — same brute-force surface.
+  const clientIp = req.ip || 'unknown';
+  if (_loginRateLimited(clientIp)) {
+    return res.status(429).json({ error: 'Too Many Requests', message: 'Too many attempts — please wait 15 minutes.' });
+  }
+  try {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0].message });
+    }
+    const user  = await authService.restoreAccount(parsed.data.email, parsed.data.password);
+    const token = await authService.buildJwt(user.id);
+    authService.setJwtCookie(res, token);
+    return res.json({ ok: true, name: user.name, redirect: '/dashboard' });
+  } catch (err) {
+    if (err.code === 'INVALID_CREDENTIALS') {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    if (err.code === 'ALREADY_ACTIVE') {
+      return res.status(409).json({ error: 'already_active', message: 'This account is already active. Please log in.' });
     }
     next(err);
   }
@@ -396,6 +470,9 @@ router.post('/register', async (req, res, next) => {
     // Normalise optional phone (strip to E.164-ish or keep as-is)
     const normalizedPhone = phone ? String(phone).trim() : null;
 
+    // Lead source — UTM params captured from the ad → landing → app signup flow.
+    const ls = normalizeLeadSource(req.body?.lead_source);
+
     // Check duplicate
     const { rows: existing } = await pool.query(
       `SELECT id FROM users WHERE email = $1`, [normalizedEmail]
@@ -416,10 +493,13 @@ router.post('/register', async (req, res, next) => {
       const hash = await require('bcrypt').hash(password, 12);
 
       const { rows: [user] } = await client.query(
-        `INSERT INTO users (email, name, phone, plan_id, role, password_hash, password_set, created_via)
-         VALUES ($1, $2, $3, $4, 'subscriber', $5, TRUE, 'self_signup')
+        `INSERT INTO users (email, name, phone, plan_id, role, password_hash, password_set, created_via,
+                            signup_utm_source, signup_utm_medium, signup_utm_campaign,
+                            signup_utm_term, signup_utm_content)
+         VALUES ($1, $2, $3, $4, 'subscriber', $5, TRUE, 'self_signup', $6, $7, $8, $9, $10)
          RETURNING id`,
-        [normalizedEmail, finalName, normalizedPhone, plans[0].id, hash]
+        [normalizedEmail, finalName, normalizedPhone, plans[0].id, hash,
+         ls.utm_source, ls.utm_medium, ls.utm_campaign, ls.utm_term, ls.utm_content]
       );
 
       await client.query(
@@ -428,6 +508,17 @@ router.post('/register', async (req, res, next) => {
       await client.query(
         `INSERT INTO onboarding_state (user_id, signed_up_at) VALUES ($1, NOW()) ON CONFLICT DO NOTHING`,
         [user.id]
+      );
+
+      // Returning-after-purge: if this email was purged before, flag the
+      // one-time "your data was destroyed" notice on the new account.
+      await client.query(
+        `UPDATE users u
+            SET previously_purged_at = pa.purged_at, purge_notice_shown = FALSE
+           FROM (SELECT purged_at FROM purged_accounts
+                  WHERE LOWER(email) = LOWER($2) ORDER BY purged_at DESC LIMIT 1) pa
+          WHERE u.id = $1`,
+        [user.id, normalizedEmail]
       );
 
       await client.query('COMMIT');
@@ -624,7 +715,11 @@ router.get('/oauth/google/callback', async (req, res) => {
 
     const tokens  = await oauth.exchangeGoogleCode(code);
     const profile = await oauth.getGoogleUserInfo(tokens.access_token);
-    const { user, isNew, isFirstLogin } = await authService.findOrCreateOAuthUser('google', profile);
+    // Lead source rides along in the vp_ls cookie set on the app domain before
+    // the redirect; only applied when this OAuth call creates a brand-new user.
+    const leadSource = leadSourceFromCookie(req);
+    const { user, isNew, isFirstLogin } = await authService.findOrCreateOAuthUser('google', profile, leadSource);
+    res.clearCookie('vp_ls');
     const jwt = await authService.buildJwt(user.id);
     authService.setJwtCookie(res, jwt);
 
@@ -638,8 +733,40 @@ router.get('/oauth/google/callback', async (req, res) => {
     return res.redirect(`${frontendUrl}/dashboard?token=${jwt}`);
 
   } catch (err) {
+    // Deactivated account — Google verified the identity, so offer self-service
+    // restore. Mint a short-lived restore token and send it to the login screen.
+    if (err.code === 'ACCOUNT_DEACTIVATED' && err.userId) {
+      const restoreToken = authService.mintRestoreToken(err.userId);
+      const nameParam = err.userName ? `&name=${encodeURIComponent(err.userName)}` : '';
+      return res.redirect(`${frontendUrl}/login?restore_token=${restoreToken}${nameParam}`);
+    }
     logger.error(`[auth] Google OAuth callback error: ${err.message}`);
     return res.redirect(`${frontendUrl}/login?error=oauth_failed`);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/auth/restore-token
+//
+// OAuth restore: exchange the short-lived restore token (from the OAuth
+// callback redirect) for an actual restore + login. Body: { token }.
+// ─────────────────────────────────────────────────────────────
+
+router.post('/restore-token', async (req, res, next) => {
+  try {
+    const { token } = req.body ?? {};
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'Validation Error', message: 'token is required' });
+    }
+    const user  = await authService.restoreWithToken(token);
+    const jwt   = await authService.buildJwt(user.id);
+    authService.setJwtCookie(res, jwt);
+    return res.json({ ok: true, name: user.name, redirect: '/dashboard' });
+  } catch (err) {
+    if (err.code === 'INVALID_TOKEN') {
+      return res.status(400).json({ error: 'invalid_token', message: err.message });
+    }
+    next(err);
   }
 });
 

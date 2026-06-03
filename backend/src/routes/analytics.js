@@ -121,6 +121,44 @@ function lookupCountry(ip) {
   }
 }
 
+// ── UTM forwarding for CTA redirect links ────────────────────────────────
+// When a CTA tracking link is clicked WITH utm_* query params (typically
+// forwarded from a landing page), carry those params through to the
+// destination URL so downstream pages/funnels keep the campaign attribution.
+//
+// Safety: this is a no-op unless utm_* params are actually present, and it
+// only ADDS keys the destination doesn't already define (never overwrites the
+// owner's own UTMs). If the destination isn't a parseable absolute URL it is
+// returned unchanged — the redirect must never break because of this.
+const UTM_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+
+function mergeUtmIntoUrl(destUrl, query) {
+  if (!destUrl || !query) return destUrl;
+  if (!UTM_PARAMS.some(k => typeof query[k] === 'string' && query[k])) return destUrl; // nothing to forward
+  try {
+    const u = new URL(destUrl);
+    for (const k of UTM_PARAMS) {
+      const v = query[k];
+      if (typeof v === 'string' && v && !u.searchParams.has(k)) {
+        u.searchParams.set(k, v.slice(0, 300));
+      }
+    }
+    return u.toString();
+  } catch {
+    return destUrl; // relative/invalid URL — leave as-is
+  }
+}
+
+// Extract a clean { utm_* } object from a query for analytics metadata.
+function pickUtm(query) {
+  const out = {};
+  for (const k of UTM_PARAMS) {
+    const v = query?.[k];
+    out[k] = (typeof v === 'string' && v) ? v.slice(0, 300) : null;
+  }
+  return out;
+}
+
 /**
  * Analytics Ingestion API — public, no authentication
  *
@@ -267,9 +305,13 @@ router.post('/session', async (req, res) => {
   }
 
   try {
-    // Verify the video exists and is active (silently 404 if not)
+    // Verify the video exists, is active, AND its owner is active. A deactivated
+    // owner's videos are frozen — no new analytics are recorded until restored.
     const { rows: [video] } = await pool.query(
-      `SELECT id FROM videos WHERE id = $1 AND is_active = TRUE`,
+      `SELECT v.id
+       FROM   videos v
+       JOIN   users  u ON u.id = v.user_id
+       WHERE  v.id = $1 AND v.is_active = TRUE AND u.is_active = TRUE`,
       [video_id]
     );
     if (!video) return res.status(404).json({ error: 'video_not_found' });
@@ -674,7 +716,7 @@ router.get('/cta/link/:ctaId', async (req, res) => {
   try {
     const { rows: [row] } = await pool.query(
       `SELECT c.id, c.cta_name, c.page_name, c.destination_url, c.video_id,
-              p.name AS plan_name
+              c.user_id, p.name AS plan_name
        FROM   video_cta_links c
        JOIN   users  u ON u.id = c.user_id
        JOIN   plans  p ON p.id = u.plan_id
@@ -697,8 +739,12 @@ router.get('/cta/link/:ctaId', async (req, res) => {
   // so the Set-Cookie header rides on the 302 response.
   const ctaViewerId = resolveCtaViewerId(req, res);
 
+  // Forward any inbound utm_* params (e.g. from the landing page) onto the
+  // destination so the campaign attribution survives the redirect hop.
+  const finalDest = mergeUtmIntoUrl(ctaLink.destination_url, req.query);
+
   // Redirect immediately — tracking is fire-and-forget
-  res.redirect(302, ctaLink.destination_url);
+  res.redirect(302, finalDest);
 
   // Record click with full metadata (Pro/admin_lifetime plan only)
   if (ctaLink.plan_name === 'pro' || ctaLink.plan_name === 'admin_lifetime') {
@@ -711,24 +757,20 @@ router.get('/cta/link/:ctaId', async (req, res) => {
                        : /tablet/.test(uaStr)                      ? 'tablet'
                        : 'desktop';
 
+    const utm = pickUtm(req.query);
+    // CTA logs live in their own table, independent of the video library.
     pool.query(
-      `INSERT INTO analytics_events
-         (session_id, video_id, event_type, occurred_at, metadata)
-       VALUES (NULL, $1, 'cta_click', NOW(), $2::jsonb)`,
+      `INSERT INTO cta_click_logs
+         (cta_link_id, user_id, video_id, cta_name, page_name, destination_url,
+          viewer_id, device, browser, country, country_code, city,
+          utm_source, utm_medium, utm_campaign, utm_term, utm_content)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
       [
-        ctaLink.video_id,
-        JSON.stringify({
-          cta_link_id    : ctaId,
-          cta_name       : ctaLink.cta_name,
-          page_name      : ctaLink.page_name || null,
-          destination_url: ctaLink.destination_url,
-          viewer_id      : ctaViewerId,
-          device         : clickDevice,
-          browser        : clickBrowser,
-          country        : clickGeo.name,
-          country_code   : clickGeo.code,
-          city           : clickGeo.city,
-        }),
+        ctaId, ctaLink.user_id, ctaLink.video_id,
+        ctaLink.cta_name, ctaLink.page_name || null, ctaLink.destination_url,
+        ctaViewerId, clickDevice, clickBrowser,
+        clickGeo.name, clickGeo.code, clickGeo.city,
+        utm.utm_source, utm.utm_medium, utm.utm_campaign, utm.utm_term, utm.utm_content,
       ]
     ).catch(err => logger.warn(`[analytics/cta/link] insert failed: ${err.message}`));
   }
@@ -762,27 +804,54 @@ router.get('/cta/:videoId', async (req, res) => {
     return res.status(400).send('Missing or invalid "to" destination URL. Usage: /api/analytics/cta/VIDEO_ID?to=https://your-page.com');
   }
 
+  // Forward any inbound utm_* params onto the destination (campaign attribution
+  // survives the redirect). No-op when no utm_* params are present.
+  const finalDest = mergeUtmIntoUrl(safeDest, req.query);
+
   // Validate videoId is UUID-shaped
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(videoId)) {
-    return res.redirect(safeDest);
+    return res.redirect(finalDest);
   }
 
+  // Resolve the first-party CTA viewer id (sets a cookie) BEFORE the redirect
+  // so the Set-Cookie header rides on the 302 — never touch res after redirect.
+  const ctaViewerId  = resolveCtaViewerId(req, res);
+
   // Redirect first (< 50 ms) — tracking is fire-and-forget
-  res.redirect(302, safeDest);
+  res.redirect(302, finalDest);
 
   // Background: record the click — only tracked for Pro / admin_lifetime plan owners.
   // The redirect always happens regardless of plan; only the analytics recording is gated.
+  // Capture device/browser/geo for the independent CTA log.
+  const clickGeo     = lookupCountry(getClientIp(req));
+  const clickBrowser = parseBrowser(req.headers['user-agent']);
+  const uaStr        = (req.headers['user-agent'] || '').toLowerCase();
+  const clickDevice  = /mobile|android|iphone|ipad/.test(uaStr) ? 'mobile'
+                     : /tablet/.test(uaStr)                      ? 'tablet'
+                     : 'desktop';
+  const utm          = pickUtm(req.query);
+
+  // Record into the independent cta_click_logs table — Pro/admin owners only.
+  // The owner is resolved from the video; the log keeps video_id only as an
+  // informational reference (no FK), so it survives any future video purge.
   pool.query(
-    `INSERT INTO analytics_events
-       (session_id, video_id, event_type, occurred_at)
-     SELECT NULL, v.id, 'cta_click', NOW()
+    `INSERT INTO cta_click_logs
+       (cta_link_id, user_id, video_id, cta_name, page_name, destination_url,
+        viewer_id, device, browser, country, country_code, city,
+        utm_source, utm_medium, utm_campaign, utm_term, utm_content)
+     SELECT NULL, v.user_id, v.id, NULL, NULL, $2,
+            $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
      FROM   videos v
      JOIN   users u ON u.id = v.user_id
      JOIN   plans p ON p.id = u.plan_id
      WHERE  v.id = $1
        AND  v.is_active = TRUE
        AND  p.name IN ('pro', 'admin_lifetime')`,
-    [videoId]
+    [
+      videoId, safeDest, ctaViewerId, clickDevice, clickBrowser,
+      clickGeo.name, clickGeo.code, clickGeo.city,
+      utm.utm_source, utm.utm_medium, utm.utm_campaign, utm.utm_term, utm.utm_content,
+    ]
   ).catch(err => logger.warn(`[analytics/cta] insert failed: ${err.message}`));
 });
 

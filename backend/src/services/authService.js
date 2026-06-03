@@ -79,21 +79,34 @@ async function loginWithPassword(email, password) {
   const normalizedEmail = email.toLowerCase().trim();
 
   const result = await pool.query(
-    `SELECT id, email, name, password_hash, password_set, role, is_active, last_login_at
+    `SELECT id, email, name, password_hash, password_set, role, is_active, last_login_at, deactivated_reason
      FROM users WHERE email = $1`,
     [normalizedEmail]
   );
   const user = result.rows[0];
+  const DUMMY_HASH = '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW';
 
-  // Unknown or inactive account — constant-time compare prevents email enumeration.
-  // This is a valid bcrypt hash (cost 12) that will never match any real password
-  // but forces the full work factor so timing is identical to a found account.
-  if (!user || !user.is_active) {
-    await bcrypt.compare(password, '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW');
-    throw Object.assign(
-      new Error('Invalid email or password'),
-      { code: 'INVALID_CREDENTIALS' }
-    );
+  // Unknown account — constant-time compare prevents email enumeration.
+  if (!user) {
+    await bcrypt.compare(password, DUMMY_HASH);
+    throw Object.assign(new Error('Invalid email or password'), { code: 'INVALID_CREDENTIALS' });
+  }
+
+  // Deactivated account — verify the REAL password first so we only reveal the
+  // deactivation (and offer restore) to someone who actually owns the account.
+  // A wrong password still returns the generic invalid-credentials error.
+  if (!user.is_active) {
+    const ok = (user.password_set && user.password_hash)
+      ? await bcrypt.compare(password, user.password_hash)
+      : (await bcrypt.compare(password, DUMMY_HASH), false);
+    if (!ok) {
+      throw Object.assign(new Error('Invalid email or password'), { code: 'INVALID_CREDENTIALS' });
+    }
+    throw Object.assign(new Error('Account deactivated'), {
+      code    : 'ACCOUNT_DEACTIVATED',
+      reason  : user.deactivated_reason || null,
+      userName: user.name || null,
+    });
   }
 
   // ── First login: password_set = FALSE ──────────────────────────────────
@@ -139,12 +152,96 @@ async function loginWithPassword(email, password) {
   const isFirstLogin = !user.last_login_at;
 
   await pool.query(
-    `UPDATE users SET last_login_at = NOW() WHERE id = $1`,
+    `UPDATE users SET previous_login_at = last_login_at, last_login_at = NOW() WHERE id = $1`,
     [user.id]
   );
 
   logger.info(`[authService] Password login: ${normalizedEmail}`);
   return { ...user, first_login: isFirstLogin };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Self-service account restore
+//
+// A deactivated user confirms "Restore?" on the login screen. We re-verify the
+// password (same enumeration-safe rules as login), reactivate the account,
+// fire user_restored, and return the user so the route can log them in.
+// ─────────────────────────────────────────────────────────────
+
+async function restoreAccount(email, password) {
+  const normalizedEmail = email.toLowerCase().trim();
+  const DUMMY_HASH = '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW';
+
+  const { rows: [user] } = await pool.query(
+    `SELECT id, email, name, password_hash, password_set, is_active
+     FROM users WHERE email = $1`,
+    [normalizedEmail]
+  );
+  if (!user) {
+    await bcrypt.compare(password, DUMMY_HASH);
+    throw Object.assign(new Error('Invalid email or password'), { code: 'INVALID_CREDENTIALS' });
+  }
+  if (user.is_active) {
+    throw Object.assign(new Error('Account is already active'), { code: 'ALREADY_ACTIVE' });
+  }
+  const ok = (user.password_set && user.password_hash)
+    ? await bcrypt.compare(password, user.password_hash)
+    : (await bcrypt.compare(password, DUMMY_HASH), false);
+  if (!ok) {
+    throw Object.assign(new Error('Invalid email or password'), { code: 'INVALID_CREDENTIALS' });
+  }
+
+  await pool.query(
+    `UPDATE users
+        SET is_active = TRUE, deactivated_at = NULL, deactivated_reason = NULL,
+            last_login_at = NOW(), updated_at = NOW()
+      WHERE id = $1`,
+    [user.id]
+  );
+  emitEvent(user.id, 'user_restored', null, { email: user.email, restored_by: 'self' });
+  logger.info(`[authService] Account restored (self-service): ${normalizedEmail}`);
+  return { id: user.id, name: user.name, email: user.email };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Token-based restore (OAuth path — identity already verified by Google).
+// The OAuth callback mints a short-lived restore token for a deactivated user;
+// the login screen exchanges it for an actual restore on "Yes".
+// ─────────────────────────────────────────────────────────────
+
+function mintRestoreToken(userId) {
+  return jwt.sign({ sub: userId, purpose: 'restore' }, env.JWT_SECRET, { expiresIn: '15m' });
+}
+
+async function restoreWithToken(token) {
+  let payload;
+  try {
+    payload = jwt.verify(token, env.JWT_SECRET);
+  } catch {
+    throw Object.assign(new Error('This restore link has expired. Please sign in again.'), { code: 'INVALID_TOKEN' });
+  }
+  if (payload.purpose !== 'restore' || !payload.sub) {
+    throw Object.assign(new Error('Invalid restore token'), { code: 'INVALID_TOKEN' });
+  }
+
+  const { rows: [user] } = await pool.query(
+    `SELECT id, name, email, is_active FROM users WHERE id = $1`,
+    [payload.sub]
+  );
+  if (!user) throw Object.assign(new Error('Account not found'), { code: 'INVALID_TOKEN' });
+
+  if (!user.is_active) {
+    await pool.query(
+      `UPDATE users
+          SET is_active = TRUE, deactivated_at = NULL, deactivated_reason = NULL,
+              last_login_at = NOW(), updated_at = NOW()
+        WHERE id = $1`,
+      [user.id]
+    );
+    emitEvent(user.id, 'user_restored', null, { email: user.email, restored_by: 'self_oauth' });
+    logger.info(`[authService] Account restored (OAuth self-service): ${user.email}`);
+  }
+  return { id: user.id, name: user.name, email: user.email };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -310,7 +407,7 @@ async function resetPassword(token, newPassword) {
  *
  * Emits user_signed_up for new users (non-blocking, after commit).
  */
-async function findOrCreateOAuthUser(provider, providerProfile) {
+async function findOrCreateOAuthUser(provider, providerProfile, leadSource = null) {
   const { id: providerId, email: providerEmail, name } = providerProfile;
   const normalizedEmail = providerEmail.toLowerCase().trim();
 
@@ -320,7 +417,7 @@ async function findOrCreateOAuthUser(provider, providerProfile) {
 
     // ── 1. Match by provider_id ───────────────────────────────
     const oauthResult = await client.query(
-      `SELECT u.id, u.email, u.role, u.is_active, u.last_login_at
+      `SELECT u.id, u.email, u.name, u.role, u.is_active, u.last_login_at
        FROM user_oauth_accounts oa
        JOIN users u ON u.id = oa.user_id
        WHERE oa.provider = $1 AND oa.provider_id = $2`,
@@ -330,7 +427,9 @@ async function findOrCreateOAuthUser(provider, providerProfile) {
     if (oauthResult.rows.length > 0) {
       const user = oauthResult.rows[0];
       if (!user.is_active) {
-        throw Object.assign(new Error('Account is inactive'), { code: 'INACTIVE' });
+        throw Object.assign(new Error('Account is deactivated'), {
+          code: 'ACCOUNT_DEACTIVATED', userId: user.id, userName: user.name,
+        });
       }
       // Capture first-login status BEFORE updating last_login_at
       const isFirstLogin = !user.last_login_at;
@@ -341,7 +440,7 @@ async function findOrCreateOAuthUser(provider, providerProfile) {
         [normalizedEmail, provider, providerId]
       );
       await client.query(
-        `UPDATE users SET last_login_at = NOW() WHERE id = $1`,
+        `UPDATE users SET previous_login_at = last_login_at, last_login_at = NOW() WHERE id = $1`,
         [user.id]
       );
       await client.query('COMMIT');
@@ -350,7 +449,7 @@ async function findOrCreateOAuthUser(provider, providerProfile) {
 
     // ── 2. Match by email (link OAuth to existing account) ────
     const emailResult = await client.query(
-      `SELECT id, email, role, is_active, last_login_at FROM users WHERE email = $1`,
+      `SELECT id, email, name, role, is_active, last_login_at FROM users WHERE email = $1`,
       [normalizedEmail]
     );
 
@@ -361,7 +460,9 @@ async function findOrCreateOAuthUser(provider, providerProfile) {
     if (emailResult.rows.length > 0) {
       user = emailResult.rows[0];
       if (!user.is_active) {
-        throw Object.assign(new Error('Account is inactive'), { code: 'INACTIVE' });
+        throw Object.assign(new Error('Account is deactivated'), {
+          code: 'ACCOUNT_DEACTIVATED', userId: user.id, userName: user.name,
+        });
       }
       // Capture first-login status BEFORE the shared last_login_at update below
       isFirstLogin = !user.last_login_at;
@@ -380,15 +481,23 @@ async function findOrCreateOAuthUser(provider, providerProfile) {
       );
       if (!freePlan.rows.length) throw new Error('Free plan not found in database');
 
+      const ls = leadSource || {};
       const newUser = await client.query(
-        `INSERT INTO users (email, name, plan_id, created_via, password_set)
-         VALUES ($1, $2, $3, $4, FALSE)
+        `INSERT INTO users (email, name, plan_id, created_via, password_set,
+                            signup_utm_source, signup_utm_medium, signup_utm_campaign,
+                            signup_utm_term, signup_utm_content)
+         VALUES ($1, $2, $3, $4, FALSE, $5, $6, $7, $8, $9)
          RETURNING id, email, role`,
         [
           normalizedEmail,
           name || normalizedEmail.split('@')[0],
           freePlan.rows[0].id,
           `oauth_${provider}`,
+          ls.utm_source  ?? null,
+          ls.utm_medium  ?? null,
+          ls.utm_campaign ?? null,
+          ls.utm_term    ?? null,
+          ls.utm_content ?? null,
         ]
       );
       user  = newUser.rows[0];
@@ -408,11 +517,20 @@ async function findOrCreateOAuthUser(provider, providerProfile) {
          VALUES ($1, $2, $3, $4)`,
         [user.id, provider, providerId, normalizedEmail]
       );
+      // Returning-after-purge: flag the one-time notice if this email was purged.
+      await client.query(
+        `UPDATE users u
+            SET previously_purged_at = pa.purged_at, purge_notice_shown = FALSE
+           FROM (SELECT purged_at FROM purged_accounts
+                  WHERE LOWER(email) = LOWER($2) ORDER BY purged_at DESC LIMIT 1) pa
+          WHERE u.id = $1`,
+        [user.id, normalizedEmail]
+      );
       logger.info(`[authService] New OAuth user (free plan): ${normalizedEmail} via ${provider}`);
     }
 
     await client.query(
-      `UPDATE users SET last_login_at = NOW() WHERE id = $1`,
+      `UPDATE users SET previous_login_at = last_login_at, last_login_at = NOW() WHERE id = $1`,
       [user.id]
     );
     await client.query('COMMIT');
@@ -483,6 +601,9 @@ async function _firePasswordResetWebhook(user, resetUrl) {
 
 module.exports = {
   loginWithPassword,
+  restoreAccount,
+  mintRestoreToken,
+  restoreWithToken,
   setPassword,
   forgotPassword,
   resetPassword,

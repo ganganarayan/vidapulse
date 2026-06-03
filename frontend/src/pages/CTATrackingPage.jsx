@@ -152,7 +152,7 @@ export default function CTATrackingPage() {
         {/* Body */}
         <div className="flex-1 overflow-y-auto">
 
-            <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4">
+            <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4">
 
               {/* How it works banner */}
               <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl px-4 py-3 flex gap-3">
@@ -385,8 +385,8 @@ export default function CTATrackingPage() {
                               <td className="px-3 py-2 whitespace-nowrap text-gray-400">
                                 {new Date(c.occurred_at).toLocaleString()}
                               </td>
-                              <td className="px-3 py-2 font-medium text-gray-200">{c.cta_name || '—'}</td>
-                              <td className="px-3 py-2 text-gray-400">{c.page_name || '—'}</td>
+                              <td className="px-3 py-2 font-medium text-gray-200 whitespace-nowrap">{c.cta_name || '—'}</td>
+                              <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{c.page_name || '—'}</td>
                               <td className="px-3 py-2 capitalize">{c.device || '—'}</td>
                               <td className="px-3 py-2">{c.browser || '—'}</td>
                               <td className="px-3 py-2">{c.country || '—'}</td>

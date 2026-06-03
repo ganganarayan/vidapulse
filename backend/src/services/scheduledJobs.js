@@ -32,6 +32,7 @@
 const { pool }          = require('../config/database');
 const logger            = require('../config/logger');
 const { emitEvent }     = require('./behavioralEventService');
+const { purgeUsers }    = require('./purgeService');
 const insightEngine     = require('./insightEngine');
 const viewerStoryEngine = require('./viewerStoryEngine');
 
@@ -41,12 +42,20 @@ const INSIGHT_BATCH_MS     = 15 * 60_000;   // 15 minutes
 const HOURLY_JOBS_MS       = 60 * 60_000;   // 1 hour
 const DAILY_STATS_MS       = 24 * 60 * 60_000; // 24 hours
 const EXPIRY_CHECK_MS      = 24 * 60 * 60_000; // 24 hours
+const INACTIVITY_CHECK_MS  = 24 * 60 * 60_000; // 24 hours
+const INACTIVITY_DAYS      = 180;              // deactivate after 180 days idle
+const REMINDER_10D_DAYS    = 170;              // 10 days before deactivation
+const REMINDER_3D_DAYS     = 177;              //  3 days before deactivation
+const PURGE_CHECK_MS       = 24 * 60 * 60_000; // 24 hours
+const PURGE_AFTER_DEACTIVATION_DAYS = 180;     // purge 180 days after deactivation
 
 // Startup delays — stagger jobs to avoid hitting the DB all at once
 const INSIGHT_BATCH_DELAY  = 2  * 60_000;   // insight starts 2 min after server ready
 const HOURLY_JOBS_DELAY    = 5  * 60_000;   // hourly jobs start 5 min after server ready
 const DAILY_STATS_DELAY    = 10 * 60_000;   // daily stats backfill starts 10 min after server ready
 const EXPIRY_CHECK_DELAY   = 15 * 60_000;   // expiry check starts 15 min after server ready
+const INACTIVITY_CHECK_DELAY = 20 * 60_000; // inactivity check starts 20 min after server ready
+const PURGE_CHECK_DELAY      = 25 * 60_000; // auto-purge check starts 25 min after server ready
 
 // Thresholds for behavioral event jobs
 const NO_RETURN_HOURS      = 72;            // 3 days after wow moment without return
@@ -92,7 +101,19 @@ function start() {
     _timers.push(setInterval(() => _run(_jobPlanExpiryCheck), EXPIRY_CHECK_MS));
   }, EXPIRY_CHECK_DELAY));
 
-  logger.info('[scheduledJobs] Started — online_cleanup(3m) · insight_batch(15m) · hourly(1h) · daily_stats(24h) · plan_expiry(24h)');
+  // ── inactivity deactivation: starts after 20 min delay ────────────────
+  _timers.push(setTimeout(() => {
+    _run(_jobInactivityDeactivation);
+    _timers.push(setInterval(() => _run(_jobInactivityDeactivation), INACTIVITY_CHECK_MS));
+  }, INACTIVITY_CHECK_DELAY));
+
+  // ── auto-purge deactivated accounts: starts after 25 min delay ────────
+  _timers.push(setTimeout(() => {
+    _run(_jobAutoPurge);
+    _timers.push(setInterval(() => _run(_jobAutoPurge), PURGE_CHECK_MS));
+  }, PURGE_CHECK_DELAY));
+
+  logger.info('[scheduledJobs] Started — online_cleanup(3m) · insight_batch(15m) · hourly(1h) · daily_stats(24h) · plan_expiry(24h) · inactivity(24h) · auto_purge(24h)');
 }
 
 function stop() {
@@ -330,6 +351,96 @@ async function _jobPlanExpiryCheck() {
       logger.error(`[scheduledJobs] plan_expiry: failed for user ${id}: ${err.message}`);
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// JOB: inactivity_deactivation  (FREE accounts only)
+//
+// Soft-deactivates any non-admin FREE user whose most recent activity
+// (last_seen_at / last_login_at, falling back to created_at) is older than
+// INACTIVITY_DAYS. Paid users are never auto-deactivated — when a paid plan
+// expires it first downgrades to free (plan_expiry job), then this clock runs.
+// Sets is_active=FALSE + deactivated_at/reason. Data is retained (soft state).
+// ─────────────────────────────────────────────────────────────────────────
+
+const FREE_PLAN_FILTER = `u.plan_id IN (SELECT id FROM plans WHERE name = 'free')`;
+
+async function _jobInactivityDeactivation() {
+  // Most-recent activity per user, reused across all queries below.
+  const LAST_ACTIVITY = `GREATEST(COALESCE(u.last_seen_at, u.created_at), COALESCE(u.last_login_at, u.created_at))`;
+
+  // ── 1. Reminder webhooks ────────────────────────────────────────────────
+  // Fire once per inactivity cycle: dedup against behavioral_events created
+  // AFTER the user's last activity, so the reminders reset if the user returns.
+  async function sendReminders(eventKey, idleDays) {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.email
+         FROM users u
+        WHERE u.is_active = TRUE AND u.role <> 'admin' AND ${FREE_PLAN_FILTER}
+          AND ${LAST_ACTIVITY} < NOW() - ($1 || ' days')::interval
+          AND NOT EXISTS (
+                SELECT 1 FROM behavioral_events be
+                 WHERE be.user_id = u.id
+                   AND be.event_key = $2
+                   AND be.created_at > ${LAST_ACTIVITY})`,
+      [String(idleDays), eventKey]
+    );
+    for (const u of rows) {
+      emitEvent(u.id, eventKey, null, { email: u.email, days_until_deactivation: INACTIVITY_DAYS - idleDays });
+    }
+    if (rows.length) logger.info(`[scheduledJobs] ${eventKey} — sent to ${rows.length} user(s)`);
+  }
+  await sendReminders('inactivity_reminder_10d', REMINDER_10D_DAYS);
+  await sendReminders('inactivity_reminder_3d',  REMINDER_3D_DAYS);
+
+  // ── 2. Deactivate FREE users past the threshold + fire user_deactivated ──
+  const { rows } = await pool.query(
+    `UPDATE users u
+        SET is_active          = FALSE,
+            deactivated_at     = NOW(),
+            deactivated_reason = 'inactivity_180d',
+            updated_at         = NOW()
+      WHERE u.is_active = TRUE
+        AND u.role <> 'admin'
+        AND ${FREE_PLAN_FILTER}
+        AND ${LAST_ACTIVITY} < NOW() - ($1 || ' days')::interval
+      RETURNING id, email`,
+    [String(INACTIVITY_DAYS)]
+  );
+
+  for (const u of rows) {
+    emitEvent(u.id, 'user_deactivated', null, { email: u.email, reason: 'inactivity_180d' });
+  }
+  if (rows.length) logger.info(`[scheduledJobs] inactivity_deactivation — deactivated ${rows.length} free user(s) idle > ${INACTIVITY_DAYS} days`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// JOB: auto_purge  (FREE accounts only)
+//
+// Permanently purges FREE accounts that have been deactivated for longer than
+// PURGE_AFTER_DEACTIVATION_DAYS (the second 180-day cycle). Uses the shared
+// purgeService: video-analytics data destroyed, all logs + payments +
+// subscriptions kept, and a purged_accounts row written so a returning user is
+// recognized. No emails fire here — reminders only go before deactivation.
+// ─────────────────────────────────────────────────────────────────────────
+
+async function _jobAutoPurge() {
+  const { rows } = await pool.query(
+    `SELECT u.id
+       FROM users u
+      WHERE u.is_active = FALSE
+        AND u.role <> 'admin'
+        AND ${FREE_PLAN_FILTER}
+        AND u.deactivated_at IS NOT NULL
+        AND u.deactivated_at < NOW() - ($1 || ' days')::interval
+      LIMIT 500`,
+    [String(PURGE_AFTER_DEACTIVATION_DAYS)]
+  );
+  if (rows.length === 0) return;
+
+  const ids = rows.map(r => r.id);
+  const purged = await purgeUsers(ids, 'deactivated_180d');
+  logger.warn(`[scheduledJobs] auto_purge — purged ${purged} account(s) deactivated > ${PURGE_AFTER_DEACTIVATION_DAYS} days (data destroyed, logs kept)`);
 }
 
 /**
