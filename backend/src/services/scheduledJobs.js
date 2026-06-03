@@ -41,12 +41,15 @@ const INSIGHT_BATCH_MS     = 15 * 60_000;   // 15 minutes
 const HOURLY_JOBS_MS       = 60 * 60_000;   // 1 hour
 const DAILY_STATS_MS       = 24 * 60 * 60_000; // 24 hours
 const EXPIRY_CHECK_MS      = 24 * 60 * 60_000; // 24 hours
+const INACTIVITY_CHECK_MS  = 24 * 60 * 60_000; // 24 hours
+const INACTIVITY_DAYS      = 180;              // deactivate after 180 days idle
 
 // Startup delays — stagger jobs to avoid hitting the DB all at once
 const INSIGHT_BATCH_DELAY  = 2  * 60_000;   // insight starts 2 min after server ready
 const HOURLY_JOBS_DELAY    = 5  * 60_000;   // hourly jobs start 5 min after server ready
 const DAILY_STATS_DELAY    = 10 * 60_000;   // daily stats backfill starts 10 min after server ready
 const EXPIRY_CHECK_DELAY   = 15 * 60_000;   // expiry check starts 15 min after server ready
+const INACTIVITY_CHECK_DELAY = 20 * 60_000; // inactivity check starts 20 min after server ready
 
 // Thresholds for behavioral event jobs
 const NO_RETURN_HOURS      = 72;            // 3 days after wow moment without return
@@ -92,7 +95,13 @@ function start() {
     _timers.push(setInterval(() => _run(_jobPlanExpiryCheck), EXPIRY_CHECK_MS));
   }, EXPIRY_CHECK_DELAY));
 
-  logger.info('[scheduledJobs] Started — online_cleanup(3m) · insight_batch(15m) · hourly(1h) · daily_stats(24h) · plan_expiry(24h)');
+  // ── inactivity deactivation: starts after 20 min delay ────────────────
+  _timers.push(setTimeout(() => {
+    _run(_jobInactivityDeactivation);
+    _timers.push(setInterval(() => _run(_jobInactivityDeactivation), INACTIVITY_CHECK_MS));
+  }, INACTIVITY_CHECK_DELAY));
+
+  logger.info('[scheduledJobs] Started — online_cleanup(3m) · insight_batch(15m) · hourly(1h) · daily_stats(24h) · plan_expiry(24h) · inactivity(24h)');
 }
 
 function stop() {
@@ -330,6 +339,37 @@ async function _jobPlanExpiryCheck() {
       logger.error(`[scheduledJobs] plan_expiry: failed for user ${id}: ${err.message}`);
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// JOB: inactivity_deactivation
+//
+// Soft-deactivates any non-admin, currently-active user whose most recent
+// activity (last_seen_at / last_login_at, falling back to created_at) is older
+// than INACTIVITY_DAYS. Sets is_active=FALSE + deactivated_at/reason so they
+// appear in the admin Deactivated section and get the restore prompt on login.
+// All their data is retained (this is a soft state, not a purge).
+// ─────────────────────────────────────────────────────────────────────────
+
+async function _jobInactivityDeactivation() {
+  const { rows } = await pool.query(
+    `UPDATE users
+        SET is_active          = FALSE,
+            deactivated_at     = NOW(),
+            deactivated_reason = 'inactivity_180d',
+            updated_at         = NOW()
+      WHERE is_active = TRUE
+        AND role <> 'admin'
+        AND GREATEST(
+              COALESCE(last_seen_at,  created_at),
+              COALESCE(last_login_at, created_at)
+            ) < NOW() - ($1 || ' days')::interval
+      RETURNING id, email`,
+    [String(INACTIVITY_DAYS)]
+  );
+
+  if (rows.length === 0) return;
+  logger.info(`[scheduledJobs] inactivity_deactivation — deactivated ${rows.length} user(s) idle > ${INACTIVITY_DAYS} days`);
 }
 
 /**
