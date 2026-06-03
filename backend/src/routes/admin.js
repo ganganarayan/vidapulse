@@ -624,6 +624,88 @@ router.patch('/users/:id/plan', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /api/admin/users/delete
+//
+// Bulk hard-delete subscriber accounts. IRREVERSIBLE — removes each user and
+// all their data (videos, sessions, preferences, …) via ON DELETE CASCADE.
+//
+// Guards: admin-only (requireAdmin already applied); never deletes an admin
+// account; never deletes the calling admin's own account.
+//
+// A few FK references to users are RESTRICT / NO ACTION (webhook_logs,
+// admin_impersonation_sessions) — those are cleaned up first inside the
+// transaction so the final DELETE can succeed.
+//
+// Body   : { user_ids: string[] }  (UUIDs, 1–100)
+// Returns: { deleted: number, skipped: [{ id, reason }] }
+// ─────────────────────────────────────────────────────────────────────────────
+
+const deleteUsersSchema = z.object({
+  user_ids: z.array(z.string().uuid()).min(1).max(100),
+});
+
+router.post('/users/delete', async (req, res, next) => {
+  const parsed = deleteUsersSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error  : 'Validation failed',
+      message: 'user_ids must be a non-empty array of UUIDs (max 100)',
+    });
+  }
+  const ids = [...new Set(parsed.data.user_ids)];
+
+  const client = await pool.connect();
+  try {
+    // Classify the requested ids: which exist, which are protected.
+    const { rows: targets } = await client.query(
+      `SELECT id, email, role FROM users WHERE id = ANY($1::uuid[])`,
+      [ids]
+    );
+    const found = new Map(targets.map(t => [t.id, t]));
+
+    const skipped   = [];
+    const deletable = [];
+    for (const id of ids) {
+      const t = found.get(id);
+      if (!t)                  { skipped.push({ id, reason: 'not_found' }); continue; }
+      if (t.role === 'admin')  { skipped.push({ id, reason: 'is_admin'  }); continue; }
+      if (id === req.user.id)  { skipped.push({ id, reason: 'self'      }); continue; }
+      deletable.push(id);
+    }
+
+    let deleted = 0;
+    if (deletable.length) {
+      await client.query('BEGIN');
+      // Clear the RESTRICT / NO-ACTION references that would block the delete.
+      await client.query(
+        `DELETE FROM admin_impersonation_sessions
+          WHERE target_user_id = ANY($1::uuid[]) OR admin_user_id = ANY($1::uuid[])`,
+        [deletable]
+      );
+      await client.query(
+        `UPDATE webhook_logs SET result_user_id = NULL WHERE result_user_id = ANY($1::uuid[])`,
+        [deletable]
+      );
+      // Final delete — everything else cascades. Re-assert role guard in SQL.
+      const del = await client.query(
+        `DELETE FROM users WHERE id = ANY($1::uuid[]) AND role <> 'admin'`,
+        [deletable]
+      );
+      deleted = del.rowCount;
+      await client.query('COMMIT');
+      logger.warn(`[admin] Hard-deleted ${deleted} user(s) by admin ${req.user.id}: ${deletable.join(', ')}`);
+    }
+
+    return res.json({ deleted, skipped });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/revenue
 //
 // Payment breakdown from the payments table.

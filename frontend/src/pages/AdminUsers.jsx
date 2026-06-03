@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 
 /**
  * AdminUsers — /admin/users
@@ -378,7 +379,7 @@ function isoToDateInput(iso) {
   return new Date(iso).toISOString().slice(0, 10); // YYYY-MM-DD
 }
 
-function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick }) {
+function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick, selected, onToggleSelect, selectable }) {
   const [planVal,      setPlanVal]      = useState(user.plan ?? 'free');
   const [dateVal,      setDateVal]      = useState(isoToDateInput(user.plan_expires_at));
   const [saving,       setSaving]       = useState(false);
@@ -459,7 +460,20 @@ function UserRow({ user, onPlanUpdate, onPromoClick, onEnterClick }) {
   }
 
   return (
-    <tr className="hover:bg-gray-700/30 transition-colors">
+    <tr className={`transition-colors ${selected ? 'bg-amber-500/5' : 'hover:bg-gray-700/30'}`}>
+
+      {/* Select */}
+      <td className="px-4 py-3 w-px">
+        <input
+          type="checkbox"
+          checked={!!selected}
+          disabled={!selectable}
+          onChange={() => onToggleSelect(user.id)}
+          title={selectable ? 'Select user' : 'Admin accounts cannot be deleted'}
+          className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-amber-500
+                     focus:ring-amber-500/40 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed accent-amber-500"
+        />
+      </td>
 
       {/* User */}
       <td className="px-4 py-3">
@@ -613,6 +627,7 @@ export default function AdminUsers() {
   const navigate            = useNavigate();
   const [searchParams]      = useSearchParams();
   const { startImpersonation } = useAuth();
+  const { showToast }       = useToast();
 
   const [users,       setUsers]       = useState([]);
   const [pagination,  setPagination]  = useState(null);
@@ -630,6 +645,44 @@ export default function AdminUsers() {
   // Promotion visibility modal state
   const [promoModalUser,  setPromoModalUser]  = useState(null);
 
+  // Bulk-delete selection state
+  const [selectedIds,      setSelectedIds]      = useState(() => new Set());
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting,         setDeleting]         = useState(false);
+
+  // Admin accounts can't be deleted — only these rows are selectable.
+  const selectableUsers = users.filter(u => u.role !== 'admin');
+  const allSelected = selectableUsers.length > 0 && selectableUsers.every(u => selectedIds.has(u.id));
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+  function toggleSelectAll() {
+    setSelectedIds(allSelected ? new Set() : new Set(selectableUsers.map(u => u.id)));
+  }
+
+  async function handleConfirmDelete() {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    setDeleting(true);
+    try {
+      const { data } = await api.post('/admin/users/delete', { user_ids: ids });
+      const skippedNote = data.skipped?.length ? ` · ${data.skipped.length} skipped` : '';
+      showToast(`Deleted ${data.deleted} user${data.deleted !== 1 ? 's' : ''}${skippedNote}`);
+      setSelectedIds(new Set());
+      setConfirmingDelete(false);
+      loadUsers();
+    } catch (err) {
+      showToast(err.response?.data?.message ?? 'Delete failed', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   // "Session expired" notice from api.js redirect param
   const [expiredNotice, setExpiredNotice] = useState(
     searchParams.get('impersonation_expired') === '1'
@@ -646,6 +699,7 @@ export default function AdminUsers() {
       const { data } = await api.get(`/admin/users?${params}`);
       setUsers(data.users);
       setPagination(data.pagination);
+      setSelectedIds(new Set());
     } catch (err) {
       setFetchError(err.response?.data?.message ?? 'Failed to load users');
     } finally {
@@ -767,6 +821,16 @@ export default function AdminUsers() {
               {pagination.total.toLocaleString()} user{pagination.total !== 1 ? 's' : ''}
             </span>
           )}
+          {selectedIds.size > 0 && (
+            <button
+              onClick={() => setConfirmingDelete(true)}
+              className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold
+                         bg-red-600/90 hover:bg-red-500 text-white transition-colors"
+            >
+              <TrashIcon />
+              Delete ({selectedIds.size})
+            </button>
+          )}
         </div>
 
         {/* Error state */}
@@ -782,6 +846,17 @@ export default function AdminUsers() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase tracking-wider">
+                  <th className="px-4 py-3 w-px">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && !allSelected; }}
+                      onChange={toggleSelectAll}
+                      disabled={selectableUsers.length === 0}
+                      title="Select all"
+                      className="w-4 h-4 rounded border-gray-600 bg-gray-700 accent-amber-500 cursor-pointer disabled:opacity-30"
+                    />
+                  </th>
                   <th className="px-4 py-3 text-left font-medium">User</th>
                   <th className="px-4 py-3 text-left font-medium">Plan</th>
                   <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Plan Expires</th>
@@ -798,6 +873,7 @@ export default function AdminUsers() {
                 {loading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i} className="animate-pulse">
+                      <td className="px-4 py-3"><div className="w-4 h-4 bg-gray-700 rounded" /></td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-gray-700" />
@@ -817,7 +893,7 @@ export default function AdminUsers() {
                   ))
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
+                    <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
                       {search ? 'No users match your search.' : 'No users found.'}
                     </td>
                   </tr>
@@ -826,6 +902,9 @@ export default function AdminUsers() {
                     <UserRow
                       key={user.id}
                       user={user}
+                      selected={selectedIds.has(user.id)}
+                      selectable={user.role !== 'admin'}
+                      onToggleSelect={toggleSelect}
                       onPlanUpdate={handlePlanUpdate}
                       onPromoClick={() => setPromoModalUser(user)}
                       onEnterClick={() => { setModalUser(user); setModalError(''); }}
@@ -887,6 +966,94 @@ export default function AdminUsers() {
         />
       )}
 
+      {/* Bulk-delete confirmation */}
+      {confirmingDelete && (
+        <DeleteUsersModal
+          users={users.filter(u => selectedIds.has(u.id))}
+          loading={deleting}
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
+
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DeleteUsersModal — irreversible bulk-delete confirmation
+// ─────────────────────────────────────────────────────────────────────────────
+
+function DeleteUsersModal({ users, loading, onConfirm, onCancel }) {
+  const count = users.length;
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape' && !loading) onCancel(); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel, loading]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+      onClick={e => { if (e.target === e.currentTarget && !loading) onCancel(); }}
+    >
+      <div className="bg-gray-800 border border-gray-700 rounded-xl w-full max-w-md shadow-2xl">
+        <div className="p-6 pb-4">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-full bg-red-600/20 flex items-center justify-center flex-shrink-0 text-red-400">
+              <TrashIcon />
+            </div>
+            <h2 className="text-lg font-bold text-white">
+              Delete {count} {count === 1 ? 'account' : 'accounts'}?
+            </h2>
+          </div>
+          <p className="text-gray-400 text-sm">
+            This permanently removes {count === 1 ? 'this account' : 'these accounts'} and{' '}
+            <span className="text-red-300 font-medium">all of their data</span> — videos, analytics,
+            sessions and settings. This <span className="text-red-300 font-medium">cannot be undone</span>.
+          </p>
+
+          <div className="mt-3 max-h-40 overflow-y-auto rounded-lg border border-gray-700 divide-y divide-gray-700/60">
+            {users.map(u => (
+              <div key={u.id} className="px-3 py-2 text-sm">
+                <p className="text-gray-200 truncate">{u.name || <span className="italic text-gray-500">No name</span>}</p>
+                <p className="text-gray-500 text-xs truncate">{u.email}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="px-6 pb-6 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={loading}
+            className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-gray-300 border border-gray-600 hover:border-gray-400 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex-1 px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loading
+              ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Deleting…</>
+              : `Delete ${count === 1 ? 'account' : count + ' accounts'}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Trash icon used by the toolbar delete button and the confirm modal
+function TrashIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
   );
 }
