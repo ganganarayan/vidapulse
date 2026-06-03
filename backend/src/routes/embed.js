@@ -44,10 +44,13 @@ router.get('/:videoId', async (req, res) => {
   }
 
   try {
+    // Join the owner and require the owner be active — a deactivated owner's
+    // videos are frozen (won't play) until the account is restored.
     const { rows: [video] } = await pool.query(
-      `SELECT id, title, source_type, original_url, playable_url, processing_status
-       FROM   videos
-       WHERE  id = $1 AND is_active = TRUE`,
+      `SELECT v.id, v.title, v.source_type, v.original_url, v.playable_url, v.processing_status
+       FROM   videos v
+       JOIN   users  u ON u.id = v.user_id
+       WHERE  v.id = $1 AND v.is_active = TRUE AND u.is_active = TRUE`,
       [videoId]
     );
 

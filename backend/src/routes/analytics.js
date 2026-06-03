@@ -305,9 +305,13 @@ router.post('/session', async (req, res) => {
   }
 
   try {
-    // Verify the video exists and is active (silently 404 if not)
+    // Verify the video exists, is active, AND its owner is active. A deactivated
+    // owner's videos are frozen — no new analytics are recorded until restored.
     const { rows: [video] } = await pool.query(
-      `SELECT id FROM videos WHERE id = $1 AND is_active = TRUE`,
+      `SELECT v.id
+       FROM   videos v
+       JOIN   users  u ON u.id = v.user_id
+       WHERE  v.id = $1 AND v.is_active = TRUE AND u.is_active = TRUE`,
       [video_id]
     );
     if (!video) return res.status(404).json({ error: 'video_not_found' });
