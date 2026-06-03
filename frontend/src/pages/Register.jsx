@@ -57,7 +57,7 @@ export default function Register() {
       });
       clearLeadSource();
       await refetch();
-      pixelTrack('Lead');
+      pixelTrack('StartTrial');
       navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err.response?.data?.message ?? 'Registration failed. Please try again.');
