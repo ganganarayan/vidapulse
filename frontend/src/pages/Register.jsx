@@ -17,7 +17,6 @@ export default function Register() {
   // Prefill email from the link (?email=...) — forwarded by the CTA tracking
   // redirect from the landing opt-in / Thank-You button / registration email.
   const prefillEmail = (searchParams.get('email') || '').trim();
-  const emailLocked  = !!prefillEmail;   // came from the link → not editable
 
   const [email,     setEmail]     = useState(prefillEmail);
   const [password,  setPassword]  = useState('');
@@ -284,18 +283,11 @@ export default function Register() {
                 placeholder="you@example.com"
                 required
                 disabled={loading}
-                readOnly={emailLocked}
                 autoComplete="email"
-                title={emailLocked ? 'Email taken from your invitation link' : undefined}
-                className={`w-full border text-sm rounded-lg px-3 py-2.5 focus:outline-none transition-colors
-                           ${emailLocked
-                             ? 'bg-gray-800 border-gray-700 text-gray-400 cursor-not-allowed'
-                             : 'bg-gray-700 border-gray-600 focus:border-amber-500 text-gray-100 placeholder-gray-500'
-                           }`}
+                className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
+                           text-gray-100 placeholder-gray-500 text-sm rounded-lg
+                           px-3 py-2.5 focus:outline-none transition-colors"
               />
-              {emailLocked && (
-                <p className="text-[11px] text-gray-500 mt-1">From your invitation link — just set a password below.</p>
-              )}
             </div>
 
             {/* Password */}
