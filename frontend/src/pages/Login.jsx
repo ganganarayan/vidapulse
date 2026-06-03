@@ -26,8 +26,18 @@ export default function Login() {
   const [restoring,   setRestoring]   = useState(false);
   const [restoredMsg, setRestoredMsg] = useState('');
 
-  // Pick up any OAuth error from query params
+  // Pick up an OAuth restore token (deactivated account via Google) or error.
   useEffect(() => {
+    const restoreToken = searchParams.get('restore_token');
+    if (restoreToken) {
+      const name = searchParams.get('name');
+      setDeactivated({
+        name,
+        token  : restoreToken,
+        message: 'Your account has been deactivated. Would you like to restore it?',
+      });
+      return;
+    }
     const errKey = searchParams.get('error');
     if (errKey && OAUTH_ERRORS[errKey]) setError(OAUTH_ERRORS[errKey]);
   }, [searchParams]);
@@ -70,7 +80,10 @@ export default function Login() {
     setRestoring(true);
     setError('');
     try {
-      const { data } = await api.post('/auth/restore-account', { email, password });
+      // OAuth restore uses the short-lived token; email/password uses credentials.
+      const { data } = deactivated?.token
+        ? await api.post('/auth/restore-token', { token: deactivated.token })
+        : await api.post('/auth/restore-account', { email, password });
       setRestoredMsg(`${data.name || 'Account'} restored`);
       await refetch();
       setTimeout(() => window.location.replace('/dashboard'), 900);

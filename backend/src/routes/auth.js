@@ -722,8 +722,40 @@ router.get('/oauth/google/callback', async (req, res) => {
     return res.redirect(`${frontendUrl}/dashboard?token=${jwt}`);
 
   } catch (err) {
+    // Deactivated account — Google verified the identity, so offer self-service
+    // restore. Mint a short-lived restore token and send it to the login screen.
+    if (err.code === 'ACCOUNT_DEACTIVATED' && err.userId) {
+      const restoreToken = authService.mintRestoreToken(err.userId);
+      const nameParam = err.userName ? `&name=${encodeURIComponent(err.userName)}` : '';
+      return res.redirect(`${frontendUrl}/login?restore_token=${restoreToken}${nameParam}`);
+    }
     logger.error(`[auth] Google OAuth callback error: ${err.message}`);
     return res.redirect(`${frontendUrl}/login?error=oauth_failed`);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/auth/restore-token
+//
+// OAuth restore: exchange the short-lived restore token (from the OAuth
+// callback redirect) for an actual restore + login. Body: { token }.
+// ─────────────────────────────────────────────────────────────
+
+router.post('/restore-token', async (req, res, next) => {
+  try {
+    const { token } = req.body ?? {};
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'Validation Error', message: 'token is required' });
+    }
+    const user  = await authService.restoreWithToken(token);
+    const jwt   = await authService.buildJwt(user.id);
+    authService.setJwtCookie(res, jwt);
+    return res.json({ ok: true, name: user.name, redirect: '/dashboard' });
+  } catch (err) {
+    if (err.code === 'INVALID_TOKEN') {
+      return res.status(400).json({ error: 'invalid_token', message: err.message });
+    }
+    next(err);
   }
 });
 

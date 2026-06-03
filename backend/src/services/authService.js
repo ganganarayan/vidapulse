@@ -204,6 +204,47 @@ async function restoreAccount(email, password) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Token-based restore (OAuth path — identity already verified by Google).
+// The OAuth callback mints a short-lived restore token for a deactivated user;
+// the login screen exchanges it for an actual restore on "Yes".
+// ─────────────────────────────────────────────────────────────
+
+function mintRestoreToken(userId) {
+  return jwt.sign({ sub: userId, purpose: 'restore' }, env.JWT_SECRET, { expiresIn: '15m' });
+}
+
+async function restoreWithToken(token) {
+  let payload;
+  try {
+    payload = jwt.verify(token, env.JWT_SECRET);
+  } catch {
+    throw Object.assign(new Error('This restore link has expired. Please sign in again.'), { code: 'INVALID_TOKEN' });
+  }
+  if (payload.purpose !== 'restore' || !payload.sub) {
+    throw Object.assign(new Error('Invalid restore token'), { code: 'INVALID_TOKEN' });
+  }
+
+  const { rows: [user] } = await pool.query(
+    `SELECT id, name, email, is_active FROM users WHERE id = $1`,
+    [payload.sub]
+  );
+  if (!user) throw Object.assign(new Error('Account not found'), { code: 'INVALID_TOKEN' });
+
+  if (!user.is_active) {
+    await pool.query(
+      `UPDATE users
+          SET is_active = TRUE, deactivated_at = NULL, deactivated_reason = NULL,
+              last_login_at = NOW(), updated_at = NOW()
+        WHERE id = $1`,
+      [user.id]
+    );
+    emitEvent(user.id, 'user_restored', null, { email: user.email, restored_by: 'self_oauth' });
+    logger.info(`[authService] Account restored (OAuth self-service): ${user.email}`);
+  }
+  return { id: user.id, name: user.name, email: user.email };
+}
+
+// ─────────────────────────────────────────────────────────────
 // Set password (welcome email token flow)
 // ─────────────────────────────────────────────────────────────
 
@@ -376,7 +417,7 @@ async function findOrCreateOAuthUser(provider, providerProfile, leadSource = nul
 
     // ── 1. Match by provider_id ───────────────────────────────
     const oauthResult = await client.query(
-      `SELECT u.id, u.email, u.role, u.is_active, u.last_login_at
+      `SELECT u.id, u.email, u.name, u.role, u.is_active, u.last_login_at
        FROM user_oauth_accounts oa
        JOIN users u ON u.id = oa.user_id
        WHERE oa.provider = $1 AND oa.provider_id = $2`,
@@ -386,7 +427,9 @@ async function findOrCreateOAuthUser(provider, providerProfile, leadSource = nul
     if (oauthResult.rows.length > 0) {
       const user = oauthResult.rows[0];
       if (!user.is_active) {
-        throw Object.assign(new Error('Account is inactive'), { code: 'INACTIVE' });
+        throw Object.assign(new Error('Account is deactivated'), {
+          code: 'ACCOUNT_DEACTIVATED', userId: user.id, userName: user.name,
+        });
       }
       // Capture first-login status BEFORE updating last_login_at
       const isFirstLogin = !user.last_login_at;
@@ -406,7 +449,7 @@ async function findOrCreateOAuthUser(provider, providerProfile, leadSource = nul
 
     // ── 2. Match by email (link OAuth to existing account) ────
     const emailResult = await client.query(
-      `SELECT id, email, role, is_active, last_login_at FROM users WHERE email = $1`,
+      `SELECT id, email, name, role, is_active, last_login_at FROM users WHERE email = $1`,
       [normalizedEmail]
     );
 
@@ -417,7 +460,9 @@ async function findOrCreateOAuthUser(provider, providerProfile, leadSource = nul
     if (emailResult.rows.length > 0) {
       user = emailResult.rows[0];
       if (!user.is_active) {
-        throw Object.assign(new Error('Account is inactive'), { code: 'INACTIVE' });
+        throw Object.assign(new Error('Account is deactivated'), {
+          code: 'ACCOUNT_DEACTIVATED', userId: user.id, userName: user.name,
+        });
       }
       // Capture first-login status BEFORE the shared last_login_at update below
       isFirstLogin = !user.last_login_at;
@@ -548,6 +593,8 @@ async function _firePasswordResetWebhook(user, resetUrl) {
 module.exports = {
   loginWithPassword,
   restoreAccount,
+  mintRestoreToken,
+  restoreWithToken,
   setPassword,
   forgotPassword,
   resetPassword,
