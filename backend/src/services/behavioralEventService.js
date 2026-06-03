@@ -40,6 +40,7 @@ const { fireContactWebhook } = require('./contactWebhookSender');
 // will be added here once the payment flow is wired.
 const CRM_WEBHOOK_EVENTS = new Set([
   'user_signed_up',
+  'user_restored',   // a deactivated account self-restored (or admin-restored)
 ]);
 
 // One-time per user: skip if a row already exists in behavioral_events

@@ -21,6 +21,11 @@ export default function Login() {
   const [error,         setError]         = useState('');
   const [googleEnabled, setGoogleEnabled] = useState(false);
 
+  // Deactivated-account restore flow
+  const [deactivated, setDeactivated] = useState(null); // { name, message } | null
+  const [restoring,   setRestoring]   = useState(false);
+  const [restoredMsg, setRestoredMsg] = useState('');
+
   // Pick up any OAuth error from query params
   useEffect(() => {
     const errKey = searchParams.get('error');
@@ -47,10 +52,32 @@ export default function Login() {
       // and shows the native "Save password?" prompt.
       window.location.replace('/dashboard');
     } catch (err) {
+      const data = err.response?.data;
+      // Deactivated account (correct password) — offer self-service restore.
+      if (data?.deactivated) {
+        setDeactivated({ name: data.name, message: data.message });
+        setLoading(false);
+        return;
+      }
       // Server returns { error: '...' } for both 401 and first-login 400
-      const msg = err.response?.data?.error || err.response?.data?.message || 'Something went wrong. Please try again.';
+      const msg = data?.error || data?.message || 'Something went wrong. Please try again.';
       setError(msg);
       setLoading(false);
+    }
+  }
+
+  async function handleRestore() {
+    setRestoring(true);
+    setError('');
+    try {
+      const { data } = await api.post('/auth/restore-account', { email, password });
+      setRestoredMsg(`${data.name || 'Account'} restored`);
+      await refetch();
+      setTimeout(() => window.location.replace('/dashboard'), 900);
+    } catch (err) {
+      setError(err.response?.data?.message || err.response?.data?.error || 'Could not restore. Please try again.');
+      setRestoring(false);
+      setDeactivated(null);
     }
   }
 
@@ -78,6 +105,38 @@ export default function Login() {
         {error && (
           <div className="mb-4 px-4 py-3 bg-red-900/40 border border-red-700/50 rounded-lg text-red-300 text-sm">
             {error}
+          </div>
+        )}
+
+        {/* Deactivated → restore prompt */}
+        {deactivated && !restoredMsg && (
+          <div className="mb-4 px-4 py-4 bg-amber-900/30 border border-amber-700/50 rounded-lg">
+            <p className="text-amber-200 text-sm mb-3">{deactivated.message}</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleRestore}
+                disabled={restoring}
+                className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+              >
+                {restoring ? 'Restoring…' : 'Yes, restore'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeactivated(null)}
+                disabled={restoring}
+                className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+              >
+                No
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Restored confirmation */}
+        {restoredMsg && (
+          <div className="mb-4 px-4 py-3 bg-emerald-900/30 border border-emerald-700/50 rounded-lg text-emerald-200 text-sm flex items-center gap-2">
+            <span>✓</span> {restoredMsg}
           </div>
         )}
 

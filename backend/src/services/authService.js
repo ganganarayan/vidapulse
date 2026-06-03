@@ -79,21 +79,34 @@ async function loginWithPassword(email, password) {
   const normalizedEmail = email.toLowerCase().trim();
 
   const result = await pool.query(
-    `SELECT id, email, name, password_hash, password_set, role, is_active, last_login_at
+    `SELECT id, email, name, password_hash, password_set, role, is_active, last_login_at, deactivated_reason
      FROM users WHERE email = $1`,
     [normalizedEmail]
   );
   const user = result.rows[0];
+  const DUMMY_HASH = '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW';
 
-  // Unknown or inactive account — constant-time compare prevents email enumeration.
-  // This is a valid bcrypt hash (cost 12) that will never match any real password
-  // but forces the full work factor so timing is identical to a found account.
-  if (!user || !user.is_active) {
-    await bcrypt.compare(password, '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW');
-    throw Object.assign(
-      new Error('Invalid email or password'),
-      { code: 'INVALID_CREDENTIALS' }
-    );
+  // Unknown account — constant-time compare prevents email enumeration.
+  if (!user) {
+    await bcrypt.compare(password, DUMMY_HASH);
+    throw Object.assign(new Error('Invalid email or password'), { code: 'INVALID_CREDENTIALS' });
+  }
+
+  // Deactivated account — verify the REAL password first so we only reveal the
+  // deactivation (and offer restore) to someone who actually owns the account.
+  // A wrong password still returns the generic invalid-credentials error.
+  if (!user.is_active) {
+    const ok = (user.password_set && user.password_hash)
+      ? await bcrypt.compare(password, user.password_hash)
+      : (await bcrypt.compare(password, DUMMY_HASH), false);
+    if (!ok) {
+      throw Object.assign(new Error('Invalid email or password'), { code: 'INVALID_CREDENTIALS' });
+    }
+    throw Object.assign(new Error('Account deactivated'), {
+      code    : 'ACCOUNT_DEACTIVATED',
+      reason  : user.deactivated_reason || null,
+      userName: user.name || null,
+    });
   }
 
   // ── First login: password_set = FALSE ──────────────────────────────────
@@ -145,6 +158,49 @@ async function loginWithPassword(email, password) {
 
   logger.info(`[authService] Password login: ${normalizedEmail}`);
   return { ...user, first_login: isFirstLogin };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Self-service account restore
+//
+// A deactivated user confirms "Restore?" on the login screen. We re-verify the
+// password (same enumeration-safe rules as login), reactivate the account,
+// fire user_restored, and return the user so the route can log them in.
+// ─────────────────────────────────────────────────────────────
+
+async function restoreAccount(email, password) {
+  const normalizedEmail = email.toLowerCase().trim();
+  const DUMMY_HASH = '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW';
+
+  const { rows: [user] } = await pool.query(
+    `SELECT id, email, name, password_hash, password_set, is_active
+     FROM users WHERE email = $1`,
+    [normalizedEmail]
+  );
+  if (!user) {
+    await bcrypt.compare(password, DUMMY_HASH);
+    throw Object.assign(new Error('Invalid email or password'), { code: 'INVALID_CREDENTIALS' });
+  }
+  if (user.is_active) {
+    throw Object.assign(new Error('Account is already active'), { code: 'ALREADY_ACTIVE' });
+  }
+  const ok = (user.password_set && user.password_hash)
+    ? await bcrypt.compare(password, user.password_hash)
+    : (await bcrypt.compare(password, DUMMY_HASH), false);
+  if (!ok) {
+    throw Object.assign(new Error('Invalid email or password'), { code: 'INVALID_CREDENTIALS' });
+  }
+
+  await pool.query(
+    `UPDATE users
+        SET is_active = TRUE, deactivated_at = NULL, deactivated_reason = NULL,
+            last_login_at = NOW(), updated_at = NOW()
+      WHERE id = $1`,
+    [user.id]
+  );
+  emitEvent(user.id, 'user_restored', null, { email: user.email, restored_by: 'self' });
+  logger.info(`[authService] Account restored (self-service): ${normalizedEmail}`);
+  return { id: user.id, name: user.name, email: user.email };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -491,6 +547,7 @@ async function _firePasswordResetWebhook(user, resetUrl) {
 
 module.exports = {
   loginWithPassword,
+  restoreAccount,
   setPassword,
   forgotPassword,
   resetPassword,

@@ -263,12 +263,58 @@ router.post('/login', async (req, res, next) => {
       redirect   : '/dashboard',
     });
   } catch (err) {
+    if (err.code === 'ACCOUNT_DEACTIVATED') {
+      // Correct password on a deactivated account — offer self-service restore.
+      const msg = err.reason === 'inactivity_180d'
+        ? 'Your account was deactivated after more than 180 days of inactivity.'
+        : 'Your account has been deactivated.';
+      return res.status(403).json({
+        error      : 'account_deactivated',
+        deactivated: true,
+        name       : err.userName || null,
+        message    : `${msg} Would you like to restore it?`,
+      });
+    }
     if (err.code === 'INVALID_CREDENTIALS') {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
     if (err.code === 'VALIDATION_ERROR') {
       // First-login password validation failure (too short, no number)
       return res.status(400).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/auth/restore-account
+//
+// Self-service restore from the login screen. Body: { email, password }.
+// Re-verifies the password, reactivates the account, fires user_restored,
+// and logs the user in (sets the JWT cookie).
+// ─────────────────────────────────────────────────────────────
+
+router.post('/restore-account', async (req, res, next) => {
+  // Reuse the login rate limiter — same brute-force surface.
+  const clientIp = req.ip || 'unknown';
+  if (_loginRateLimited(clientIp)) {
+    return res.status(429).json({ error: 'Too Many Requests', message: 'Too many attempts — please wait 15 minutes.' });
+  }
+  try {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0].message });
+    }
+    const user  = await authService.restoreAccount(parsed.data.email, parsed.data.password);
+    const token = await authService.buildJwt(user.id);
+    authService.setJwtCookie(res, token);
+    return res.json({ ok: true, name: user.name, redirect: '/dashboard' });
+  } catch (err) {
+    if (err.code === 'INVALID_CREDENTIALS') {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    if (err.code === 'ALREADY_ACTIVE') {
+      return res.status(409).json({ error: 'already_active', message: 'This account is already active. Please log in.' });
     }
     next(err);
   }
