@@ -53,7 +53,7 @@ function formatLeadSource(user) {
   const med = (user.signup_utm_medium && String(user.signup_utm_medium).trim()) || null;
   if (path.length === 0 && !src && !med) return null;
   return {
-    primary  : path.length ? path.join(' › ') : (src || med),
+    primary  : path.length ? path.join(' / ') : (src || med),
     secondary: [src, med].filter(Boolean).join(' · ') || null,
   };
 }
@@ -787,7 +787,10 @@ export default function AdminUsers() {
                   <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Plan Expires</th>
                   <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">Videos</th>
                   <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">Last Login</th>
-                  <th className="px-4 py-3 text-left font-medium hidden xl:table-cell">Lead Source</th>
+                  <th className="px-4 py-3 text-left font-medium hidden xl:table-cell">
+                    Lead Source
+                    <span className="block text-[10px] font-normal normal-case tracking-normal text-gray-600">Campaign / Ad Set / Ad</span>
+                  </th>
                   <th className="px-4 py-3 text-right font-medium">Action</th>
                 </tr>
               </thead>
