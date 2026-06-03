@@ -42,6 +42,9 @@ router.get('/me', requireAuth, async (req, res, next) => {
           u.wow_moment_seen,
           u.first_video_id,
           u.created_at,
+          u.previously_purged_at,
+          u.purge_notice_shown,
+          u.previous_login_at,
           u.plan_expires_at,
           u.plan_enrolled_at,
           u.razorpay_subscription_id,
@@ -95,6 +98,9 @@ router.get('/me', requireAuth, async (req, res, next) => {
         wow_moment_seen          : u.wow_moment_seen,
         first_video_id           : u.first_video_id,
         created_at               : u.created_at,
+        previously_purged_at     : u.previously_purged_at ?? null,
+        purge_notice_shown       : u.purge_notice_shown,
+        previous_login_at        : u.previous_login_at ?? null,
         plan_expires_at          : u.plan_expires_at    ?? null,
         plan_enrolled_at         : u.plan_enrolled_at   ?? null,
         razorpay_subscription_id : u.razorpay_subscription_id ?? null,
@@ -106,6 +112,23 @@ router.get('/me', requireAuth, async (req, res, next) => {
         },
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// POST /api/user/purge-notice-ack
+// Marks the one-time "your data was destroyed" notice as shown (after the
+// returning user clicks OK on the popup), so it never appears again.
+// ─────────────────────────────────────────────────────────────────────────
+router.post('/purge-notice-ack', requireAuth, async (req, res, next) => {
+  try {
+    await pool.query(
+      `UPDATE users SET purge_notice_shown = TRUE WHERE id = $1`,
+      [req.user.id]
+    );
+    return res.json({ ok: true });
   } catch (err) {
     next(err);
   }

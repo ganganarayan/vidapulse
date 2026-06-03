@@ -152,7 +152,7 @@ async function loginWithPassword(email, password) {
   const isFirstLogin = !user.last_login_at;
 
   await pool.query(
-    `UPDATE users SET last_login_at = NOW() WHERE id = $1`,
+    `UPDATE users SET previous_login_at = last_login_at, last_login_at = NOW() WHERE id = $1`,
     [user.id]
   );
 
@@ -440,7 +440,7 @@ async function findOrCreateOAuthUser(provider, providerProfile, leadSource = nul
         [normalizedEmail, provider, providerId]
       );
       await client.query(
-        `UPDATE users SET last_login_at = NOW() WHERE id = $1`,
+        `UPDATE users SET previous_login_at = last_login_at, last_login_at = NOW() WHERE id = $1`,
         [user.id]
       );
       await client.query('COMMIT');
@@ -517,11 +517,20 @@ async function findOrCreateOAuthUser(provider, providerProfile, leadSource = nul
          VALUES ($1, $2, $3, $4)`,
         [user.id, provider, providerId, normalizedEmail]
       );
+      // Returning-after-purge: flag the one-time notice if this email was purged.
+      await client.query(
+        `UPDATE users u
+            SET previously_purged_at = pa.purged_at, purge_notice_shown = FALSE
+           FROM (SELECT purged_at FROM purged_accounts
+                  WHERE LOWER(email) = LOWER($2) ORDER BY purged_at DESC LIMIT 1) pa
+          WHERE u.id = $1`,
+        [user.id, normalizedEmail]
+      );
       logger.info(`[authService] New OAuth user (free plan): ${normalizedEmail} via ${provider}`);
     }
 
     await client.query(
-      `UPDATE users SET last_login_at = NOW() WHERE id = $1`,
+      `UPDATE users SET previous_login_at = last_login_at, last_login_at = NOW() WHERE id = $1`,
       [user.id]
     );
     await client.query('COMMIT');

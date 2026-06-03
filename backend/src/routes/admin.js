@@ -33,6 +33,7 @@ const env             = require('../config/env');
 const logger          = require('../config/logger');
 const { requireAuth, requireAdmin } = require('../middleware/requireAuth');
 const { emitEvent }   = require('../services/behavioralEventService');
+const { purgeUsers }  = require('../services/purgeService');
 const { testWebhook } = require('../services/webhookSender');
 const {
   resendQueuedWebhooks,
@@ -724,48 +725,44 @@ router.post('/users/restore', async (req, res, next) => {
 });
 
 // ── POST /api/admin/users/purge ──────────────────────────────────────────────
-// Only purges users that are ALREADY deactivated. Keeps every log.
+// Admin manual purge — only purges users that are ALREADY deactivated. Uses the
+// shared purgeService (same routine as the automatic 180-day purge): keeps every
+// log + payments/subscriptions, logs to purged_accounts, deletes the rest.
 router.post('/users/purge', async (req, res, next) => {
   const parsed = userIdsSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Validation failed', message: 'user_ids must be a non-empty array of UUIDs (max 100)' });
   const ids = [...new Set(parsed.data.user_ids)];
 
-  const client = await pool.connect();
   try {
-    const { rows } = await client.query(`SELECT id, role, is_active FROM users WHERE id = ANY($1::uuid[])`, [ids]);
+    const { rows } = await pool.query(`SELECT id, role, is_active FROM users WHERE id = ANY($1::uuid[])`, [ids]);
     // requireInactive: only deactivated users can be purged.
     const { skipped, actionable } = classifyTargets(ids, rows, req.user.id, { requireInactive: true });
 
     let purged = 0;
     if (actionable.length) {
-      await client.query('BEGIN');
-      // Preserve logs by unlinking the user pointer BEFORE deleting the user, so
-      // the cascade never reaches them (the row no longer references the user).
-      //   • behavioral_events (CASCADE) — keep as activity log
-      //   • webhook_logs.result_user_id (RESTRICT) — keep inbound webhook log
-      await client.query(`UPDATE behavioral_events SET user_id = NULL WHERE user_id = ANY($1::uuid[])`, [actionable]);
-      await client.query(`UPDATE webhook_logs SET result_user_id = NULL WHERE result_user_id = ANY($1::uuid[])`, [actionable]);
-      // Legacy impersonation-session rows have NOT NULL FKs (can't unlink) and are
-      // unused; the audit trail lives in admin_impersonation_log (kept via SET NULL).
-      await client.query(`DELETE FROM admin_impersonation_sessions WHERE target_user_id = ANY($1::uuid[]) OR admin_user_id = ANY($1::uuid[])`, [actionable]);
-
-      // Final delete — data tables cascade; SET-NULL logs (payments, contact/
-      // outbound webhook logs, cta_click_logs, impersonation audit) auto-survive.
-      const del = await client.query(
-        `DELETE FROM users WHERE id = ANY($1::uuid[]) AND role <> 'admin' AND is_active = FALSE`,
-        [actionable]
-      );
-      purged = del.rowCount;
-      await client.query('COMMIT');
+      purged = await purgeUsers(actionable, 'manual');
       logger.warn(`[admin] PURGED ${purged} user(s) (data deleted, logs kept) by admin ${req.user.id}: ${actionable.join(', ')}`);
     }
     return res.json({ purged, skipped });
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
     next(err);
-  } finally {
-    client.release();
   }
+});
+
+// ── GET /api/admin/purged-accounts ───────────────────────────────────────────
+// Purge history (manual + automatic). Data is gone; this is the record.
+router.get('/purged-accounts', async (req, res, next) => {
+  try {
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit ?? '50', 10) || 50));
+    const { rows } = await pool.query(
+      `SELECT email, name, reason, original_created_at, purged_at
+         FROM purged_accounts
+        ORDER BY purged_at DESC
+        LIMIT $1`,
+      [limit]
+    );
+    return res.json({ purged: rows });
+  } catch (err) { next(err); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

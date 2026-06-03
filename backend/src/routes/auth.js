@@ -510,6 +510,17 @@ router.post('/register', async (req, res, next) => {
         [user.id]
       );
 
+      // Returning-after-purge: if this email was purged before, flag the
+      // one-time "your data was destroyed" notice on the new account.
+      await client.query(
+        `UPDATE users u
+            SET previously_purged_at = pa.purged_at, purge_notice_shown = FALSE
+           FROM (SELECT purged_at FROM purged_accounts
+                  WHERE LOWER(email) = LOWER($2) ORDER BY purged_at DESC LIMIT 1) pa
+          WHERE u.id = $1`,
+        [user.id, normalizedEmail]
+      );
+
       await client.query('COMMIT');
 
       const token = await authService.buildJwt(user.id);
