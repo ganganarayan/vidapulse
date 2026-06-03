@@ -8,7 +8,7 @@
  * Usage:
  *   initPixel()                                           ← call once at app boot
  *   pixelPageView()                                       ← on every route change
- *   pixelTrack('CompleteRegistration')                    ← after free signup
+ *   pixelTrack('Lead')                                    ← after free signup
  *   pixelTrack('Purchase', { value: 999, currency: 'INR' }) ← after paid plan activates
  */
 

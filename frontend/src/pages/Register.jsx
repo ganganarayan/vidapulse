@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { pixelTrack } from '../lib/pixel';
@@ -12,8 +12,12 @@ import { getLeadSource, clearLeadSource } from '../lib/leadSource';
 export default function Register() {
   const navigate = useNavigate();
   const { refetch } = useAuth();
+  const [searchParams] = useSearchParams();
 
-  const [email,     setEmail]     = useState('');
+  // Prefill email from the link (?email=...) — forwarded by the CTA tracking
+  // redirect from the landing opt-in / Thank-You button / registration email.
+  const prefillEmail = (searchParams.get('email') || '').trim();
+  const [email,     setEmail]     = useState(prefillEmail);
   const [password,  setPassword]  = useState('');
   const [confirm,   setConfirm]   = useState('');
   const [showPw,    setShowPw]    = useState(false);
@@ -53,7 +57,7 @@ export default function Register() {
       });
       clearLeadSource();
       await refetch();
-      pixelTrack('CompleteRegistration');
+      pixelTrack('Lead');
       navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err.response?.data?.message ?? 'Registration failed. Please try again.');

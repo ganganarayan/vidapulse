@@ -132,12 +132,17 @@ function lookupCountry(ip) {
 // returned unchanged — the redirect must never break because of this.
 const UTM_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
 
+// Params carried through the CTA redirect onto the destination. utm_* keep
+// campaign attribution; `email` lets the landing opt-in / Thank-You button /
+// registration email prefill the register form (e.g. /register?email=lead@x.com).
+const FORWARD_PARAMS = [...UTM_PARAMS, 'email'];
+
 function mergeUtmIntoUrl(destUrl, query) {
   if (!destUrl || !query) return destUrl;
-  if (!UTM_PARAMS.some(k => typeof query[k] === 'string' && query[k])) return destUrl; // nothing to forward
+  if (!FORWARD_PARAMS.some(k => typeof query[k] === 'string' && query[k])) return destUrl; // nothing to forward
   try {
     const u = new URL(destUrl);
-    for (const k of UTM_PARAMS) {
+    for (const k of FORWARD_PARAMS) {
       const v = query[k];
       if (typeof v === 'string' && v && !u.searchParams.has(k)) {
         u.searchParams.set(k, v.slice(0, 300));
