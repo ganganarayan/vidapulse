@@ -32,6 +32,7 @@ const { pool }        = require('../config/database');
 const env             = require('../config/env');
 const logger          = require('../config/logger');
 const { requireAuth, requireAdmin } = require('../middleware/requireAuth');
+const { emitEvent }   = require('../services/behavioralEventService');
 const { testWebhook } = require('../services/webhookSender');
 const {
   resendQueuedWebhooks,
@@ -476,8 +477,16 @@ router.get('/users', async (req, res, next) => {
     const search = (req.query.search ?? '').trim();
     const offset = (page - 1) * limit;
 
+    // status filter: 'active' (is_active=TRUE) | 'deactivated' (is_active=FALSE)
+    // | omitted (all). Lets the UI show the active list and the Deactivated
+    // section as two independent, paginated queries.
+    const status = req.query.status;
+
     const params  = [];
     let   whereClause = `WHERE u.role != 'admin'`; // Never list admin accounts
+
+    if (status === 'active')      whereClause += ` AND u.is_active = TRUE`;
+    else if (status === 'deactivated') whereClause += ` AND u.is_active = FALSE`;
 
     if (search) {
       params.push(`%${search}%`);
@@ -507,6 +516,8 @@ router.get('/users', async (req, res, next) => {
          u.last_login_at,
          u.last_seen_at,
          u.plan_expires_at,
+         u.deactivated_at,
+         u.deactivated_reason,
          u.signup_utm_source,
          u.signup_utm_medium,
          u.signup_utm_campaign,
@@ -624,79 +635,131 @@ router.patch('/users/:id/plan', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/admin/users/delete
+// User deactivation lifecycle — deactivate → (restore | purge)
 //
-// Bulk hard-delete subscriber accounts. IRREVERSIBLE — removes each user and
-// all their data (videos, sessions, preferences, …) via ON DELETE CASCADE.
+// deactivate : soft — sets is_active=FALSE + deactivated_at/reason. ALL data
+//              kept. Blocks login (requireAuth/login already gate is_active).
+// restore    : reactivate a deactivated user (is_active=TRUE, clears markers)
+//              and fire a user_restored event.
+// purge      : IRREVERSIBLE hard-delete of a *deactivated* user's data. Logs are
+//              always kept — webhook logs, CTA click logs (own table), payments,
+//              subscription history, behavioral events, impersonation audit all
+//              survive (their user pointer is unlinked, the row stays).
 //
-// Guards: admin-only (requireAdmin already applied); never deletes an admin
-// account; never deletes the calling admin's own account.
-//
-// A few FK references to users are RESTRICT / NO ACTION (webhook_logs,
-// admin_impersonation_sessions) — those are cleaned up first inside the
-// transaction so the final DELETE can succeed.
-//
-// Body   : { user_ids: string[] }  (UUIDs, 1–100)
-// Returns: { deleted: number, skipped: [{ id, reason }] }
+// All three: admin-only, never act on an admin account or the caller's own.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const deleteUsersSchema = z.object({
+const userIdsSchema = z.object({
   user_ids: z.array(z.string().uuid()).min(1).max(100),
 });
 
-router.post('/users/delete', async (req, res, next) => {
-  const parsed = deleteUsersSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({
-      error  : 'Validation failed',
-      message: 'user_ids must be a non-empty array of UUIDs (max 100)',
-    });
+// Split requested ids into actionable vs skipped (with reason). `requireActive`
+// / `requireInactive` enforce the correct lifecycle state for the action.
+function classifyTargets(ids, rows, callerId, { requireActive, requireInactive } = {}) {
+  const found = new Map(rows.map(t => [t.id, t]));
+  const skipped = [], actionable = [];
+  for (const id of ids) {
+    const t = found.get(id);
+    if (!t)                                  { skipped.push({ id, reason: 'not_found' }); continue; }
+    if (t.role === 'admin')                  { skipped.push({ id, reason: 'is_admin'  }); continue; }
+    if (id === callerId)                     { skipped.push({ id, reason: 'self'      }); continue; }
+    if (requireActive   && !t.is_active)     { skipped.push({ id, reason: 'already_deactivated' }); continue; }
+    if (requireInactive &&  t.is_active)     { skipped.push({ id, reason: 'not_deactivated' });     continue; }
+    actionable.push(id);
   }
+  return { skipped, actionable };
+}
+
+// ── POST /api/admin/users/deactivate ─────────────────────────────────────────
+router.post('/users/deactivate', async (req, res, next) => {
+  const parsed = userIdsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Validation failed', message: 'user_ids must be a non-empty array of UUIDs (max 100)' });
+  const ids = [...new Set(parsed.data.user_ids)];
+  try {
+    const { rows } = await pool.query(`SELECT id, role, is_active FROM users WHERE id = ANY($1::uuid[])`, [ids]);
+    const { skipped, actionable } = classifyTargets(ids, rows, req.user.id, { requireActive: true });
+
+    let deactivated = 0;
+    if (actionable.length) {
+      const r = await pool.query(
+        `UPDATE users
+            SET is_active = FALSE, deactivated_at = NOW(), deactivated_reason = 'manual', updated_at = NOW()
+          WHERE id = ANY($1::uuid[]) AND role <> 'admin' AND is_active = TRUE`,
+        [actionable]
+      );
+      deactivated = r.rowCount;
+      logger.info(`[admin] Deactivated ${deactivated} user(s) by admin ${req.user.id}`);
+    }
+    return res.json({ deactivated, skipped });
+  } catch (err) { next(err); }
+});
+
+// ── POST /api/admin/users/restore ────────────────────────────────────────────
+router.post('/users/restore', async (req, res, next) => {
+  const parsed = userIdsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Validation failed', message: 'user_ids must be a non-empty array of UUIDs (max 100)' });
+  const ids = [...new Set(parsed.data.user_ids)];
+  try {
+    const { rows } = await pool.query(`SELECT id, role, is_active FROM users WHERE id = ANY($1::uuid[])`, [ids]);
+    const { skipped, actionable } = classifyTargets(ids, rows, req.user.id, { requireInactive: true });
+
+    let restored = 0;
+    if (actionable.length) {
+      const r = await pool.query(
+        `UPDATE users
+            SET is_active = TRUE, deactivated_at = NULL, deactivated_reason = NULL, updated_at = NOW()
+          WHERE id = ANY($1::uuid[]) AND role <> 'admin'
+        RETURNING id, name, email`,
+        [actionable]
+      );
+      restored = r.rowCount;
+      // Fire user_restored for each (non-blocking). Event registered in M5.
+      for (const u of r.rows) {
+        emitEvent(u.id, 'user_restored', null, { email: u.email, restored_by: 'admin' });
+      }
+      logger.info(`[admin] Restored ${restored} user(s) by admin ${req.user.id}`);
+    }
+    return res.json({ restored, skipped });
+  } catch (err) { next(err); }
+});
+
+// ── POST /api/admin/users/purge ──────────────────────────────────────────────
+// Only purges users that are ALREADY deactivated. Keeps every log.
+router.post('/users/purge', async (req, res, next) => {
+  const parsed = userIdsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Validation failed', message: 'user_ids must be a non-empty array of UUIDs (max 100)' });
   const ids = [...new Set(parsed.data.user_ids)];
 
   const client = await pool.connect();
   try {
-    // Classify the requested ids: which exist, which are protected.
-    const { rows: targets } = await client.query(
-      `SELECT id, email, role FROM users WHERE id = ANY($1::uuid[])`,
-      [ids]
-    );
-    const found = new Map(targets.map(t => [t.id, t]));
+    const { rows } = await client.query(`SELECT id, role, is_active FROM users WHERE id = ANY($1::uuid[])`, [ids]);
+    // requireInactive: only deactivated users can be purged.
+    const { skipped, actionable } = classifyTargets(ids, rows, req.user.id, { requireInactive: true });
 
-    const skipped   = [];
-    const deletable = [];
-    for (const id of ids) {
-      const t = found.get(id);
-      if (!t)                  { skipped.push({ id, reason: 'not_found' }); continue; }
-      if (t.role === 'admin')  { skipped.push({ id, reason: 'is_admin'  }); continue; }
-      if (id === req.user.id)  { skipped.push({ id, reason: 'self'      }); continue; }
-      deletable.push(id);
-    }
-
-    let deleted = 0;
-    if (deletable.length) {
+    let purged = 0;
+    if (actionable.length) {
       await client.query('BEGIN');
-      // Clear the RESTRICT / NO-ACTION references that would block the delete.
-      await client.query(
-        `DELETE FROM admin_impersonation_sessions
-          WHERE target_user_id = ANY($1::uuid[]) OR admin_user_id = ANY($1::uuid[])`,
-        [deletable]
-      );
-      await client.query(
-        `UPDATE webhook_logs SET result_user_id = NULL WHERE result_user_id = ANY($1::uuid[])`,
-        [deletable]
-      );
-      // Final delete — everything else cascades. Re-assert role guard in SQL.
-      const del = await client.query(
-        `DELETE FROM users WHERE id = ANY($1::uuid[]) AND role <> 'admin'`,
-        [deletable]
-      );
-      deleted = del.rowCount;
-      await client.query('COMMIT');
-      logger.warn(`[admin] Hard-deleted ${deleted} user(s) by admin ${req.user.id}: ${deletable.join(', ')}`);
-    }
+      // Preserve logs by unlinking the user pointer BEFORE deleting the user, so
+      // the cascade never reaches them (the row no longer references the user).
+      //   • behavioral_events (CASCADE) — keep as activity log
+      //   • webhook_logs.result_user_id (RESTRICT) — keep inbound webhook log
+      await client.query(`UPDATE behavioral_events SET user_id = NULL WHERE user_id = ANY($1::uuid[])`, [actionable]);
+      await client.query(`UPDATE webhook_logs SET result_user_id = NULL WHERE result_user_id = ANY($1::uuid[])`, [actionable]);
+      // Legacy impersonation-session rows have NOT NULL FKs (can't unlink) and are
+      // unused; the audit trail lives in admin_impersonation_log (kept via SET NULL).
+      await client.query(`DELETE FROM admin_impersonation_sessions WHERE target_user_id = ANY($1::uuid[]) OR admin_user_id = ANY($1::uuid[])`, [actionable]);
 
-    return res.json({ deleted, skipped });
+      // Final delete — data tables cascade; SET-NULL logs (payments, contact/
+      // outbound webhook logs, cta_click_logs, impersonation audit) auto-survive.
+      const del = await client.query(
+        `DELETE FROM users WHERE id = ANY($1::uuid[]) AND role <> 'admin' AND is_active = FALSE`,
+        [actionable]
+      );
+      purged = del.rowCount;
+      await client.query('COMMIT');
+      logger.warn(`[admin] PURGED ${purged} user(s) (data deleted, logs kept) by admin ${req.user.id}: ${actionable.join(', ')}`);
+    }
+    return res.json({ purged, skipped });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     next(err);
