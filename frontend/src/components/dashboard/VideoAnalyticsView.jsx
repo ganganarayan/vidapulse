@@ -62,7 +62,7 @@ const VIEW_LABELS = {
   rewatches     : 'Re-watches',
   heatmap       : 'Engagement Heatmap',
   stories       : 'Viewer Stories',
-  insights      : 'Insights',
+  insights      : 'AI Insights',
   geography     : 'Geography',
   devices       : 'Devices',
   browsers      : 'Browsers',
@@ -293,7 +293,7 @@ export default function VideoAnalyticsView({
               <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
                 Engagement
               </p>
-              <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Insights <PlanTierBadge plan="pro" userPlan={user?.plan} /></h2>
+              <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">AI Insights <PlanTierBadge plan="pro" userPlan={user?.plan} /></h2>
               <p className="text-xs text-gray-400 mt-1">
                 Actionable recommendations generated from your audience data.
               </p>
