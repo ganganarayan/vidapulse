@@ -480,7 +480,7 @@ async function _logMagicLink({ userId = null, urlSentTo, params = {}, status,
 
 router.post('/magic-link', async (req, res, next) => {
   try {
-    const { email, name, secret } = req.body ?? {};
+    const { email, name, phone, secret } = req.body ?? {};
 
     // Constant-time secret check
     let secretOk = false;
@@ -518,18 +518,29 @@ router.post('/magic-link', async (req, res, next) => {
       return res.status(400).json({ error: 'Validation Error', message: 'Enter a valid email address' });
     }
 
-    const finalName = (name && String(name).trim()) || normalizedEmail.split('@')[0];
+    const reqName  = (name  && String(name).trim())  || '';
+    const reqPhone = (phone && String(phone).trim()) || null;
+    const finalName = reqName || normalizedEmail.split('@')[0];
 
     // Find or create user
     let userId;
     let isNew = false;
+    let storedName  = null;
+    let storedPhone = null;
 
     const { rows: existing } = await pool.query(
-      `SELECT id FROM users WHERE email = $1 LIMIT 1`, [normalizedEmail]
+      `SELECT id, name, phone FROM users WHERE email = $1 LIMIT 1`, [normalizedEmail]
     );
 
     if (existing.length > 0) {
-      userId = existing[0].id;
+      userId      = existing[0].id;
+      storedName  = existing[0].name;
+      storedPhone = existing[0].phone;
+      // Backfill phone if the CRM now supplies one and we don't have it yet.
+      if (reqPhone && !storedPhone) {
+        await pool.query(`UPDATE users SET phone = $1 WHERE id = $2`, [reqPhone, userId]);
+        storedPhone = reqPhone;
+      }
     } else {
       // Create new free subscriber (no password — passwordless entry)
       const client = await pool.connect();
@@ -542,12 +553,13 @@ router.post('/magic-link', async (req, res, next) => {
         if (!plans.length) throw new Error('Free plan not found');
 
         const { rows: [newUser] } = await client.query(
-          `INSERT INTO users (email, name, plan_id, role, password_set, created_via)
-           VALUES ($1, $2, $3, 'subscriber', FALSE, 'magic_link')
+          `INSERT INTO users (email, name, phone, plan_id, role, password_set, created_via)
+           VALUES ($1, $2, $3, $4, 'subscriber', FALSE, 'magic_link')
            RETURNING id`,
-          [normalizedEmail, finalName, plans[0].id]
+          [normalizedEmail, finalName, reqPhone, plans[0].id]
         );
         userId = newUser.id;
+        storedPhone = reqPhone;
 
         await client.query(
           `INSERT INTO user_preferences (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [userId]
@@ -609,12 +621,15 @@ router.post('/magic-link', async (req, res, next) => {
     // It receives the login_url so an external automation (email/WhatsApp)
     // can deliver the link to the user. Every outcome is logged to the
     // Contact Webhook Log. Never throws — failures are logged only.
+    // Payload shape MUST match the CRM's field mapping exactly — every key is
+    // prefixed with "contact." (dot-key strings, not nested objects).
     const deliveryPayload = {
-      user_id  : userId,
-      email    : normalizedEmail,
-      name     : finalName,
-      token,
-      login_url: loginUrl,
+      'contact.user_id'      : userId,
+      'contact.contact_email': normalizedEmail,
+      'contact.contact_name' : (storedName && !reqName) ? storedName : finalName,
+      'contact.contact_phone': storedPhone || '',
+      'contact.token'        : token,
+      'contact.login_url'    : loginUrl,
     };
 
     (async () => {
