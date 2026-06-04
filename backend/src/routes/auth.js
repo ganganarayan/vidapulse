@@ -443,6 +443,206 @@ router.post('/logout', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// POST /api/auth/magic-link
+//
+// Server-to-server webhook called by the landing-page / Pabbly flow.
+// Secured with WEBHOOK_SECRET (same pattern as /bootstrap).
+//
+// Body: { email, name, secret }
+//
+// Behaviour:
+//   • Find-or-create user by email (idempotent — retries are safe).
+//   • Invalidate any existing active magic_link tokens for that user.
+//   • Mint a new single-use, 24-hour token.
+//   • Fire user_signed_up + contact webhook ONLY for brand-new users.
+//   • Return { user_id, email, token, login_url }.
+// ─────────────────────────────────────────────────────────────
+
+router.post('/magic-link', async (req, res, next) => {
+  try {
+    const { email, name, secret } = req.body ?? {};
+
+    // Constant-time secret check
+    let secretOk = false;
+    try {
+      secretOk = crypto.timingSafeEqual(
+        Buffer.from(String(secret ?? '').padEnd(env.WEBHOOK_SECRET.length)),
+        Buffer.from(env.WEBHOOK_SECRET)
+      ) && String(secret ?? '').length === env.WEBHOOK_SECRET.length;
+    } catch { secretOk = false; }
+
+    if (!secretOk) {
+      return res.status(403).json({ error: 'Forbidden', message: 'Invalid secret' });
+    }
+
+    if (!email) {
+      return res.status(400).json({ error: 'Validation Error', message: 'email is required' });
+    }
+
+    const normalizedEmail = String(email).toLowerCase().trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return res.status(400).json({ error: 'Validation Error', message: 'Enter a valid email address' });
+    }
+
+    const finalName = (name && String(name).trim()) || normalizedEmail.split('@')[0];
+
+    // Find or create user
+    let userId;
+    let isNew = false;
+
+    const { rows: existing } = await pool.query(
+      `SELECT id FROM users WHERE email = $1 LIMIT 1`, [normalizedEmail]
+    );
+
+    if (existing.length > 0) {
+      userId = existing[0].id;
+    } else {
+      // Create new free subscriber (no password — passwordless entry)
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        const { rows: plans } = await client.query(
+          `SELECT id FROM plans WHERE name = 'free' AND is_active = TRUE LIMIT 1`
+        );
+        if (!plans.length) throw new Error('Free plan not found');
+
+        const { rows: [newUser] } = await client.query(
+          `INSERT INTO users (email, name, plan_id, role, password_set, created_via)
+           VALUES ($1, $2, $3, 'subscriber', FALSE, 'magic_link')
+           RETURNING id`,
+          [normalizedEmail, finalName, plans[0].id]
+        );
+        userId = newUser.id;
+
+        await client.query(
+          `INSERT INTO user_preferences (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [userId]
+        );
+        await client.query(
+          `INSERT INTO onboarding_state (user_id, signed_up_at) VALUES ($1, NOW()) ON CONFLICT DO NOTHING`,
+          [userId]
+        );
+
+        // Returning-after-purge notice
+        await client.query(
+          `UPDATE users u
+              SET previously_purged_at = pa.purged_at, purge_notice_shown = FALSE
+             FROM (SELECT purged_at FROM purged_accounts
+                    WHERE LOWER(email) = LOWER($2) ORDER BY purged_at DESC LIMIT 1) pa
+            WHERE u.id = $1`,
+          [userId, normalizedEmail]
+        );
+
+        await client.query('COMMIT');
+        isNew = true;
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+
+      // Fire signup events only for genuinely new users
+      emitEvent(userId, 'user_signed_up', null, {
+        signup_source: 'magic_link',
+        email        : normalizedEmail,
+        plan         : 'free',
+      });
+      logger.info(`[auth/magic-link] New subscriber created: ${normalizedEmail}`);
+    }
+
+    // Invalidate any previous active magic_link tokens for this user
+    await pool.query(
+      `UPDATE auth_tokens SET used_at = NOW()
+        WHERE user_id = $1 AND purpose = 'magic_link' AND used_at IS NULL`,
+      [userId]
+    );
+
+    // Mint new single-use 24-hour token
+    const token = crypto.randomBytes(48).toString('hex');
+    await pool.query(
+      `INSERT INTO auth_tokens (user_id, token, purpose, expires_at)
+       VALUES ($1, $2, 'magic_link', NOW() + INTERVAL '24 hours')`,
+      [userId, token]
+    );
+
+    const loginUrl = `${env.APP_URL}/auth?token=${token}`;
+
+    logger.info(`[auth/magic-link] Token minted for ${normalizedEmail} (${isNew ? 'new' : 'existing'} user)`);
+
+    return res.json({
+      user_id  : userId,
+      email    : normalizedEmail,
+      token,
+      login_url: loginUrl,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/auth/magic-link/consume
+//
+// Called by the /auth frontend page when the user clicks their link.
+// Body: { token }
+//
+// Validates the magic_link token, burns it, sets the JWT cookie.
+// Returns { ok, password_set, redirect } on success.
+// Returns { ok: false, reason: 'expired' | 'invalid' } on failure.
+// ─────────────────────────────────────────────────────────────
+
+router.post('/magic-link/consume', async (req, res, next) => {
+  try {
+    const { token } = req.body ?? {};
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ ok: false, reason: 'invalid', message: 'token is required' });
+    }
+
+    // Look up valid, unexpired, unused token
+    const { rows: [row] } = await pool.query(
+      `SELECT t.id, t.user_id, t.expires_at, u.password_set, u.is_active
+         FROM auth_tokens t
+         JOIN users u ON u.id = t.user_id
+        WHERE t.token = $1 AND t.purpose = 'magic_link' AND t.used_at IS NULL
+        LIMIT 1`,
+      [token]
+    );
+
+    if (!row) {
+      return res.status(400).json({ ok: false, reason: 'invalid', message: 'This link is invalid.' });
+    }
+
+    if (new Date(row.expires_at) < new Date()) {
+      return res.status(400).json({ ok: false, reason: 'expired', message: 'This link has expired.' });
+    }
+
+    if (!row.is_active) {
+      // Deactivated — burn the token and let the login page handle restore
+      await pool.query(`UPDATE auth_tokens SET used_at = NOW() WHERE id = $1`, [row.id]);
+      return res.status(403).json({ ok: false, reason: 'deactivated', message: 'Account deactivated.' });
+    }
+
+    // Burn the token
+    await pool.query(`UPDATE auth_tokens SET used_at = NOW() WHERE id = $1`, [row.id]);
+
+    const jwt = await authService.buildJwt(row.user_id);
+    authService.setJwtCookie(res, jwt);
+
+    logger.info(`[auth/magic-link/consume] User ${row.user_id} logged in via magic link`);
+
+    return res.json({
+      ok          : true,
+      password_set: !!row.password_set,
+      redirect    : '/dashboard',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
 // POST /api/auth/register
 //
 // Self-signup: creates a free subscriber account and logs in.
