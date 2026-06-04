@@ -568,6 +568,11 @@ function LogRow({ row, selected, onToggle, onRefresh }) {
         {/* Actions */}
         <td className="px-3 py-3 align-top" onClick={e => e.stopPropagation()}>
           <div className="flex flex-col gap-1.5">
+            {/* Magic-link rows are delivery records, not contact-webhook fires — not retryable */}
+            {String(row.event_key).startsWith('magic_link') ? (
+              <span className="text-[10px] text-gray-600">—</span>
+            ) : (
+            <>
             {/* Retry — always visible */}
             <button
               onClick={handleRetry}
@@ -605,6 +610,8 @@ function LogRow({ row, selected, onToggle, onRefresh }) {
               <span className={`text-[10px] font-mono ${rowMsg === '✓' ? 'text-emerald-400' : 'text-red-400'}`}>
                 {rowMsg}
               </span>
+            )}
+            </>
             )}
           </div>
         </td>

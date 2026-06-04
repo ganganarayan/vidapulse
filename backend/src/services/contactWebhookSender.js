@@ -194,7 +194,7 @@ async function getContactWebhookStatus() {
   const [settingsRes, queuedRes, failedRes] = await Promise.all([
     pool.query(`SELECT contact_webhook_paused, contact_webhook_paused_at, contact_webhook_paused_reason FROM webhook_settings LIMIT 1`),
     pool.query(`SELECT COUNT(*)::int AS cnt FROM contact_webhook_log WHERE status = 'queued'`),
-    pool.query(`SELECT COUNT(*)::int AS cnt FROM contact_webhook_log WHERE status = 'failed'`),
+    pool.query(`SELECT COUNT(*)::int AS cnt FROM contact_webhook_log WHERE status = 'failed' AND event_key NOT LIKE 'magic_link%'`),
   ]);
   const s = settingsRes.rows[0] ?? {};
   return {
@@ -221,7 +221,9 @@ async function resendFailedWebhooks() {
     }
 
     const { rows: entries } = await pool.query(
-      `SELECT * FROM contact_webhook_log WHERE status = 'failed' ORDER BY sent_at ASC`
+      `SELECT * FROM contact_webhook_log
+        WHERE status = 'failed' AND event_key NOT LIKE 'magic_link%'
+        ORDER BY sent_at ASC`
     );
 
     let sent = 0, failed = 0;
@@ -506,6 +508,11 @@ async function retryWebhookEntry(logId) {
       `SELECT * FROM contact_webhook_log WHERE id = $1`, [logId]
     );
     if (!entry) return { ok: false, statusCode: 0, errorMessage: 'Entry not found' };
+
+    // Magic-link rows are not contact-webhook fires — never re-fire them here.
+    if (entry.event_key && entry.event_key.startsWith('magic_link')) {
+      return { ok: false, statusCode: 0, errorMessage: 'Magic-link entries cannot be retried here.' };
+    }
 
     const settings = await _loadSettings();
     if (!settings?.webhook_url) {

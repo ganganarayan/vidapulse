@@ -459,6 +459,25 @@ router.post('/logout', (req, res) => {
 //   • Return { user_id, email, token, login_url }.
 // ─────────────────────────────────────────────────────────────
 
+// Log a magic-link webhook row into contact_webhook_log so it shows in the
+// Admin → Contact Webhook Log UI alongside every other webhook. event_key is
+// always 'magic_link' — the retry/resend/failed-count machinery explicitly
+// skips this prefix so these rows are never re-fired to the contact webhook.
+async function _logMagicLink({ userId = null, urlSentTo, params = {}, status,
+                               responseStatus = null, responseBody = null, errorMessage = null }) {
+  try {
+    await pool.query(
+      `INSERT INTO contact_webhook_log
+         (event_key, user_id, url_sent_to, params_sent,
+          status, response_status, response_body, error_message, sent_at, response_at)
+       VALUES ('magic_link', $1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+      [userId, urlSentTo, JSON.stringify(params), status, responseStatus, responseBody, errorMessage]
+    );
+  } catch (e) {
+    logger.warn(`[auth/magic-link] log insert failed: ${e.message}`);
+  }
+}
+
 router.post('/magic-link', async (req, res, next) => {
   try {
     const { email, name, secret } = req.body ?? {};
@@ -473,15 +492,29 @@ router.post('/magic-link', async (req, res, next) => {
     } catch { secretOk = false; }
 
     if (!secretOk) {
+      await _logMagicLink({
+        urlSentTo   : '— (rejected before delivery)',
+        params      : { email: typeof email === 'string' ? email : null, name: typeof name === 'string' ? name : null },
+        status      : 'failed',
+        errorMessage: 'Invalid or missing secret — request rejected (403)',
+      });
       return res.status(403).json({ error: 'Forbidden', message: 'Invalid secret' });
     }
 
     if (!email) {
+      await _logMagicLink({
+        urlSentTo: '— (rejected before delivery)', params: {},
+        status: 'failed', errorMessage: 'email is required (400)',
+      });
       return res.status(400).json({ error: 'Validation Error', message: 'email is required' });
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      await _logMagicLink({
+        urlSentTo: '— (rejected before delivery)', params: { email: normalizedEmail },
+        status: 'failed', errorMessage: 'Invalid email address (400)',
+      });
       return res.status(400).json({ error: 'Validation Error', message: 'Enter a valid email address' });
     }
 
@@ -574,32 +607,43 @@ router.post('/magic-link', async (req, res, next) => {
     // ── Fire outbound delivery webhook (non-blocking) ─────────────────────
     // The admin configures this URL in Admin → Webhook Settings → Magic Link.
     // It receives the login_url so an external automation (email/WhatsApp)
-    // can deliver the link to the user. Never throws — failure is logged only.
+    // can deliver the link to the user. Every outcome is logged to the
+    // Contact Webhook Log. Never throws — failures are logged only.
+    const deliveryPayload = {
+      user_id  : userId,
+      email    : normalizedEmail,
+      name     : finalName,
+      token,
+      login_url: loginUrl,
+    };
+
     (async () => {
       try {
         const { rows: [ws] } = await pool.query(
           `SELECT magic_link_webhook_url, api_token FROM webhook_settings LIMIT 1`
         );
         const deliveryUrl = ws?.magic_link_webhook_url;
-        if (!deliveryUrl) return; // not configured yet — skip silently
 
-        const payload = JSON.stringify({
-          user_id  : userId,
-          email    : normalizedEmail,
-          name     : finalName,
-          token,
-          login_url: loginUrl,
-        });
+        if (!deliveryUrl) {
+          await _logMagicLink({
+            userId, urlSentTo: '— (delivery URL not configured)', params: deliveryPayload,
+            status: 'failed',
+            errorMessage: 'Magic Link Delivery Webhook URL not set in Admin → Webhook Settings',
+          });
+          logger.warn('[auth/magic-link] No delivery webhook URL configured — token minted but not delivered.');
+          return;
+        }
 
-        const parsed   = new URL(deliveryUrl);
-        const headers  = {
+        const payload = JSON.stringify(deliveryPayload);
+        const parsed  = new URL(deliveryUrl);
+        const headers = {
           'Content-Type'  : 'application/json',
           'Content-Length': Buffer.byteLength(payload),
         };
         if (ws.api_token) headers['Authorization'] = `Bearer ${ws.api_token}`;
 
-        await new Promise((resolve, reject) => {
-          const req = https.request(
+        const result = await new Promise((resolve, reject) => {
+          const r = https.request(
             {
               hostname: parsed.hostname,
               path    : parsed.pathname + parsed.search,
@@ -607,19 +651,32 @@ router.post('/magic-link', async (req, res, next) => {
               headers,
               timeout : 10000,
             },
-            res => {
-              res.resume(); // drain
-              resolve(res.statusCode);
+            resp => {
+              let body = '';
+              resp.on('data', c => { if (body.length < 4000) body += c; });
+              resp.on('end', () => resolve({ code: resp.statusCode, body }));
             }
           );
-          req.on('error',   reject);
-          req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-          req.write(payload);
-          req.end();
-        }).then(code => {
-          logger.info(`[auth/magic-link] Delivery webhook → ${deliveryUrl} — HTTP ${code}`);
+          r.on('error',   reject);
+          r.on('timeout', () => { r.destroy(); reject(new Error('timeout')); });
+          r.write(payload);
+          r.end();
         });
+
+        const ok = result.code >= 200 && result.code < 300;
+        await _logMagicLink({
+          userId, urlSentTo: deliveryUrl, params: deliveryPayload,
+          status        : ok ? 'sent' : 'failed',
+          responseStatus: result.code,
+          responseBody  : result.body || null,
+          errorMessage  : ok ? null : `Delivery endpoint returned HTTP ${result.code}`,
+        });
+        logger.info(`[auth/magic-link] Delivery webhook → ${deliveryUrl} — HTTP ${result.code}`);
       } catch (err) {
+        await _logMagicLink({
+          userId, urlSentTo: 'magic_link_webhook_url', params: deliveryPayload,
+          status: 'failed', errorMessage: `Delivery failed: ${err.message}`,
+        });
         logger.warn(`[auth/magic-link] Delivery webhook failed: ${err.message}`);
       }
     })();
