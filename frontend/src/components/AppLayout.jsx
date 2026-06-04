@@ -329,7 +329,7 @@ export function VideoSidebar({ video, activeView, onViewChange, user, drawerOpen
         <SidebarDivider label="Engagement" />
         {navItem('heatmap',     <HeatmapIcon />, 'Engagement Heatmap', !isPro,     'pro')}
         {navItem('stories',     <StoriesIcon />, 'Viewer Stories',     !isStarter, 'starter')}
-        {navItem('insights',    <SparklesIcon />,'Insights',           !isPro,     'pro')}
+        {navItem('insights',    <SparklesIcon />,'AI Insights',        !isPro,     'pro')}
 
         <SidebarDivider label="Audience" />
         {navItem('geography',   <GlobeIcon />,   'Geography',     !isStarter, 'starter')}
