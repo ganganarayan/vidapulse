@@ -20,6 +20,7 @@
 
 const express = require('express');
 const crypto  = require('crypto');
+const https   = require('https');
 const { z }   = require('zod');
 
 const router      = express.Router();
@@ -569,6 +570,59 @@ router.post('/magic-link', async (req, res, next) => {
     const loginUrl = `${env.APP_URL}/auth?token=${token}`;
 
     logger.info(`[auth/magic-link] Token minted for ${normalizedEmail} (${isNew ? 'new' : 'existing'} user)`);
+
+    // ── Fire outbound delivery webhook (non-blocking) ─────────────────────
+    // The admin configures this URL in Admin → Webhook Settings → Magic Link.
+    // It receives the login_url so an external automation (email/WhatsApp)
+    // can deliver the link to the user. Never throws — failure is logged only.
+    (async () => {
+      try {
+        const { rows: [ws] } = await pool.query(
+          `SELECT magic_link_webhook_url, api_token FROM webhook_settings LIMIT 1`
+        );
+        const deliveryUrl = ws?.magic_link_webhook_url;
+        if (!deliveryUrl) return; // not configured yet — skip silently
+
+        const payload = JSON.stringify({
+          user_id  : userId,
+          email    : normalizedEmail,
+          name     : finalName,
+          token,
+          login_url: loginUrl,
+        });
+
+        const parsed   = new URL(deliveryUrl);
+        const headers  = {
+          'Content-Type'  : 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+        };
+        if (ws.api_token) headers['Authorization'] = `Bearer ${ws.api_token}`;
+
+        await new Promise((resolve, reject) => {
+          const req = https.request(
+            {
+              hostname: parsed.hostname,
+              path    : parsed.pathname + parsed.search,
+              method  : 'POST',
+              headers,
+              timeout : 10000,
+            },
+            res => {
+              res.resume(); // drain
+              resolve(res.statusCode);
+            }
+          );
+          req.on('error',   reject);
+          req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+          req.write(payload);
+          req.end();
+        }).then(code => {
+          logger.info(`[auth/magic-link] Delivery webhook → ${deliveryUrl} — HTTP ${code}`);
+        });
+      } catch (err) {
+        logger.warn(`[auth/magic-link] Delivery webhook failed: ${err.message}`);
+      }
+    })();
 
     return res.json({
       user_id  : userId,
