@@ -69,13 +69,16 @@ function formatRelative(iso) {
   if (!iso) return 'Never';
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
+  // Under 24 hours → relative ("so many minutes/hours ago")
   if (mins < 1)   return 'Just now';
-  if (mins < 60)  return `${mins}m ago`;
+  if (mins < 60)  return `${mins} ${mins === 1 ? 'minute' : 'minutes'} ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24)   return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 30)  return `${days}d ago`;
-  return formatDate(iso);
+  if (hrs < 24)   return `${hrs} ${hrs === 1 ? 'hour' : 'hours'} ago`;
+  // 24 hours or more → absolute date + time
+  return new Date(iso).toLocaleString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
