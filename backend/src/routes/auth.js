@@ -20,7 +20,6 @@
 
 const express = require('express');
 const crypto  = require('crypto');
-const https   = require('https');
 const { z }   = require('zod');
 
 const router      = express.Router();
@@ -649,42 +648,39 @@ router.post('/magic-link', async (req, res, next) => {
           return;
         }
 
-        const payload = JSON.stringify(deliveryPayload);
-        const parsed  = new URL(deliveryUrl);
-        const headers = {
-          'Content-Type'  : 'application/json',
-          'Content-Length': Buffer.byteLength(payload),
-        };
-        if (ws.api_token) headers['Authorization'] = `Bearer ${ws.api_token}`;
+        // Mirror the contact webhook transport exactly: api_token goes in the
+        // URL query string (the automation authenticates on it), NOT a Bearer
+        // header — and the same headers/fetch flow.
+        const finalUrl = ws.api_token
+          ? `${deliveryUrl}${deliveryUrl.includes('?') ? '&' : '?'}api_token=${encodeURIComponent(ws.api_token)}`
+          : deliveryUrl;
 
-        const result = await new Promise((resolve, reject) => {
-          const r = https.request(
-            {
-              hostname: parsed.hostname,
-              path    : parsed.pathname + parsed.search,
-              method  : 'POST',
-              headers,
-              timeout : 10000,
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 10000);
+        let result;
+        try {
+          const resp = await fetch(finalUrl, {
+            method : 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent'  : 'VidaPulse-MagicLink/1.0',
+              'Accept'      : 'application/json',
             },
-            resp => {
-              let body = '';
-              resp.on('data', c => { if (body.length < 4000) body += c; });
-              resp.on('end', () => resolve({ code: resp.statusCode, body }));
-            }
-          );
-          r.on('error',   reject);
-          r.on('timeout', () => { r.destroy(); reject(new Error('timeout')); });
-          r.write(payload);
-          r.end();
-        });
+            body  : JSON.stringify(deliveryPayload),
+            signal: controller.signal,
+          });
+          const body = await resp.text().catch(() => '');
+          result = { code: resp.status, ok: resp.ok, body };
+        } finally {
+          clearTimeout(tid);
+        }
 
-        const ok = result.code >= 200 && result.code < 300;
         await _logMagicLink({
           userId, urlSentTo: deliveryUrl, params: deliveryPayload,
-          status        : ok ? 'sent' : 'failed',
+          status        : result.ok ? 'sent' : 'failed',
           responseStatus: result.code,
-          responseBody  : result.body || null,
-          errorMessage  : ok ? null : `Delivery endpoint returned HTTP ${result.code}`,
+          responseBody  : result.body ? result.body.slice(0, 4000) : null,
+          errorMessage  : result.ok ? null : `Delivery endpoint returned HTTP ${result.code}`,
         });
         logger.info(`[auth/magic-link] Delivery webhook → ${deliveryUrl} — HTTP ${result.code}`);
       } catch (err) {
