@@ -758,6 +758,12 @@ router.post('/magic-link/consume', async (req, res, next) => {
 
     logger.info(`[auth/magic-link/consume] User ${row.user_id} logged in via magic link`);
 
+    // Record the login so admin "Last Login" reflects magic-link sign-ins.
+    await pool.query(
+      `UPDATE users SET previous_login_at = last_login_at, last_login_at = NOW() WHERE id = $1`,
+      [row.user_id]
+    );
+
     return res.json({
       ok          : true,
       password_set: !!row.password_set,
@@ -820,9 +826,10 @@ router.post('/register', async (req, res, next) => {
 
       const { rows: [user] } = await client.query(
         `INSERT INTO users (email, name, phone, plan_id, role, password_hash, password_set, created_via,
+                            last_login_at,
                             signup_utm_source, signup_utm_medium, signup_utm_campaign,
                             signup_utm_term, signup_utm_content)
-         VALUES ($1, $2, $3, $4, 'subscriber', $5, TRUE, 'self_signup', $6, $7, $8, $9, $10)
+         VALUES ($1, $2, $3, $4, 'subscriber', $5, TRUE, 'self_signup', NOW(), $6, $7, $8, $9, $10)
          RETURNING id`,
         [normalizedEmail, finalName, normalizedPhone, plans[0].id, hash,
          ls.utm_source, ls.utm_medium, ls.utm_campaign, ls.utm_term, ls.utm_content]
