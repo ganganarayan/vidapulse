@@ -268,7 +268,6 @@ const updateSettingsSchema = z.object({
   webhook_url                  : _urlFieldSchema,
   notification_webhook_url     : _urlFieldSchema,
   password_reset_webhook_url   : _urlFieldSchema,
-  magic_link_webhook_url       : _urlFieldSchema,
   razorpay_starter_url         : _urlFieldSchema,
   razorpay_pro_url             : _urlFieldSchema,
   webhook_secret               : z.string().max(200).nullable().optional(),
@@ -300,7 +299,6 @@ router.patch('/webhook-settings', async (req, res, next) => {
     if (settingsFields.password_reset_webhook_url !== undefined) { settingsClauses.push(`password_reset_webhook_url = $${p++}`); settingsVals.push(settingsFields.password_reset_webhook_url); }
     if (settingsFields.razorpay_starter_url       !== undefined) { settingsClauses.push(`razorpay_starter_url       = $${p++}`); settingsVals.push(settingsFields.razorpay_starter_url);       }
     if (settingsFields.razorpay_pro_url           !== undefined) { settingsClauses.push(`razorpay_pro_url           = $${p++}`); settingsVals.push(settingsFields.razorpay_pro_url);           }
-    if (settingsFields.magic_link_webhook_url     !== undefined) { settingsClauses.push(`magic_link_webhook_url     = $${p++}`); settingsVals.push(settingsFields.magic_link_webhook_url);     }
     if (settingsFields.webhook_secret           !== undefined) { settingsClauses.push(`webhook_secret           = $${p++}`); settingsVals.push(settingsFields.webhook_secret);           }
     if (settingsFields.api_token                !== undefined) { settingsClauses.push(`api_token                = $${p++}`); settingsVals.push(settingsFields.api_token);                }
     if (settingsFields.is_active                !== undefined) { settingsClauses.push(`is_active                = $${p++}`); settingsVals.push(settingsFields.is_active);                }

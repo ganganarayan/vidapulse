@@ -12,8 +12,6 @@ import AccountLifecycleNotices   from './components/AccountLifecycleNotices';
 import { useVersionWatcher }     from './hooks/useVersionWatcher';
 import Login             from './pages/Login';
 import Register          from './pages/Register';
-import AuthToken         from './pages/AuthToken';
-import SignIn            from './pages/SignIn';
 import SetPassword       from './pages/SetPassword';
 import ForgotPassword    from './pages/ForgotPassword';
 import ResetPassword     from './pages/ResetPassword';
@@ -178,8 +176,6 @@ export default function App() {
 
           {/* ── Auth pages (public) ─────────────────────────── */}
           <Route path="/login"           element={<Login />} />
-          <Route path="/signin"          element={<SignIn />} />
-          <Route path="/auth"            element={<AuthToken />} />
           <Route path="/register"        element={<Register />} />
           <Route path="/set-password"    element={<SetPassword />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
