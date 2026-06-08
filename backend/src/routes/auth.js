@@ -483,7 +483,10 @@ router.post('/magic-link', async (req, res, next) => {
     const { email, name, phone, secret } = req.body ?? {};
 
     // Log the INBOUND receipt immediately — confirms whether we received the
-    // webhook at all, regardless of what happens next.
+    // webhook at all, and CAPTURES THE SOURCE (ip / user-agent / origin) so a
+    // mystery caller (empty body, bad secret) can be traced.
+    const _srcIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+                   || req.ip || req.socket?.remoteAddress || 'unknown';
     await _logMagicLink({
       eventKey : 'magic_link_received',
       urlSentTo: '(inbound) POST /api/auth/magic-link',
@@ -491,6 +494,11 @@ router.post('/magic-link', async (req, res, next) => {
         contact_email: typeof email === 'string' ? email : null,
         contact_name : typeof name  === 'string' ? name  : null,
         contact_phone: typeof phone === 'string' ? phone : null,
+        source_ip    : _srcIp,
+        user_agent   : req.headers['user-agent'] || null,
+        origin       : req.headers['origin']  || null,
+        referer      : req.headers['referer'] || null,
+        body_keys    : req.body && typeof req.body === 'object' ? Object.keys(req.body).join(',') : null,
       },
       status   : 'sent',   // shows as a received/✓ row in the log
     });
