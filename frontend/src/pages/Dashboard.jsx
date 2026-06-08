@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
 import { generateEmbedSnippet } from '../lib/embed';
 import { useAuth } from '../contexts/AuthContext';
@@ -829,7 +829,8 @@ function EditNameModal({ video, onSave, onClose }) {
 // ─────────────────────────────────────────────────────────────────────────
 
 function AddVideoButton({ user, onVideoAdded }) {
-  const [open,       setOpen]       = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [open,       setOpen]       = useState(searchParams.get('add') === '1');
   const [url,        setUrl]        = useState('');
   const [title,      setTitle]      = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -842,6 +843,17 @@ function AddVideoButton({ user, onVideoAdded }) {
   // True when the user has used all their video slots
   const atLimit = user?.video_limit != null && (user?.video_count ?? 0) >= user?.video_limit;
   const nextPlan = user?.plan === 'free' ? 'starter' : 'pro';
+
+  // Deep-link from the Overview "Add video" button (/videos?add=1) opens the
+  // form directly — and the URL is cleaned so a refresh doesn't re-open it.
+  useEffect(() => {
+    if (searchParams.get('add') === '1') {
+      setOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete('add');
+      setSearchParams(next, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
 

@@ -65,7 +65,7 @@ export default function OverviewPage() {
       <div className="border-b border-gray-800 px-6 py-3.5 flex items-center justify-between flex-shrink-0">
         <h1 className="text-sm font-semibold text-gray-200">Overview</h1>
         <Link
-          to="/videos"
+          to="/videos?add=1"
           className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400
                      text-gray-900 text-sm font-semibold rounded-lg transition-colors"
         >
