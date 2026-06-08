@@ -676,6 +676,13 @@ router.post('/magic-link', async (req, res, next) => {
 
     (async () => {
       try {
+        // DEBUG TOGGLE — isolate which outbound CRM call wipes the contact.
+        // false = the magic-link delivery webhook does NOT fire to the CRM.
+        const MAGIC_LINK_DELIVERY_ENABLED = true;
+        if (!MAGIC_LINK_DELIVERY_ENABLED) {
+          logger.info(`[auth/magic-link] DEBUG: delivery DISABLED — not sending login_url for ${normalizedEmail}`);
+          return;
+        }
         const { rows: [ws] } = await pool.query(
           `SELECT magic_link_webhook_url, api_token FROM webhook_settings LIMIT 1`
         );

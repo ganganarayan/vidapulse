@@ -60,8 +60,16 @@ const HTTP_TIMEOUT_MS = 10_000;
  * @param {Object} [extraFields={}] - Additional dot-key custom fields to include.
  *   e.g. { pass_reset_link: 'https://...' } → "contact.pass_reset_link" in body
  */
+// DEBUG TOGGLE — isolate which outbound CRM call wipes the contact.
+// false = the contact webhook (user_signed_up, etc.) does NOT fire to the CRM.
+const CONTACT_WEBHOOK_ENABLED = false;
+
 async function fireContactWebhook(userId, eventKey, extraFields = {}) {
   try {
+    if (!CONTACT_WEBHOOK_ENABLED) {
+      logger.info(`[contactWebhook] DEBUG: contact webhook DISABLED — skipping ${eventKey} (user=${userId})`);
+      return;
+    }
     const settings = await _loadSettings();
     if (!settings || !settings.is_active || !settings.webhook_url) return;
 
