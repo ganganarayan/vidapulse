@@ -678,9 +678,11 @@ router.post('/magic-link', async (req, res, next) => {
     if (normalizedEmail) deliveryPayload.contact_email = normalizedEmail;
     if (storedPhone)     deliveryPayload.contact_phone = storedPhone;
     deliveryPayload['contact.event_type'] = 'magic_link';
-    deliveryPayload['contact.user_id']   = userId;
-    deliveryPayload['contact.token']     = token;
-    deliveryPayload['contact.login_url'] = loginUrl;
+    deliveryPayload['contact.token']      = token;
+    deliveryPayload['contact.login_url']  = loginUrl;
+    // NOTE: contact.user_id intentionally NOT sent — "user_id" collides with a
+    // reserved/system field in the CRM and wiped the contact. Pabbly and the
+    // surviving user_signed_up webhook never send it.
 
     (async () => {
       try {
