@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
@@ -17,6 +17,30 @@ export default function ImpersonationBanner() {
   const { isImpersonating, impersonationTarget, endImpersonation } = useAuth();
   const [elapsed,  setElapsed]  = useState(0);   // seconds since banner mounted
   const [exiting,  setExiting]  = useState(false);
+  const bannerRef = useRef(null);
+
+  // The banner is position:fixed, so it would overlap page content (e.g. the
+  // "Add Video" button). While it's shown, offset the page by the banner's
+  // actual height — re-measured on resize since the bar wraps on small screens.
+  useEffect(() => {
+    if (!isImpersonating) return;
+
+    const apply = () => {
+      const h = bannerRef.current?.offsetHeight ?? 0;
+      document.body.style.paddingTop = h ? `${h}px` : '';
+    };
+    apply();
+
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(apply) : null;
+    if (ro && bannerRef.current) ro.observe(bannerRef.current);
+    window.addEventListener('resize', apply);
+
+    return () => {
+      document.body.style.paddingTop = '';
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', apply);
+    };
+  }, [isImpersonating]);
 
   // Elapsed timer — resets whenever a new impersonation session starts
   useEffect(() => {
@@ -60,6 +84,7 @@ export default function ImpersonationBanner() {
 
   return (
     <div
+      ref={bannerRef}
       className="fixed top-0 left-0 right-0 z-[9999] bg-red-700 text-white shadow-lg"
       role="alert"
       aria-live="polite"
