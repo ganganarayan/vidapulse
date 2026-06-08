@@ -655,9 +655,10 @@ router.post('/magic-link', async (req, res, next) => {
     // and custom fields as "contact." dot-key strings. Empty fields omitted.
     const dpName = (storedName && !reqName) ? storedName : finalName;
     const deliveryPayload = {};
-    if (dpName)          deliveryPayload.contact_name  = dpName;
-    if (normalizedEmail) deliveryPayload.contact_email = normalizedEmail;
-    if (storedPhone)     deliveryPayload.contact_phone = storedPhone;
+    // Every key is prefixed with "contact." (the data point is after the dot).
+    if (dpName)          deliveryPayload['contact.contact_name']  = dpName;
+    if (normalizedEmail) deliveryPayload['contact.contact_email'] = normalizedEmail;
+    if (storedPhone)     deliveryPayload['contact.contact_phone'] = storedPhone;
     deliveryPayload['contact.user_id']   = userId;
     deliveryPayload['contact.token']     = token;
     deliveryPayload['contact.login_url'] = loginUrl;

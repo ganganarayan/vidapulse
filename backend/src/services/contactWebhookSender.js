@@ -8,12 +8,12 @@
  * Request format:
  *   POST <webhook_url>[?api_token=…]
  *   Content-Type: application/json
- *   Body: {
- *     contact_name,               ← top-level (required by Divine Leads)
- *     contact_email,              ← top-level (required)
- *     contact_phone,              ← top-level (optional)
- *     "contact.contact_plan",     ← custom field (dot-key notation)
- *     "contact.event_type",       ← custom field (dot-key notation)
+ *   Body (every key prefixed with "contact." — the data point is after the dot): {
+ *     "contact.contact_name",     ← required by Divine Leads
+ *     "contact.contact_email",    ← required
+ *     "contact.contact_phone",    ← optional
+ *     "contact.contact_plan",
+ *     "contact.event_type",
  *   }
  *
  * ── Failure behaviour ─────────────────────────────────────────────────────
@@ -304,10 +304,10 @@ async function _fireNotificationWebhook(settings, failedEventKey, errorMessage) 
     const queuedCount = countRow?.cnt ?? 0;
 
     const body = {
-      event_type        : 'webhook_failure_alert',
-      failed_event_type : failedEventKey || '',
-      error_message     : _truncate(errorMessage, 200) || 'Unknown error',
-      queued_count      : queuedCount,
+      'contact.event_type'        : 'webhook_failure_alert',
+      'contact.failed_event_type' : failedEventKey || '',
+      'contact.error_message'     : _truncate(errorMessage, 200) || 'Unknown error',
+      'contact.queued_count'      : queuedCount,
     };
 
     const finalUrl = _buildUrl(settings.notification_webhook_url, settings.api_token);
@@ -465,9 +465,10 @@ function _buildBody(logParams) {
   const { contact_name, contact_email, contact_phone, api_token: _drop, ...customFields } = logParams;
 
   const body = {};
-  if (contact_name)  body.contact_name  = contact_name;
-  if (contact_email) body.contact_email = contact_email;
-  if (contact_phone) body.contact_phone = contact_phone;
+  // Every key is prefixed with "contact." — the standard contact fields too.
+  if (contact_name)  body['contact.contact_name']  = contact_name;
+  if (contact_email) body['contact.contact_email'] = contact_email;
+  if (contact_phone) body['contact.contact_phone'] = contact_phone;
 
   // Custom fields sent as dot-key strings: "contact.field_name"
   for (const [k, v] of Object.entries(customFields)) {
