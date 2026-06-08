@@ -72,10 +72,6 @@ export default function Register() {
     e.preventDefault();
     setError('');
 
-    if (!name.trim()) {
-      setError('Please enter your name');
-      return;
-    }
     if (password !== confirm) {
       setError('Passwords do not match');
       return;
@@ -172,7 +168,7 @@ export default function Register() {
             <form onSubmit={handleSignIn} className="flex flex-col gap-4">
               {/* Email — locked, from the link */}
               <div>
-                <label className="block text-xs text-gray-400 mb-1.5 font-medium">Email address</label>
+                <label className="block text-xs text-gray-300 mb-1.5 font-medium">Email address</label>
                 <input
                   type="email"
                   value={email}
@@ -185,7 +181,7 @@ export default function Register() {
 
               {/* Password */}
               <div>
-                <label className="block text-xs text-gray-400 mb-1.5 font-medium">Password</label>
+                <label className="block text-xs text-gray-300 mb-1.5 font-medium">Password</label>
                 <div className="relative">
                   <input
                     type={showPw ? 'text' : 'password'}
@@ -197,7 +193,7 @@ export default function Register() {
                     disabled={loading}
                     autoComplete="current-password"
                     className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
-                               text-gray-100 placeholder-gray-500 text-sm rounded-lg
+                               text-gray-100 placeholder-gray-400 text-sm rounded-lg
                                px-3 py-2.5 pr-10 focus:outline-none transition-colors"
                   />
                   <button type="button" onClick={() => setShowPw(v => !v)}
@@ -275,7 +271,7 @@ export default function Register() {
                   <div className="w-full border-t border-gray-700" />
                 </div>
                 <div className="relative flex justify-center text-xs">
-                  <span className="bg-gray-800 px-3 text-gray-500">or sign up with email</span>
+                  <span className="bg-gray-800 px-3 text-gray-400">or sign up with email</span>
                 </div>
               </div>
             </>
@@ -283,26 +279,25 @@ export default function Register() {
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
-            {/* Name */}
+            {/* Name (optional) */}
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5 font-medium">Full name</label>
+              <label className="block text-xs text-gray-300 mb-1.5 font-medium">Full name <span className="text-gray-500 font-normal">(optional)</span></label>
               <input
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="Your name"
-                required
                 disabled={loading}
                 autoComplete="name"
                 className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
-                           text-gray-100 placeholder-gray-500 text-sm rounded-lg
+                           text-gray-100 placeholder-gray-400 text-sm rounded-lg
                            px-3 py-2.5 focus:outline-none transition-colors"
               />
             </div>
 
             {/* Email */}
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5 font-medium">Email address</label>
+              <label className="block text-xs text-gray-300 mb-1.5 font-medium">Email address</label>
               <input
                 type="email"
                 value={email}
@@ -312,14 +307,14 @@ export default function Register() {
                 disabled={loading}
                 autoComplete="email"
                 className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
-                           text-gray-100 placeholder-gray-500 text-sm rounded-lg
+                           text-gray-100 placeholder-gray-400 text-sm rounded-lg
                            px-3 py-2.5 focus:outline-none transition-colors"
               />
             </div>
 
             {/* Phone (optional) */}
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5 font-medium">Phone <span className="text-gray-500 font-normal">(optional)</span></label>
+              <label className="block text-xs text-gray-300 mb-1.5 font-medium">Phone <span className="text-gray-500 font-normal">(optional)</span></label>
               <input
                 type="tel"
                 value={phone}
@@ -328,14 +323,14 @@ export default function Register() {
                 disabled={loading}
                 autoComplete="tel"
                 className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
-                           text-gray-100 placeholder-gray-500 text-sm rounded-lg
+                           text-gray-100 placeholder-gray-400 text-sm rounded-lg
                            px-3 py-2.5 focus:outline-none transition-colors"
               />
             </div>
 
             {/* Password */}
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5 font-medium">Password</label>
+              <label className="block text-xs text-gray-300 mb-1.5 font-medium">Password</label>
               <div className="relative">
                 <input
                   type={showPw ? 'text' : 'password'}
@@ -346,7 +341,7 @@ export default function Register() {
                   disabled={loading}
                   autoComplete="new-password"
                   className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
-                             text-gray-100 placeholder-gray-500 text-sm rounded-lg
+                             text-gray-100 placeholder-gray-400 text-sm rounded-lg
                              px-3 py-2.5 pr-10 focus:outline-none transition-colors"
                 />
                 <button type="button" onClick={() => setShowPw(v => !v)}
@@ -370,7 +365,7 @@ export default function Register() {
 
             {/* Confirm */}
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5 font-medium">Confirm password</label>
+              <label className="block text-xs text-gray-300 mb-1.5 font-medium">Confirm password</label>
               <input
                 type="password"
                 value={confirm}
@@ -380,7 +375,7 @@ export default function Register() {
                 disabled={loading}
                 autoComplete="new-password"
                 className={`w-full bg-gray-700 border focus:outline-none
-                            text-gray-100 placeholder-gray-500 text-sm rounded-lg
+                            text-gray-100 placeholder-gray-400 text-sm rounded-lg
                             px-3 py-2.5 transition-colors
                             ${confirm && confirm !== password
                               ? 'border-red-500/60 focus:border-red-500'
@@ -394,7 +389,7 @@ export default function Register() {
 
             <button
               type="submit"
-              disabled={loading || !name.trim() || !email || !password || password !== confirm}
+              disabled={loading || !email || !password || password !== confirm}
               className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:bg-amber-500/40
                          text-gray-900 font-semibold text-sm rounded-lg transition-colors
                          disabled:cursor-not-allowed mt-1"
