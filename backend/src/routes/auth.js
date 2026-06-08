@@ -459,18 +459,19 @@ router.post('/logout', (req, res) => {
 // ─────────────────────────────────────────────────────────────
 
 // Log a magic-link webhook row into contact_webhook_log so it shows in the
-// Admin → Contact Webhook Log UI alongside every other webhook. event_key is
-// always 'magic_link' — the retry/resend/failed-count machinery explicitly
-// skips this prefix so these rows are never re-fired to the contact webhook.
-async function _logMagicLink({ userId = null, urlSentTo, params = {}, status,
+// Admin → Contact Webhook Log UI alongside every other webhook. event_key
+// defaults to 'magic_link' (the outbound delivery); 'magic_link_received' marks
+// the INBOUND request receipt. Both start with 'magic_link', so the
+// retry/resend/failed-count machinery skips them (never re-fired).
+async function _logMagicLink({ eventKey = 'magic_link', userId = null, urlSentTo, params = {}, status,
                                responseStatus = null, responseBody = null, errorMessage = null }) {
   try {
     await pool.query(
       `INSERT INTO contact_webhook_log
          (event_key, user_id, url_sent_to, params_sent,
           status, response_status, response_body, error_message, sent_at, response_at)
-       VALUES ('magic_link', $1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-      [userId, urlSentTo, JSON.stringify(params), status, responseStatus, responseBody, errorMessage]
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
+      [eventKey, userId, urlSentTo, JSON.stringify(params), status, responseStatus, responseBody, errorMessage]
     );
   } catch (e) {
     logger.warn(`[auth/magic-link] log insert failed: ${e.message}`);
@@ -480,6 +481,19 @@ async function _logMagicLink({ userId = null, urlSentTo, params = {}, status,
 router.post('/magic-link', async (req, res, next) => {
   try {
     const { email, name, phone, secret } = req.body ?? {};
+
+    // Log the INBOUND receipt immediately — confirms whether we received the
+    // webhook at all, regardless of what happens next.
+    await _logMagicLink({
+      eventKey : 'magic_link_received',
+      urlSentTo: '(inbound) POST /api/auth/magic-link',
+      params   : {
+        contact_email: typeof email === 'string' ? email : null,
+        contact_name : typeof name  === 'string' ? name  : null,
+        contact_phone: typeof phone === 'string' ? phone : null,
+      },
+      status   : 'sent',   // shows as a received/✓ row in the log
+    });
 
     // Constant-time secret check
     let secretOk = false;
