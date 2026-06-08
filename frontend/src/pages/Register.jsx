@@ -17,8 +17,12 @@ export default function Register() {
   // Prefill email from the link (?email=...) — forwarded by the CTA tracking
   // redirect from the landing opt-in / Thank-You button / registration email.
   const prefillEmail = (searchParams.get('email') || '').trim();
+  const prefillName  = (searchParams.get('name')  || '').trim();
+  const prefillPhone = (searchParams.get('phone') || '').trim();
 
   const [email,     setEmail]     = useState(prefillEmail);
+  const [name,      setName]      = useState(prefillName);
+  const [phone,     setPhone]     = useState(prefillPhone);
   const [password,  setPassword]  = useState('');
   const [confirm,   setConfirm]   = useState('');
   const [showPw,    setShowPw]    = useState(false);
@@ -68,6 +72,10 @@ export default function Register() {
     e.preventDefault();
     setError('');
 
+    if (!name.trim()) {
+      setError('Please enter your name');
+      return;
+    }
     if (password !== confirm) {
       setError('Passwords do not match');
       return;
@@ -81,6 +89,8 @@ export default function Register() {
     try {
       await api.post('/auth/register', {
         email      : email.trim(),
+        name       : name.trim(),
+        phone      : phone.trim() || undefined,
         password,
         lead_source: getLeadSource() || undefined,
       });
@@ -273,6 +283,23 @@ export default function Register() {
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
+            {/* Name */}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5 font-medium">Full name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Your name"
+                required
+                disabled={loading}
+                autoComplete="name"
+                className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
+                           text-gray-100 placeholder-gray-500 text-sm rounded-lg
+                           px-3 py-2.5 focus:outline-none transition-colors"
+              />
+            </div>
+
             {/* Email */}
             <div>
               <label className="block text-xs text-gray-400 mb-1.5 font-medium">Email address</label>
@@ -284,6 +311,22 @@ export default function Register() {
                 required
                 disabled={loading}
                 autoComplete="email"
+                className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
+                           text-gray-100 placeholder-gray-500 text-sm rounded-lg
+                           px-3 py-2.5 focus:outline-none transition-colors"
+              />
+            </div>
+
+            {/* Phone (optional) */}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5 font-medium">Phone <span className="text-gray-500 font-normal">(optional)</span></label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="+91…"
+                disabled={loading}
+                autoComplete="tel"
                 className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
                            text-gray-100 placeholder-gray-500 text-sm rounded-lg
                            px-3 py-2.5 focus:outline-none transition-colors"
@@ -351,7 +394,7 @@ export default function Register() {
 
             <button
               type="submit"
-              disabled={loading || !email || !password || password !== confirm}
+              disabled={loading || !name.trim() || !email || !password || password !== confirm}
               className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:bg-amber-500/40
                          text-gray-900 font-semibold text-sm rounded-lg transition-colors
                          disabled:cursor-not-allowed mt-1"
