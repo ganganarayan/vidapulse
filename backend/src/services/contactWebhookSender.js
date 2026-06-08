@@ -8,12 +8,12 @@
  * Request format:
  *   POST <webhook_url>[?api_token=…]
  *   Content-Type: application/json
- *   Body (flat keys, no prefix — per the CRM dev team): {
- *     contact_name,     ← required by Divine Leads
- *     contact_email,    ← required
- *     contact_phone,    ← optional
- *     contact_plan,
- *     event_type,
+ *   Body (HYBRID — standard fields flat, custom fields "contact."-prefixed): {
+ *     contact_name,           ← standard, flat (required by Divine Leads)
+ *     contact_email,          ← standard, flat (required)
+ *     contact_phone,          ← standard, flat (optional)
+ *     "contact.contact_plan", ← custom, prefixed
+ *     "contact.event_type",   ← custom, prefixed
  *   }
  *
  * ── Failure behaviour ─────────────────────────────────────────────────────
@@ -462,13 +462,17 @@ function _buildUrl(baseUrl, apiToken) {
  *   }
  */
 function _buildBody(logParams) {
-  const { api_token: _drop, ...rest } = logParams;
+  const { contact_name, contact_email, contact_phone, api_token: _drop, ...customFields } = logParams;
 
-  // Flat payload — every key sent as-is with NO prefix (per the CRM dev team):
-  //   { contact_name, contact_email, contact_phone, contact_plan, event_type, … }
+  // Hybrid format (verified against the live CRM): standard contact fields are
+  // sent FLAT; every custom field carries the "contact." prefix (the CRM only
+  // maps custom fields when they're prefixed).
   const body = {};
-  for (const [k, v] of Object.entries(rest)) {
-    if (v !== undefined && v !== null && v !== '') body[k] = v;
+  if (contact_name)  body.contact_name  = contact_name;
+  if (contact_email) body.contact_email = contact_email;
+  if (contact_phone) body.contact_phone = contact_phone;
+  for (const [k, v] of Object.entries(customFields)) {
+    if (v !== undefined && v !== null && v !== '') body[`contact.${k}`] = v;
   }
   return body;
 }
