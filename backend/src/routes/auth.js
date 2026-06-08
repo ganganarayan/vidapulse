@@ -521,6 +521,17 @@ router.post('/magic-link', async (req, res, next) => {
     const reqPhone = (phone && String(phone).trim()) || null;
     const finalName = reqName || normalizedEmail.split('@')[0];
 
+    // Ad attribution (UTM). Accept either a lead_source object or individual
+    // utm_* fields at the top level of the webhook body.
+    const ls = normalizeLeadSource(req.body?.lead_source ?? {
+      utm_source  : req.body?.utm_source,
+      utm_medium  : req.body?.utm_medium,
+      utm_campaign: req.body?.utm_campaign,
+      utm_term    : req.body?.utm_term,
+      utm_content : req.body?.utm_content,
+    });
+    const hasUtm = !!(ls.utm_source || ls.utm_medium || ls.utm_campaign || ls.utm_term || ls.utm_content);
+
     // Find or create user
     let userId;
     let isNew = false;
@@ -540,6 +551,20 @@ router.post('/magic-link', async (req, res, next) => {
         await pool.query(`UPDATE users SET phone = $1 WHERE id = $2`, [reqPhone, userId]);
         storedPhone = reqPhone;
       }
+      // Backfill ad attribution — COALESCE keeps any existing (first-touch)
+      // value and only fills columns that are still empty.
+      if (hasUtm) {
+        await pool.query(
+          `UPDATE users SET
+             signup_utm_source   = COALESCE(signup_utm_source,   $2),
+             signup_utm_medium   = COALESCE(signup_utm_medium,   $3),
+             signup_utm_campaign = COALESCE(signup_utm_campaign, $4),
+             signup_utm_term     = COALESCE(signup_utm_term,     $5),
+             signup_utm_content  = COALESCE(signup_utm_content,  $6)
+           WHERE id = $1`,
+          [userId, ls.utm_source, ls.utm_medium, ls.utm_campaign, ls.utm_term, ls.utm_content]
+        );
+      }
     } else {
       // Create new free subscriber (no password — passwordless entry)
       const client = await pool.connect();
@@ -552,10 +577,13 @@ router.post('/magic-link', async (req, res, next) => {
         if (!plans.length) throw new Error('Free plan not found');
 
         const { rows: [newUser] } = await client.query(
-          `INSERT INTO users (email, name, phone, plan_id, role, password_set, created_via)
-           VALUES ($1, $2, $3, $4, 'subscriber', FALSE, 'magic_link')
+          `INSERT INTO users (email, name, phone, plan_id, role, password_set, created_via,
+                              signup_utm_source, signup_utm_medium, signup_utm_campaign,
+                              signup_utm_term, signup_utm_content)
+           VALUES ($1, $2, $3, $4, 'subscriber', FALSE, 'magic_link', $5, $6, $7, $8, $9)
            RETURNING id`,
-          [normalizedEmail, finalName, reqPhone, plans[0].id]
+          [normalizedEmail, finalName, reqPhone, plans[0].id,
+           ls.utm_source, ls.utm_medium, ls.utm_campaign, ls.utm_term, ls.utm_content]
         );
         userId = newUser.id;
         storedPhone = reqPhone;
