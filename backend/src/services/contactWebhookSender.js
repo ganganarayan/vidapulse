@@ -62,7 +62,7 @@ const HTTP_TIMEOUT_MS = 10_000;
  */
 // DEBUG TOGGLE — isolate which outbound CRM call wipes the contact.
 // false = the contact webhook (user_signed_up, etc.) does NOT fire to the CRM.
-const CONTACT_WEBHOOK_ENABLED = false;
+const CONTACT_WEBHOOK_ENABLED = true;
 
 async function fireContactWebhook(userId, eventKey, extraFields = {}) {
   try {
