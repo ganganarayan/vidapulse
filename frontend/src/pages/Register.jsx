@@ -312,9 +312,9 @@ export default function Register() {
               />
             </div>
 
-            {/* Phone (optional) */}
+            {/* WhatsApp number (optional) */}
             <div>
-              <label className="block text-xs text-gray-300 mb-1.5 font-medium">Phone <span className="text-gray-500 font-normal">(optional)</span></label>
+              <label className="block text-xs text-gray-300 mb-1.5 font-medium">WhatsApp Number for Quick Assistance <span className="text-gray-500 font-normal">(optional)</span></label>
               <input
                 type="tel"
                 value={phone}
