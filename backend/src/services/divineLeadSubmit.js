@@ -68,28 +68,27 @@ async function submitToVidaPulse(name, email, phone) {
   const finalEmail = email.trim();
   const finalPhone = (phone || '').trim();
 
-  // Build a multipart/form-data body that matches the live browser submission
-  // byte-for-byte (verified off the real request):
-  //   • actual values live in the FLAT keys name / email / phone
-  //   • fields[N] carries id/label/name only; value & custom_field_id are EMPTY
-  //   • Content-Type must be multipart/form-data (the widget ignores urlencoded)
+  // Build a multipart/form-data body. Populate EVERY field — both the flat
+  // keys (name/email/phone) AND each fields[N][value] — so the value reaches
+  // the contact regardless of which the widget reads. id/label/name describe
+  // the form field; value carries the data; custom_field_id stays empty.
   // Rebuilt per attempt because a FormData body stream is single-use.
   function buildBody() {
     const fd = new FormData();
     fd.set('fields[0][id]', '149840');
     fd.set('fields[0][label]', 'Name');
     fd.set('fields[0][name]', 'name');
-    fd.set('fields[0][value]', '');
+    fd.set('fields[0][value]', finalName);
     fd.set('fields[0][custom_field_id]', '');
     fd.set('fields[1][id]', '149841');
     fd.set('fields[1][label]', 'Email');
     fd.set('fields[1][name]', 'email');
-    fd.set('fields[1][value]', '');
+    fd.set('fields[1][value]', finalEmail);
     fd.set('fields[1][custom_field_id]', '');
     fd.set('fields[2][id]', '149842');
     fd.set('fields[2][label]', 'Phone');
     fd.set('fields[2][name]', 'phone');
-    fd.set('fields[2][value]', '');
+    fd.set('fields[2][value]', finalPhone);
     fd.set('fields[2][custom_field_id]', '');
     fd.set('name',  finalName);
     fd.set('email', finalEmail);
