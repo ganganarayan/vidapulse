@@ -678,11 +678,16 @@ router.post('/magic-link', async (req, res, next) => {
     if (normalizedEmail) deliveryPayload.contact_email = normalizedEmail;
     if (storedPhone)     deliveryPayload.contact_phone = storedPhone;
     deliveryPayload['contact.event_type'] = 'magic_link';
-    deliveryPayload['contact.token']      = token;
-    deliveryPayload['contact.login_url']  = loginUrl;
-    // NOTE: contact.user_id intentionally NOT sent — "user_id" collides with a
-    // reserved/system field in the CRM and wiped the contact. Pabbly and the
-    // surviving user_signed_up webhook never send it.
+    // ── DEBUG (round: isolate value vs automation) ──────────────────────────
+    // Sending SHORT dummy token/login_url to test if the long real values
+    // (token=96 hex, login_url≈136 chars) overflow a CRM custom-field limit and
+    // corrupt the contact. If the contact SURVIVES this round → it's the value;
+    // if it WIPES → it's automation 6a217a96d9c61. Revert after the test.
+    const DEBUG_SHORT_TOKEN_VALUES = true;
+    deliveryPayload['contact.token']     = DEBUG_SHORT_TOKEN_VALUES ? 'DBGTOKEN' : token;
+    deliveryPayload['contact.login_url'] = DEBUG_SHORT_TOKEN_VALUES ? 'https://orbitq.vidapulse.io/auth' : loginUrl;
+    // NOTE: contact.user_id intentionally NOT sent — "user_id" collided with a
+    // reserved/system field in the CRM. Pabbly and user_signed_up never send it.
 
     (async () => {
       try {
