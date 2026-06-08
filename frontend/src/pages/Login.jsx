@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -13,6 +13,7 @@ const OAUTH_ERRORS = {
 export default function Login() {
   const [searchParams] = useSearchParams();
   const { refetch } = useAuth();
+  const navigate = useNavigate();
 
   const [email,         setEmail]         = useState('');
   const [password,      setPassword]      = useState('');
@@ -20,6 +21,7 @@ export default function Login() {
   const [loading,       setLoading]       = useState(false);
   const [error,         setError]         = useState('');
   const [autoMsg,       setAutoMsg]       = useState('');   // "creating account…" status
+  const [confirmCreate, setConfirmCreate] = useState(null); // email pending create-confirm, or null
   const [googleEnabled, setGoogleEnabled] = useState(false);
 
   // Deactivated-account restore flow
@@ -53,6 +55,7 @@ export default function Login() {
   async function handleLogin(e) {
     e.preventDefault();
     setError('');
+    setConfirmCreate(null);
     setLoading(true);
     try {
       await api.post('/auth/login', { email, password });
@@ -71,26 +74,20 @@ export default function Login() {
         return;
       }
 
-      // No account for this email → auto-create it, then land in the dashboard.
-      // (Login returns a generic 401 for both wrong-password and no-account, so
-      //  we disambiguate via /auth/email-status.)
+      // Login returns a generic 401 for both wrong-password and no-account, so
+      // disambiguate via /auth/email-status. If there's NO account, we do NOT
+      // silently create one (that let typos/bots make junk accounts) — we ask
+      // the user to confirm first; the create happens in handleConfirmCreate().
       if (err.response?.status === 401) {
         try {
           const { data: status } = await api.get(
             `/auth/email-status?email=${encodeURIComponent(email.trim())}`
           );
           if (!status.exists) {
-            if (password.length < 8) {
-              setError('No account found for this email. To create one, use a password of at least 8 characters.');
-              setLoading(false);
-              return;
-            }
             setError('');
-            setAutoMsg('Account does not exist — creating your account…');
-            await new Promise(r => setTimeout(r, 1800)); // brief, readable beat
-            await api.post('/auth/register', { email: email.trim(), password });
-            await refetch();
-            window.location.replace('/dashboard');
+            setAutoMsg('');
+            setConfirmCreate(email.trim());
+            setLoading(false);
             return;
           }
         } catch {
@@ -104,6 +101,35 @@ export default function Login() {
       setError(msg);
       setLoading(false);
     }
+  }
+
+  // User confirmed they want a brand-new account for the entered email (it has
+  // none). This is the ONLY place a login-screen create happens.
+  async function handleConfirmCreate() {
+    if (password.length < 8) {
+      setError('To create an account, use a password of at least 8 characters.');
+      return;
+    }
+    setError('');
+    setConfirmCreate(null);
+    setLoading(true);
+    setAutoMsg('Creating your account…');
+    try {
+      await api.post('/auth/register', { email: email.trim(), password });
+      await refetch();
+      window.location.replace('/dashboard');
+    } catch (err) {
+      setAutoMsg('');
+      setError(err.response?.data?.message || err.response?.data?.error || 'Could not create account. Please try again.');
+      setLoading(false);
+    }
+  }
+
+  // User declined → send them to the register screen with the email prefilled.
+  function handleDeclineCreate() {
+    const em = confirmCreate || email.trim();
+    setConfirmCreate(null);
+    navigate(`/register?email=${encodeURIComponent(em)}`);
   }
 
   async function handleRestore() {
@@ -177,6 +203,36 @@ export default function Login() {
                 type="button"
                 onClick={() => setDeactivated(null)}
                 disabled={restoring}
+                className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+              >
+                No
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* No account for this email → confirm before creating (no silent/junk accounts) */}
+        {confirmCreate && (
+          <div className="mb-4 px-4 py-4 bg-amber-900/30 border border-amber-700/50 rounded-lg">
+            <p className="text-amber-200 text-sm mb-1">
+              No account found for <span className="text-amber-100 font-medium break-all">{confirmCreate}</span>.
+            </p>
+            <p className="text-amber-200/80 text-sm mb-3">
+              Do you want to create a new free account with these details?
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleConfirmCreate}
+                disabled={loading}
+                className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+              >
+                Yes, create account
+              </button>
+              <button
+                type="button"
+                onClick={handleDeclineCreate}
+                disabled={loading}
                 className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
               >
                 No
