@@ -16,7 +16,7 @@
  *   c) Email/password — set via set_password_url sent by divineleads
  */
 
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs'); // pure-JS, hash-compatible with bcrypt ($2a/$2b)
 const crypto = require('crypto');
 const jwt    = require('jsonwebtoken');
 

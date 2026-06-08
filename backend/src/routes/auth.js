@@ -860,7 +860,7 @@ router.post('/register', async (req, res, next) => {
       );
       if (!plans.length) throw new Error('Free plan not found');
 
-      const hash = await require('bcrypt').hash(password, 12);
+      const hash = await require('bcryptjs').hash(password, 12);
 
       const { rows: [user] } = await client.query(
         `INSERT INTO users (email, name, phone, plan_id, role, password_hash, password_set, created_via,
@@ -961,7 +961,7 @@ router.patch('/me', requireAuth, async (req, res, next) => {
           message: 'Passwords do not match',
         });
       }
-      const hash = await require('bcrypt').hash(new_password, 12);
+      const hash = await require('bcryptjs').hash(new_password, 12);
       params.push(hash);
       setClauses.push(`password_hash = $${params.length}`);
       setClauses.push(`password_set = TRUE`);
