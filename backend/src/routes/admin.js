@@ -560,6 +560,72 @@ router.get('/users', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/users/export.csv
+// Admin-only. Streams ALL non-admin users (active + deactivated) as a CSV for
+// importing missing contacts into the CRM. Columns map onto CRM contact fields
+// (name, email, phone) plus plan / status / signup context. One query, no
+// pagination — the full list every time.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/users/export.csv', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+         u.name,
+         u.email,
+         u.phone,
+         COALESCE(p.name::text, 'free') AS plan,
+         CASE WHEN u.is_active THEN 'active' ELSE 'deactivated' END AS status,
+         u.created_at,
+         u.last_login_at,
+         u.signup_utm_source,
+         u.signup_utm_campaign
+       FROM users u
+       LEFT JOIN plans p ON p.id = u.plan_id
+       WHERE u.role != 'admin'
+       ORDER BY u.created_at ASC`
+    );
+
+    const headers = [
+      'name', 'email', 'phone', 'plan', 'status',
+      'created_at', 'last_login_at', 'utm_source', 'utm_campaign',
+    ];
+
+    // RFC-4180 escaping: quote values containing comma/quote/CR/LF; double quotes.
+    const esc = (v) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v);
+      return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const iso = (d) => (d ? new Date(d).toISOString() : '');
+
+    const lines = [headers.join(',')];
+    for (const r of rows) {
+      lines.push([
+        esc(r.name),
+        esc(r.email),
+        esc(r.phone),
+        esc(r.plan),
+        esc(r.status),
+        esc(iso(r.created_at)),
+        esc(iso(r.last_login_at)),
+        esc(r.signup_utm_source),
+        esc(r.signup_utm_campaign),
+      ].join(','));
+    }
+    // Leading UTF-8 BOM so Excel detects encoding (names with accents, etc.).
+    const csv = '﻿' + lines.join('\r\n') + '\r\n';
+
+    const stamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="vidapulse-users-${stamp}.csv"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(csv);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PATCH /api/admin/users/:id/plan
 //
 // Admin-only: change a user's plan and/or plan_expires_at.

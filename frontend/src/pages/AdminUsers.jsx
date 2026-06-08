@@ -665,6 +665,7 @@ export default function AdminUsers() {
   const [selectedIds,          setSelectedIds]          = useState(() => new Set());
   const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
   const [working,              setWorking]              = useState(false);
+  const [exporting,            setExporting]            = useState(false);
 
   // Shared refresh signal — bumping it reloads the active list AND the
   // Deactivated section (so a user moves between them immediately).
@@ -701,6 +702,30 @@ export default function AdminUsers() {
       showToast(err.response?.data?.message ?? 'Deactivation failed', 'error');
     } finally {
       setWorking(false);
+    }
+  }
+
+  // Download ALL users (name, email, phone, plan, status, signup date, lead
+  // source) as a CSV — for importing missing contacts into the CRM. Streams
+  // from the admin export endpoint; auth rides the httpOnly cookie.
+  async function handleExportCsv() {
+    setExporting(true);
+    try {
+      const res = await api.get('/admin/users/export.csv', { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const cd  = res.headers?.['content-disposition'] || '';
+      const m   = /filename="?([^"]+)"?/.exec(cd);
+      const a   = document.createElement('a');
+      a.href = url;
+      a.download = m ? m[1] : 'vidapulse-users.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showToast(err.response?.data?.message ?? 'Export failed. Please try again.', 'error');
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -842,6 +867,15 @@ export default function AdminUsers() {
               {pagination.total.toLocaleString()} user{pagination.total !== 1 ? 's' : ''}
             </span>
           )}
+          <button
+            onClick={handleExportCsv}
+            disabled={exporting}
+            title="Download all users (name, email, phone, plan) as CSV for CRM import"
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold
+                       bg-gray-700 hover:bg-gray-600 text-gray-100 transition-colors disabled:opacity-50"
+          >
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </button>
           {selectedIds.size > 0 && (
             <button
               onClick={() => setConfirmingDeactivate(true)}
