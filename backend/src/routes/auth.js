@@ -669,6 +669,7 @@ router.post('/magic-link', async (req, res, next) => {
     if (dpName)          deliveryPayload.contact_name  = dpName;
     if (normalizedEmail) deliveryPayload.contact_email = normalizedEmail;
     if (storedPhone)     deliveryPayload.contact_phone = storedPhone;
+    deliveryPayload['contact.event_type'] = 'magic_link';
     deliveryPayload['contact.user_id']   = userId;
     deliveryPayload['contact.token']     = token;
     deliveryPayload['contact.login_url'] = loginUrl;

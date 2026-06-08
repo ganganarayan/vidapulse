@@ -93,9 +93,13 @@ async function _processStandardEvents() {
               be.event_key,
               be.user_id,
               be.video_id,
-              be.payload   AS event_payload
+              be.payload   AS event_payload,
+              u.name  AS u_name,
+              u.email AS u_email,
+              u.phone AS u_phone
        FROM   webhook_outbound_log wol
        JOIN   behavioral_events    be  ON be.id = wol.behavioral_event_id
+       JOIN   users                u   ON u.id  = be.user_id
        WHERE  wol.status        = 'failed'
          AND  wol.next_retry_at <= NOW()
          AND  wol.attempts      < wol.max_attempts
@@ -112,17 +116,21 @@ async function _processStandardEvents() {
     // ── 2. New events: no existing log row yet ──────────────────────────
     // insight_available is excluded — handled exclusively by Worker B
     const { rows: newEvents } = await pool.query(
-      `SELECT *
-       FROM   behavioral_events
-       WHERE  processed   = FALSE
-         AND  event_key  != 'insight_available'
-         AND  (scheduled_for IS NULL OR scheduled_for <= NOW())
+      `SELECT be.*,
+              u.name  AS u_name,
+              u.email AS u_email,
+              u.phone AS u_phone
+       FROM   behavioral_events be
+       JOIN   users u ON u.id = be.user_id
+       WHERE  be.processed   = FALSE
+         AND  be.event_key  != 'insight_available'
+         AND  (be.scheduled_for IS NULL OR be.scheduled_for <= NOW())
          AND  NOT EXISTS (
            SELECT 1
            FROM   webhook_outbound_log wol
-           WHERE  wol.behavioral_event_id = behavioral_events.id
+           WHERE  wol.behavioral_event_id = be.id
          )
-       ORDER  BY created_at ASC
+       ORDER  BY be.created_at ASC
        LIMIT  $1`,
       [STANDARD_BATCH_SIZE]
     );
@@ -194,7 +202,7 @@ async function _attemptStandardFire(settings, envelope, logId, eventId, prevAtte
         [eventId]
       );
 
-      logger.info(`[webhookSender] ✓ event_id=${eventId} key=${envelope.event_key} (attempt ${attemptNumber})`);
+      logger.info(`[webhookSender] ✓ event_id=${eventId} key=${envelope['contact.event_type']} (attempt ${attemptNumber})`);
 
     } else {
       throw new Error(`HTTP ${statusCode}: ${_truncate(responseBody, 200)}`);
@@ -346,19 +354,22 @@ async function _fireInsightDispatch(settings, userId, notifications, governor) {
   const t1 = isBundle ? 'new insights' : (primary.teaser_variable_1 || '');
   const t2 = isBundle ? ''             : (primary.teaser_variable_2 || '');
 
-  const envelope = {
-    event_key : 'insight_available',
-    fired_at  : new Date().toISOString(),
-    user_id   : userId,
-    data      : {
-      template_key      : templateKey,
-      video_title       : videoTitle,
-      notification_count: notifications.length,
-      dashboard_url     : dashUrl,
-      teaser_variable_1 : t1,
-      teaser_variable_2 : t2,
-    },
-  };
+  // Contact identity (so the CRM matches & updates, never overwrites).
+  const { rows: [u] } = await pool.query(
+    `SELECT name, email, phone FROM users WHERE id = $1`, [userId]
+  );
+
+  const envelope = {};
+  if (u?.name)  envelope.contact_name  = u.name;
+  if (u?.email) envelope.contact_email = u.email;
+  if (u?.phone) envelope.contact_phone = u.phone;
+  envelope['contact.event_type']         = 'insight_available';
+  envelope['contact.template_key']       = templateKey;
+  envelope['contact.video_title']        = videoTitle;
+  envelope['contact.notification_count'] = notifications.length;
+  envelope['contact.dashboard_url']      = dashUrl;
+  envelope['contact.teaser_variable_1']  = t1;
+  envelope['contact.teaser_variable_2']  = t2;
 
   try {
     const { ok, statusCode, responseBody } = await _postWebhook(
@@ -487,14 +498,19 @@ function _buildStandardEnvelope(event) {
   const rawPayload = event.event_payload ?? event.payload;
   const data       = _parseJson(rawPayload);
 
-  return {
-    event_key : event.event_key,
-    event_id  : event.behavioral_event_id ?? event.id,
-    fired_at  : new Date().toISOString(),
-    user_id   : event.user_id,
-    video_id  : event.video_id ?? null,
-    data,
-  };
+  // Contact identity FIRST (so the CRM matches & updates the existing contact,
+  // never overwrites a blank), then the event details as contact.* customs.
+  const out = {};
+  if (event.u_name)  out.contact_name  = event.u_name;
+  if (event.u_email) out.contact_email = event.u_email;
+  if (event.u_phone) out.contact_phone = event.u_phone;
+  out['contact.event_type'] = event.event_key;
+  out['contact.event_id']   = event.behavioral_event_id ?? event.id;
+  out['contact.fired_at']   = new Date().toISOString();
+  out['contact.user_id']    = event.user_id;
+  out['contact.video_id']   = event.video_id ?? null;
+  out['contact.data']       = data;
+  return out;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

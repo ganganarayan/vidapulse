@@ -147,7 +147,7 @@ async function resendQueuedWebhooks() {
         failed++;
         logger.warn(`[contactWebhook] Resend failed log_id=${entry.id}: ${errorMessage}`);
         await _pauseWebhook(`Re-fire failed: ${errorMessage || `HTTP ${statusCode}`}`);
-        await _fireNotificationWebhook(settings, entry.event_key, errorMessage);
+        await _fireNotificationWebhook(settings, entry.event_key, errorMessage, user?.email || logParams.contact_email || null);
         break;
       }
     }
@@ -286,7 +286,7 @@ async function _fireAndLog(userId, eventKey, user, settings, extraFields = {}) {
     // Do NOT pause the pipeline. The entry is already logged as 'failed'
     // (pending retry); subsequent webhooks keep firing. Still alert admin.
     logger.warn(`[contactWebhook] ✗ ${eventKey} → ${errorMessage} user=${userId} (left failed/pending)`);
-    await _fireNotificationWebhook(settings, eventKey, errorMessage || `HTTP ${statusCode}`);
+    await _fireNotificationWebhook(settings, eventKey, errorMessage || `HTTP ${statusCode}`, user?.email || logParams.contact_email || null);
   }
 }
 
@@ -294,7 +294,7 @@ async function _fireAndLog(userId, eventKey, user, settings, extraFields = {}) {
 // NOTIFICATION WEBHOOK
 // ─────────────────────────────────────────────────────────────────────────
 
-async function _fireNotificationWebhook(settings, failedEventKey, errorMessage) {
+async function _fireNotificationWebhook(settings, failedEventKey, errorMessage, affectedEmail = null) {
   if (!settings.notification_webhook_url) return;
 
   try {
@@ -304,10 +304,12 @@ async function _fireNotificationWebhook(settings, failedEventKey, errorMessage) 
     const queuedCount = countRow?.cnt ?? 0;
 
     const body = {
-      event_type        : 'webhook_failure_alert',
-      failed_event_type : failedEventKey || '',
-      error_message     : _truncate(errorMessage, 200) || 'Unknown error',
-      queued_count      : queuedCount,
+      // Contact identity first so the CRM matches/updates the affected contact.
+      contact_email                : affectedEmail || undefined,
+      'contact.event_type'         : 'webhook_failure_alert',
+      'contact.failed_event_type'  : failedEventKey || '',
+      'contact.error_message'      : _truncate(errorMessage, 200) || 'Unknown error',
+      'contact.queued_count'       : queuedCount,
     };
 
     const finalUrl = _buildUrl(settings.notification_webhook_url, settings.api_token);
