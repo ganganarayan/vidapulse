@@ -62,7 +62,9 @@ function formatLeadSource(user) {
 // Whole days since a timestamp (e.g. account creation → the "DAYS" column).
 function daysSince(iso) {
   if (!iso) return '—';
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  // Clamp to 0 — a just-created account can read slightly negative from
+  // server/client clock skew, which showed as "-1" right after signup.
+  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
 }
 
 function formatRelative(iso) {
