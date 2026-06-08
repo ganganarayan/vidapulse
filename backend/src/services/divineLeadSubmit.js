@@ -57,6 +57,44 @@ async function markDivineLeadSynced(userId) {
  * @param {string} phone
  * @returns {Promise<{ok:boolean, status?:number, reason?:string}>}
  */
+// Browser-like UA so the widget treats us like a real form submit.
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36';
+
+/**
+ * GET the form page first to obtain the session cookies (XSRF-TOKEN,
+ * searchyin_session, …) — a browser always has these, and the widget needs a
+ * valid form session to create a real Contact (not just a pipeline stub).
+ * Returns { cookieHeader, xsrf }. Best-effort — never throws.
+ */
+async function _fetchFormSession() {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const res = await fetch(VIDAPULSE_FORM_URL, {
+      method : 'GET',
+      headers: { 'User-Agent': BROWSER_UA, 'Accept': 'text/html,application/xhtml+xml' },
+      signal : controller.signal,
+    }).finally(() => clearTimeout(timer));
+
+    const setCookies = typeof res.headers.getSetCookie === 'function'
+      ? res.headers.getSetCookie()
+      : (res.headers.get('set-cookie') ? [res.headers.get('set-cookie')] : []);
+
+    const jar = {};
+    for (const c of setCookies) {
+      const pair = c.split(';')[0];
+      const i = pair.indexOf('=');
+      if (i > 0) jar[pair.slice(0, i).trim()] = pair.slice(i + 1).trim();
+    }
+    const cookieHeader = Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ');
+    const xsrf = jar['XSRF-TOKEN'] ? decodeURIComponent(jar['XSRF-TOKEN']) : null;
+    return { cookieHeader, xsrf };
+  } catch (err) {
+    logger.warn(`[VidaPulse→DivineLead] session fetch failed: ${err.message}`);
+    return { cookieHeader: '', xsrf: null };
+  }
+}
+
 async function submitToVidaPulse(name, email, phone) {
   if (!email || !email.includes('@')) {
     logger.error('[VidaPulse→DivineLead] missing/invalid email — skipping');
@@ -96,6 +134,9 @@ async function submitToVidaPulse(name, email, phone) {
     return fd;
   }
 
+  // Establish a form session first (cookies + XSRF), like a browser would.
+  const session = await _fetchFormSession();
+
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -107,8 +148,10 @@ async function submitToVidaPulse(name, email, phone) {
         headers: {
           'Origin'    : 'https://login.vidapulse.io',
           'Referer'   : VIDAPULSE_FORM_URL,
-          'User-Agent': 'VidaPulse-Server/1.0',
+          'User-Agent': BROWSER_UA,
           'Accept'    : 'application/json, text/html, */*',
+          ...(session.cookieHeader ? { 'Cookie'       : session.cookieHeader } : {}),
+          ...(session.xsrf         ? { 'X-XSRF-TOKEN' : session.xsrf } : {}),
         },
         body  : buildBody(),
         signal: controller.signal,
