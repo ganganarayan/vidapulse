@@ -31,7 +31,6 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { pool }    = require('../config/database');
 const { fireContactWebhook } = require('../services/contactWebhookSender');
 const { emitEvent }          = require('../services/behavioralEventService');
-const { submitToVidaPulse, markDivineLeadSynced } = require('../services/divineLeadSubmit');
 
 // ── Login rate limiter ────────────────────────────────────────
 // In-memory, keyed by IP.  Max 10 attempts per 15-minute window.
@@ -892,16 +891,6 @@ router.post('/register', async (req, res, next) => {
         plan         : 'free',
       });
 
-      // DivineLead push — fire EXACTLY ONCE for the brand-new account.
-      // Atomically claim the once-only flag, then fire-and-forget (never await,
-      // never block the dashboard redirect, never throw into signup).
-      markDivineLeadSynced(user.id).then(claimed => {
-        if (claimed) {
-          submitToVidaPulse(finalName, normalizedEmail, normalizedPhone || '')
-            .catch(e => logger.error(`[VidaPulse→DivineLead] unexpected: ${e.message}`));
-        }
-      }).catch(() => {});
-
       logger.info(`[auth/register] New subscriber: ${normalizedEmail}`);
       return res.status(201).json({ ok: true });
 
@@ -1126,18 +1115,6 @@ router.get('/oauth/google/callback', async (req, res) => {
     // New OAuth users: authService.findOrCreateOAuthUser already emits
     // user_signed_up → behavioralEventService → contact webhook. No extra fire.
     // Login events do not trigger the contact webhook — signup only.
-
-    // DivineLead push — ONLY on first-ever sign-in (isNew). The OAuth callback
-    // runs on every Google login, so this is gated by isNew AND the atomic
-    // once-only flag so returning logins fire it zero times. Fire-and-forget.
-    if (isNew) {
-      markDivineLeadSynced(user.id).then(claimed => {
-        if (claimed) {
-          submitToVidaPulse(profile.name, profile.email, '')
-            .catch(e => logger.error(`[VidaPulse→DivineLead] unexpected: ${e.message}`));
-        }
-      }).catch(() => {});
-    }
 
     logger.info(`[auth] Google OAuth success: ${profile.email} (${isNew ? 'new user' : 'login'})`);
     // Token in URL lets the frontend store it in localStorage for non-cookie clients.
