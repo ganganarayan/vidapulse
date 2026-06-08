@@ -88,6 +88,19 @@ router.post('/create-user', webhookAuth, async (req, res) => {
   logger.info(`[webhook/create-user] Incoming request from ${sourceIp}`);
   logger.debug(`[webhook/create-user] Body: ${JSON.stringify(req.body)}`);
 
+  // Log the inbound receipt into the unified Contact Webhook Log (visible in
+  // Admin → Contact Webhook Log alongside every other webhook).
+  pool.query(
+    `INSERT INTO contact_webhook_log
+       (event_key, user_id, url_sent_to, params_sent, status, sent_at, response_at)
+     VALUES ('create_user_received', NULL, '(inbound) POST /api/webhook/create-user', $1, 'sent', NOW(), NOW())`,
+    [JSON.stringify({
+      contact_name : req.body?.name  ?? null,
+      contact_email: req.body?.email ?? null,
+      contact_phone: req.body?.phone ?? null,
+    })]
+  ).catch(e => logger.warn(`[webhook/create-user] unified log insert failed: ${e.message}`));
+
   // ── Validate payload ─────────────────────────────────────
   const parseResult = createUserSchema.safeParse(req.body);
 

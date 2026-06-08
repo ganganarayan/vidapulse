@@ -184,7 +184,7 @@ async function getContactWebhookStatus() {
   const [settingsRes, queuedRes, failedRes] = await Promise.all([
     pool.query(`SELECT contact_webhook_paused, contact_webhook_paused_at, contact_webhook_paused_reason FROM webhook_settings LIMIT 1`),
     pool.query(`SELECT COUNT(*)::int AS cnt FROM contact_webhook_log WHERE status = 'queued'`),
-    pool.query(`SELECT COUNT(*)::int AS cnt FROM contact_webhook_log WHERE status = 'failed' AND event_key NOT LIKE 'magic_link%'`),
+    pool.query(`SELECT COUNT(*)::int AS cnt FROM contact_webhook_log WHERE status = 'failed' AND event_key NOT LIKE 'magic_link%' AND event_key NOT IN ('webhook_failure_alert','create_user_received')`),
   ]);
   const s = settingsRes.rows[0] ?? {};
   return {
@@ -212,7 +212,7 @@ async function resendFailedWebhooks() {
 
     const { rows: entries } = await pool.query(
       `SELECT * FROM contact_webhook_log
-        WHERE status = 'failed' AND event_key NOT LIKE 'magic_link%'
+        WHERE status = 'failed' AND event_key NOT LIKE 'magic_link%' AND event_key NOT IN ('webhook_failure_alert','create_user_received')
         ORDER BY sent_at ASC`
     );
 
@@ -313,7 +313,18 @@ async function _fireNotificationWebhook(settings, failedEventKey, errorMessage, 
     };
 
     const finalUrl = _buildUrl(settings.notification_webhook_url, settings.api_token);
-    const { ok, statusCode } = await _doPost(finalUrl, body);
+    const { ok, statusCode, responseBody, errorMessage: errMsg } = await _doPost(finalUrl, body);
+    // Log every notification fire to the unified Contact Webhook Log.
+    await _insertLog({
+      eventKey      : 'webhook_failure_alert',
+      userId        : null,
+      urlSentTo     : settings.notification_webhook_url,
+      paramsSent    : body,
+      status        : ok ? 'sent' : 'failed',
+      responseStatus: statusCode,
+      responseBody  : responseBody ? _truncate(responseBody, 1000) : null,
+      errorMessage  : ok ? null : errMsg,
+    }).catch(e => logger.warn(`[contactWebhook] notification log insert failed: ${e.message}`));
     if (ok) {
       logger.info(`[contactWebhook] Notification webhook fired → ${statusCode}`);
     } else {
@@ -502,9 +513,11 @@ async function retryWebhookEntry(logId) {
     );
     if (!entry) return { ok: false, statusCode: 0, errorMessage: 'Entry not found' };
 
-    // Magic-link rows are not contact-webhook fires — never re-fire them here.
-    if (entry.event_key && entry.event_key.startsWith('magic_link')) {
-      return { ok: false, statusCode: 0, errorMessage: 'Magic-link entries cannot be retried here.' };
+    // Only genuine contact-webhook fires are retryable here. Magic-link rows,
+    // inbound receipts (*_received), and failure alerts are log-only.
+    const ek = entry.event_key || '';
+    if (ek.startsWith('magic_link') || ek.endsWith('_received') || ek === 'webhook_failure_alert') {
+      return { ok: false, statusCode: 0, errorMessage: 'This entry is log-only and cannot be retried.' };
     }
 
     const settings = await _loadSettings();
