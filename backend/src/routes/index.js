@@ -74,6 +74,24 @@ router.use('/reports',   reportsRoutes);
 router.use('/cta-links', ctaLinksRoutes);
 router.use('/payments',  paymentsRoutes);
 
+// ── GET /api/geo ──────────────────────────────────────────────────────────
+// Public (no auth). Returns the requester's ISO-3166 alpha-2 country code,
+// resolved offline from their IP via geoip-lite. Used by the signup form to
+// default the phone-number country code. Never throws — returns
+// { country: null } on any lookup failure so the client can fall back.
+router.get('/geo', (req, res) => {
+  let country = null;
+  try {
+    const ip = getClientIp(req);
+    if (ip) {
+      const ipv4 = ip.replace(/^::ffff:/i, '');
+      const geo  = geoip.lookup(ipv4);
+      country = geo?.country || null;
+    }
+  } catch { country = null; }
+  return res.json({ country });
+});
+
 // ── GET /api/promotion-videos ─────────────────────────────────────────────
 // Returns promotion videos visible to the current user (plan-filtered, not hidden).
 router.get('/promotion-videos', requireAuth, async (req, res, next) => {

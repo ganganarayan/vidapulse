@@ -4,6 +4,7 @@ import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { pixelTrack } from '../lib/pixel';
 import { getLeadSource, clearLeadSource } from '../lib/leadSource';
+import { COUNTRIES, dialForCountry, DEFAULT_COUNTRY } from '../lib/countries';
 
 /**
  * Register — self-signup for new subscribers (free plan).
@@ -23,6 +24,7 @@ export default function Register() {
   const [email,     setEmail]     = useState(prefillEmail);
   const [name,      setName]      = useState(prefillName);
   const [phone,     setPhone]     = useState(prefillPhone);
+  const [countryCode, setCountryCode] = useState(DEFAULT_COUNTRY);
   const [password,  setPassword]  = useState('');
   const [confirm,   setConfirm]   = useState('');
   const [showPw,    setShowPw]    = useState(false);
@@ -39,6 +41,21 @@ export default function Register() {
     api.get('/auth/providers')
       .then(res => setGoogleEnabled(!!res.data.google))
       .catch(() => {});
+  }, []);
+
+  // Default the phone country code from the visitor's IP (offline geoip on the
+  // server, GET /api/geo). Falls back to DEFAULT_COUNTRY when the lookup fails
+  // or returns a country we don't list.
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/geo')
+      .then(({ data }) => {
+        if (cancelled) return;
+        const cc = String(data?.country || '').toUpperCase();
+        if (cc && dialForCountry(cc)) setCountryCode(cc);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   // When the email is prefilled, check whether it already belongs to a Google
@@ -83,10 +100,25 @@ export default function Register() {
 
     setLoading(true);
     try {
+      // Combine the selected country dial code with the national number into a
+      // clean E.164 string (e.g. +919876543210). If the user pasted a number
+      // that already starts with '+', treat it as already international.
+      const dial     = dialForCountry(countryCode) || '';
+      const rawPhone = phone.trim();
+      let fullPhone;
+      if (!rawPhone) {
+        fullPhone = undefined;
+      } else if (rawPhone.startsWith('+')) {
+        fullPhone = '+' + rawPhone.replace(/\D/g, '');
+      } else {
+        const national = rawPhone.replace(/\D/g, '').replace(/^0+/, '');
+        fullPhone = national ? `+${dial}${national}` : undefined;
+      }
+
       await api.post('/auth/register', {
         email      : email.trim(),
         name       : name.trim(),
-        phone      : phone.trim() || undefined,
+        phone      : fullPhone,
         password,
         lead_source: getLeadSource() || undefined,
       });
@@ -312,20 +344,34 @@ export default function Register() {
               />
             </div>
 
-            {/* WhatsApp number (optional) */}
+            {/* WhatsApp number (optional) — separate country code + national number */}
             <div>
               <label className="block text-xs text-gray-300 mb-1.5 font-medium">WhatsApp Number for Quick Assistance <span className="text-gray-500 font-normal">(optional)</span></label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                placeholder="+91…"
-                disabled={loading}
-                autoComplete="tel"
-                className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
-                           text-gray-100 placeholder-gray-400 text-sm rounded-lg
-                           px-3 py-2.5 focus:outline-none transition-colors"
-              />
+              <div className="flex gap-2">
+                <select
+                  value={countryCode}
+                  onChange={e => setCountryCode(e.target.value)}
+                  disabled={loading}
+                  aria-label="Country code"
+                  className="shrink-0 max-w-[8.5rem] bg-gray-700 border border-gray-600 focus:border-amber-500
+                             text-gray-100 text-sm rounded-lg px-2 py-2.5 focus:outline-none transition-colors"
+                >
+                  {COUNTRIES.map(c => (
+                    <option key={c.code} value={c.code}>{c.name} (+{c.dial})</option>
+                  ))}
+                </select>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  placeholder="98765 43210"
+                  disabled={loading}
+                  autoComplete="tel"
+                  className="flex-1 min-w-0 bg-gray-700 border border-gray-600 focus:border-amber-500
+                             text-gray-100 placeholder-gray-400 text-sm rounded-lg
+                             px-3 py-2.5 focus:outline-none transition-colors"
+                />
+              </div>
             </div>
 
             {/* Password */}
