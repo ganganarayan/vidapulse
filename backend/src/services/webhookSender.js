@@ -56,9 +56,23 @@ let _isRunning      = false;
 // LIFECYCLE
 // ─────────────────────────────────────────────────────────────────────────
 
+// Master switch for the behavioral/insight event STREAM to the CRM webhook_url.
+// Disabled: this is an event feed, but our CRM webhook_url is a contact-UPSERT
+// automation — the event-style calls were overwriting/wiping contacts ~30s
+// after signup. The contact webhook (contactWebhookSender) and the magic-link
+// delivery remain the only senders to the CRM. Behavioral events are still
+// recorded (emitEvent → behavioral_events) for the funnel; they just no longer
+// POST to the CRM. Re-enable only with a SEPARATE event URL.
+const CRM_EVENT_STREAM_ENABLED = false;
+
 function start() {
   if (_isRunning) return;
   _isRunning = true;
+
+  if (!CRM_EVENT_STREAM_ENABLED) {
+    logger.info('[webhookSender] CRM event stream DISABLED — Worker A/B not started (contact webhook is the sole CRM sender)');
+    return;
+  }
 
   _standardTimer = setInterval(_processStandardEvents, STANDARD_INTERVAL_MS);
 
