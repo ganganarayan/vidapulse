@@ -207,19 +207,14 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
   const step    = Math.max(1, Math.floor(n / 120));
   const sampled = pts.filter((_, i) => i % step === 0 || i === n - 1);
 
-  function smoothPath(points) {
+  // Plain single line — straight segments between points (no curve smoothing).
+  function straightPath(points) {
     if (points.length < 2) return '';
-    let d = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const curr = points[i];
-      const cpx  = (prev.x + curr.x) / 2;
-      d += ` C ${cpx} ${prev.y} ${cpx} ${curr.y} ${curr.x} ${curr.y}`;
-    }
-    return d;
+    return `M ${points[0].x} ${points[0].y}` +
+           points.slice(1).map(p => ` L ${p.x} ${p.y}`).join('');
   }
 
-  const linePath = smoothPath(sampled);
+  const linePath = straightPath(sampled);
   const areaPath = `${linePath} L ${sampled[sampled.length - 1].x} ${CHART_H_SVG} L 0 ${CHART_H_SVG} Z`;
 
   const avgRetention = Math.round(buckets.reduce((s, b) => s + b.pct, 0) / buckets.length);
