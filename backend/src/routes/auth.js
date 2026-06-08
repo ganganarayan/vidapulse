@@ -649,19 +649,15 @@ router.post('/magic-link', async (req, res, next) => {
     // It receives the login_url so an external automation (email/WhatsApp)
     // can deliver the link to the user. Every outcome is logged to the
     // Contact Webhook Log. Never throws — failures are logged only.
-    // Payload shape matches the register/contact webhook standard EXACTLY:
-    // standard contact fields (contact_name, contact_email, contact_phone) at
-    // the TOP LEVEL — the automation requires these to identify the contact —
-    // and custom fields as "contact." dot-key strings. Empty fields omitted.
+    // Flat keys, no prefix (per the CRM dev team). Empty fields omitted.
     const dpName = (storedName && !reqName) ? storedName : finalName;
     const deliveryPayload = {};
-    // Every key is prefixed with "contact." (the data point is after the dot).
-    if (dpName)          deliveryPayload['contact.contact_name']  = dpName;
-    if (normalizedEmail) deliveryPayload['contact.contact_email'] = normalizedEmail;
-    if (storedPhone)     deliveryPayload['contact.contact_phone'] = storedPhone;
-    deliveryPayload['contact.user_id']   = userId;
-    deliveryPayload['contact.token']     = token;
-    deliveryPayload['contact.login_url'] = loginUrl;
+    if (dpName)          deliveryPayload.contact_name  = dpName;
+    if (normalizedEmail) deliveryPayload.contact_email = normalizedEmail;
+    if (storedPhone)     deliveryPayload.contact_phone = storedPhone;
+    deliveryPayload.user_id   = userId;
+    deliveryPayload.token     = token;
+    deliveryPayload.login_url = loginUrl;
 
     (async () => {
       try {

@@ -194,7 +194,7 @@ async function _attemptStandardFire(settings, envelope, logId, eventId, prevAtte
         [eventId]
       );
 
-      logger.info(`[webhookSender] ✓ event_id=${eventId} key=${envelope['contact.event_key']} (attempt ${attemptNumber})`);
+      logger.info(`[webhookSender] ✓ event_id=${eventId} key=${envelope.event_key} (attempt ${attemptNumber})`);
 
     } else {
       throw new Error(`HTTP ${statusCode}: ${_truncate(responseBody, 200)}`);
@@ -347,15 +347,17 @@ async function _fireInsightDispatch(settings, userId, notifications, governor) {
   const t2 = isBundle ? ''             : (primary.teaser_variable_2 || '');
 
   const envelope = {
-    'contact.event_key'          : 'insight_available',
-    'contact.fired_at'           : new Date().toISOString(),
-    'contact.user_id'            : userId,
-    'contact.template_key'       : templateKey,
-    'contact.video_title'        : videoTitle,
-    'contact.notification_count' : notifications.length,
-    'contact.dashboard_url'      : dashUrl,
-    'contact.teaser_variable_1'  : t1,
-    'contact.teaser_variable_2'  : t2,
+    event_key : 'insight_available',
+    fired_at  : new Date().toISOString(),
+    user_id   : userId,
+    data      : {
+      template_key      : templateKey,
+      video_title       : videoTitle,
+      notification_count: notifications.length,
+      dashboard_url     : dashUrl,
+      teaser_variable_1 : t1,
+      teaser_variable_2 : t2,
+    },
   };
 
   try {
@@ -486,12 +488,12 @@ function _buildStandardEnvelope(event) {
   const data       = _parseJson(rawPayload);
 
   return {
-    'contact.event_key' : event.event_key,
-    'contact.event_id'  : event.behavioral_event_id ?? event.id,
-    'contact.fired_at'  : new Date().toISOString(),
-    'contact.user_id'   : event.user_id,
-    'contact.video_id'  : event.video_id ?? null,
-    'contact.data'      : data,
+    event_key : event.event_key,
+    event_id  : event.behavioral_event_id ?? event.id,
+    fired_at  : new Date().toISOString(),
+    user_id   : event.user_id,
+    video_id  : event.video_id ?? null,
+    data,
   };
 }
 

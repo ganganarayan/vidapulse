@@ -19,6 +19,7 @@ export default function Login() {
   const [showPassword,  setShowPassword]  = useState(false);
   const [loading,       setLoading]       = useState(false);
   const [error,         setError]         = useState('');
+  const [autoMsg,       setAutoMsg]       = useState('');   // "creating account…" status
   const [googleEnabled, setGoogleEnabled] = useState(false);
 
   // Deactivated-account restore flow
@@ -69,8 +70,37 @@ export default function Login() {
         setLoading(false);
         return;
       }
+
+      // No account for this email → auto-create it, then land in the dashboard.
+      // (Login returns a generic 401 for both wrong-password and no-account, so
+      //  we disambiguate via /auth/email-status.)
+      if (err.response?.status === 401) {
+        try {
+          const { data: status } = await api.get(
+            `/auth/email-status?email=${encodeURIComponent(email.trim())}`
+          );
+          if (!status.exists) {
+            if (password.length < 8) {
+              setError('No account found for this email. To create one, use a password of at least 8 characters.');
+              setLoading(false);
+              return;
+            }
+            setError('');
+            setAutoMsg('Account does not exist — creating your account…');
+            await new Promise(r => setTimeout(r, 1800)); // brief, readable beat
+            await api.post('/auth/register', { email: email.trim(), password });
+            await refetch();
+            window.location.replace('/dashboard');
+            return;
+          }
+        } catch {
+          // fall through to the generic error below
+        }
+      }
+
       // Server returns { error: '...' } for both 401 and first-login 400
       const msg = data?.error || data?.message || 'Something went wrong. Please try again.';
+      setAutoMsg('');
       setError(msg);
       setLoading(false);
     }
@@ -118,6 +148,15 @@ export default function Login() {
         {error && (
           <div className="mb-4 px-4 py-3 bg-red-900/40 border border-red-700/50 rounded-lg text-red-300 text-sm">
             {error}
+          </div>
+        )}
+
+        {/* Auto-create status (account not found → creating) */}
+        {autoMsg && (
+          <div className="mb-4 px-4 py-3 bg-amber-900/25 border border-amber-700/40 rounded-lg
+                          text-amber-200 text-sm flex items-center gap-2.5">
+            <span className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+            {autoMsg}
           </div>
         )}
 
