@@ -65,19 +65,9 @@ async function fireContactWebhook(userId, eventKey, extraFields = {}) {
     const settings = await _loadSettings();
     if (!settings || !settings.is_active || !settings.webhook_url) return;
 
-    // ── If paused, queue the entry rather than dropping it ────────────
-    if (settings.contact_webhook_paused) {
-      const user  = await _loadUser(userId);
-      const lp    = user ? _buildLogParams(user, eventKey, settings, extraFields) : { event_type: eventKey, ...extraFields };
-      await _insertLog({
-        eventKey, userId,
-        urlSentTo : settings.webhook_url,
-        paramsSent: lp,
-        status    : 'queued',
-      });
-      logger.info(`[contactWebhook] Queued ${eventKey} user=${userId} (webhook paused)`);
-      return;
-    }
+    // Fire immediately for every event — no global pause/queue governor.
+    // A failure does NOT block other events; the entry is just logged as
+    // 'failed' (pending retry) by _fireAndLog.
 
     // ── Load user, build params, fire ─────────────────────────────────
     const user = await _loadUser(userId);
@@ -293,8 +283,9 @@ async function _fireAndLog(userId, eventKey, user, settings, extraFields = {}) {
   if (ok) {
     logger.info(`[contactWebhook] ✓ ${eventKey} → ${statusCode} (${ms}ms) user=${userId}`);
   } else {
-    logger.warn(`[contactWebhook] ✗ ${eventKey} → ${errorMessage} user=${userId}`);
-    await _pauseWebhook(errorMessage || `HTTP ${statusCode}`);
+    // Do NOT pause the pipeline. The entry is already logged as 'failed'
+    // (pending retry); subsequent webhooks keep firing. Still alert admin.
+    logger.warn(`[contactWebhook] ✗ ${eventKey} → ${errorMessage} user=${userId} (left failed/pending)`);
     await _fireNotificationWebhook(settings, eventKey, errorMessage || `HTTP ${statusCode}`);
   }
 }

@@ -68,41 +68,50 @@ async function submitToVidaPulse(name, email, phone) {
   const finalEmail = email.trim();
   const finalPhone = (phone || '').trim();
 
-  // Build the urlencoded body exactly per the form's wire format: a flat copy
-  // plus a parallel fields[] array mapping each value to its server field id.
-  const body = new URLSearchParams();
-  body.set('name',  finalName);
-  body.set('email', finalEmail);
-  body.set('phone', finalPhone);
-  body.set('fields[0][id]', '149840');
-  body.set('fields[0][label]', 'Name');
-  body.set('fields[0][name]', 'name');
-  body.set('fields[0][value]', finalName);
-  body.set('fields[0][custom_field_id]', '');
-  body.set('fields[1][id]', '149841');
-  body.set('fields[1][label]', 'Email');
-  body.set('fields[1][name]', 'email');
-  body.set('fields[1][value]', finalEmail);
-  body.set('fields[1][custom_field_id]', '');
-  body.set('fields[2][id]', '149842');
-  body.set('fields[2][label]', 'Phone');
-  body.set('fields[2][name]', 'phone');
-  body.set('fields[2][value]', finalPhone);
-  body.set('fields[2][custom_field_id]', '');
+  // Build a multipart/form-data body that matches the live browser submission
+  // byte-for-byte (verified off the real request):
+  //   • actual values live in the FLAT keys name / email / phone
+  //   • fields[N] carries id/label/name only; value & custom_field_id are EMPTY
+  //   • Content-Type must be multipart/form-data (the widget ignores urlencoded)
+  // Rebuilt per attempt because a FormData body stream is single-use.
+  function buildBody() {
+    const fd = new FormData();
+    fd.set('fields[0][id]', '149840');
+    fd.set('fields[0][label]', 'Name');
+    fd.set('fields[0][name]', 'name');
+    fd.set('fields[0][value]', '');
+    fd.set('fields[0][custom_field_id]', '');
+    fd.set('fields[1][id]', '149841');
+    fd.set('fields[1][label]', 'Email');
+    fd.set('fields[1][name]', 'email');
+    fd.set('fields[1][value]', '');
+    fd.set('fields[1][custom_field_id]', '');
+    fd.set('fields[2][id]', '149842');
+    fd.set('fields[2][label]', 'Phone');
+    fd.set('fields[2][name]', 'phone');
+    fd.set('fields[2][value]', '');
+    fd.set('fields[2][custom_field_id]', '');
+    fd.set('name',  finalName);
+    fd.set('email', finalEmail);
+    fd.set('phone', finalPhone);
+    return fd;
+  }
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
+      // Do NOT set Content-Type — fetch derives the multipart boundary from the
+      // FormData body automatically. Setting it manually would break parsing.
       const res = await fetch(VIDAPULSE_FORM_URL, {
         method : 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Origin'      : 'https://login.vidapulse.io',
-          'Referer'     : VIDAPULSE_FORM_URL,
-          'User-Agent'  : 'VidaPulse-Server/1.0',
+          'Origin'    : 'https://login.vidapulse.io',
+          'Referer'   : VIDAPULSE_FORM_URL,
+          'User-Agent': 'VidaPulse-Server/1.0',
+          'Accept'    : 'application/json, text/html, */*',
         },
-        body  : body.toString(),
+        body  : buildBody(),
         signal: controller.signal,
       });
       clearTimeout(timer);
