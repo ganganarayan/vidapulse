@@ -60,14 +60,14 @@ export default function OnboardingState() {
 
   if (loading) {
     return (
-      <AdminShell title="Onboarding State" onBack={() => navigate('/dashboard')}>
+      <AdminShell title="Onboarding Stage" onBack={() => navigate('/dashboard')}>
         <PageSkeleton />
       </AdminShell>
     );
   }
   if (fetchError) {
     return (
-      <AdminShell title="Onboarding State" onBack={() => navigate('/dashboard')}>
+      <AdminShell title="Onboarding Stage" onBack={() => navigate('/dashboard')}>
         <div className="text-center py-20">
           <p className="text-gray-400 text-sm mb-4">{fetchError}</p>
           <button
@@ -86,7 +86,7 @@ export default function OnboardingState() {
   const registered = counts.registered || 0;
 
   return (
-    <AdminShell title="Onboarding State" onBack={() => navigate('/dashboard')}>
+    <AdminShell title="Onboarding Stage" onBack={() => navigate('/dashboard')}>
       <div className="max-w-4xl mx-auto flex flex-col gap-8">
 
         {/* ── Funnel ──────────────────────────────────────────────────── */}
