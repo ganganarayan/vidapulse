@@ -190,7 +190,7 @@ function AppSidebar({ onClose }) {
               badge={webhookAlerts.paused ? (webhookAlerts.queuedCount || '!') : null}
             />
             <SidebarItem to="/admin/help"        icon={<HelpIcon />}     label="Help Editor"  active={active('/admin/help')} />
-            <SidebarItem to="/admin/onboarding"       icon={<HeartIcon />}    label="Onboarding"       active={active('/admin/onboarding', true)} />
+            <SidebarItem to="/admin/onboarding"       icon={<HeartIcon />}    label="Behavioral Events" active={active('/admin/onboarding', true)} />
             <SidebarItem to="/admin/onboarding-state" icon={<EventsIcon />}   label="Onboarding Stage" active={active('/admin/onboarding-state')} />
             <SidebarItem to="/admin/copy-data"        icon={<CopyDataIcon />} label="Copy Data"        active={active('/admin/copy-data')} />
           </>

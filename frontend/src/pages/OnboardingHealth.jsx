@@ -56,9 +56,9 @@ export default function OnboardingHealth() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <AdminShell title="Onboarding Health" onBack={() => navigate('/dashboard')}><PageSkeleton /></AdminShell>;
+  if (loading) return <AdminShell title="Behavioral Events" onBack={() => navigate('/dashboard')}><PageSkeleton /></AdminShell>;
   if (fetchError) return (
-    <AdminShell title="Onboarding Health" onBack={() => navigate('/dashboard')}>
+    <AdminShell title="Behavioral Events" onBack={() => navigate('/dashboard')}>
       <div className="text-center py-20">
         <p className="text-gray-400 text-sm mb-4">{fetchError}</p>
         <button onClick={load} className="px-4 py-2 bg-gray-800 border border-gray-700 text-sm text-gray-200 rounded-lg hover:bg-gray-700 transition-colors">Retry</button>
@@ -68,10 +68,20 @@ export default function OnboardingHealth() {
 
   const { funnel, timing, plan_breakdown = [], recent_users = [] } = data;
   const total = funnel.total_users || 1; // guard div/0
+  const diagnostics = data.diagnostics ?? [];
 
   return (
-    <AdminShell title="Onboarding Health" onBack={() => navigate('/dashboard')}>
+    <AdminShell title="Behavioral Events" onBack={() => navigate('/dashboard')}>
       <div className="max-w-4xl mx-auto flex flex-col gap-8">
+
+        {diagnostics.length > 0 && (
+          <div className="bg-red-500/8 border border-red-500/30 rounded-xl p-4">
+            <p className="text-sm font-semibold text-red-300 mb-1">Some data could not be loaded</p>
+            <ul className="text-xs text-red-400/80 font-mono break-all list-disc pl-5 space-y-0.5">
+              {diagnostics.map((d, i) => <li key={i}>{d}</li>)}
+            </ul>
+          </div>
+        )}
 
         {/* ── Funnel ──────────────────────────────────────────────────── */}
         <section>

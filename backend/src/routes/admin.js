@@ -364,7 +364,7 @@ router.post('/webhook-settings/test', async (req, res, next) => {
 
 router.get('/onboarding-health', async (req, res, next) => {
   try {
-    const [funnelRes, timingRes, recentRes, planBreakdownRes] = await Promise.all([
+    const [funnelRes, timingRes, recentRes, planBreakdownRes] = await Promise.allSettled([
 
       // Admin-role accounts are excluded from all onboarding metrics so they
       // don't pollute conversion data with internal test/setup activity.
@@ -438,19 +438,35 @@ router.get('/onboarding-health', async (req, res, next) => {
       `),
     ]);
 
-    const funnel = funnelRes.rows[0];
-    const timing = timingRes.rows[0];
+    // Unwrap each settled result independently. A failing query yields [] plus a
+    // diagnostic line (with the real Postgres error) instead of blanking the whole
+    // page — Railway hides 500 bodies in production, so surfacing the error in the
+    // payload is the only way to see what's actually wrong.
+    const diagnostics = [];
+    const _rows = (label, settled) => {
+      if (settled.status === 'fulfilled') return settled.value.rows;
+      logger.error(`[onboarding-health] ${label} query failed: ${settled.reason?.message}`);
+      diagnostics.push(`${label}: ${settled.reason?.message || 'query failed'}`);
+      return [];
+    };
+    const funnelRows = _rows('funnel',         funnelRes);
+    const timingRows = _rows('timing',         timingRes);
+    const recentRows = _rows('recent_users',   recentRes);
+    const planRows   = _rows('plan_breakdown', planBreakdownRes);
+
+    const funnel = funnelRows[0] ?? {};
+    const timing = timingRows[0] ?? {};
     const total  = funnel.total_users || 0;
     const pct    = n => total > 0 ? Math.round((parseInt(n || 0, 10) / total) * 100) : 0;
 
     return res.json({
       funnel: {
         total_users  : total,
-        added_video  : { count: parseInt(funnel.added_video,    10), pct: pct(funnel.added_video)    },
-        saw_wow      : { count: parseInt(funnel.saw_wow_moment, 10), pct: pct(funnel.saw_wow_moment) },
-        hit_limit    : { count: parseInt(funnel.hit_free_limit, 10), pct: pct(funnel.hit_free_limit) },
-        attempted_pro: { count: parseInt(funnel.attempted_pro,  10), pct: pct(funnel.attempted_pro)  },
-        converted    : { count: parseInt(funnel.converted,      10), pct: pct(funnel.converted)      },
+        added_video  : { count: parseInt(funnel.added_video    || 0, 10), pct: pct(funnel.added_video)    },
+        saw_wow      : { count: parseInt(funnel.saw_wow_moment || 0, 10), pct: pct(funnel.saw_wow_moment) },
+        hit_limit    : { count: parseInt(funnel.hit_free_limit || 0, 10), pct: pct(funnel.hit_free_limit) },
+        attempted_pro: { count: parseInt(funnel.attempted_pro  || 0, 10), pct: pct(funnel.attempted_pro)  },
+        converted    : { count: parseInt(funnel.converted      || 0, 10), pct: pct(funnel.converted)      },
         avg_limit_hits: parseFloat(funnel.avg_limit_hits ?? 0),
       },
       timing: {
@@ -459,8 +475,9 @@ router.get('/onboarding-health', async (req, res, next) => {
         median_wow_to_paid    : timing.median_wow_to_paid     != null ? Number(timing.median_wow_to_paid)     : null,
         median_limit_to_paid  : timing.median_limit_to_paid   != null ? Number(timing.median_limit_to_paid)   : null,
       },
-      plan_breakdown : planBreakdownRes.rows,
-      recent_users   : recentRes.rows,
+      plan_breakdown : planRows,
+      recent_users   : recentRows,
+      diagnostics,
     });
   } catch (err) {
     next(err);
