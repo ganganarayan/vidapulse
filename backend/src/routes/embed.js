@@ -99,6 +99,14 @@ router.get('/:videoId', async (req, res) => {
 function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
   const { id, title, source_type } = video;
 
+  // Meta Pixel base code — injected into the embed only when a pixel ID is
+  // configured. The play handler fires a 'TrackingActivated' custom event
+  // (see ping() in trackerCore). Standard fbq snippet, ID from env.
+  const metaPixelId   = env.META_PIXEL_ID;
+  const metaPixelInit = metaPixelId
+    ? `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init',${JSON.stringify(metaPixelId)});`
+    : '';
+
   // Individual player settings — every control has its own toggle
   const autoplay          = ps.autoplay              ?? false;
   const startMuted        = ps.start_muted           ?? true;
@@ -1266,6 +1274,9 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
 
     function ping(ev){
       if(!sid){pq.push(ev);console.log('[VidaPulse] queued (no session yet):',ev);return;}
+      /* Meta engagement signal: every play = one TrackingActivated occurrence.
+         Fires in the viewer's browser; no-ops if the embed pixel isn't configured. */
+      if(ev==='play'){try{if(typeof window.fbq==='function')window.fbq('trackCustom','TrackingActivated');}catch(_){}}
       /* Drain ivs so each ping only reports NEW intervals.
          On failure they are restored at the front so the next ping retries them.
          This prevents double-counting when heartbeats overlap with pause/end events. */
@@ -1350,6 +1361,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
     ${playerHtml}
   </div>
   <script>
+    ${metaPixelInit}
     ${trackerCore}
     ${extraScript}
   </script>
