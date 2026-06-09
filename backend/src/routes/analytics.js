@@ -615,6 +615,12 @@ router.post('/ping', async (req, res) => {
          WHERE id = $1`,
         [video_id]
       );
+
+      // First real play → the owner's tracking is "activated". emitEvent dedups
+      // one-time events, so this reaches the CRM exactly once per owner (their
+      // first play across any video). No Meta pixel here — a viewer triggers
+      // this request, not the owner.
+      emitEvent(ctx.video_owner_id, 'tracking_activated', video_id, { video_id });
     }
 
     // ── 4. Recompute video aggregates atomically on end or first play ────────

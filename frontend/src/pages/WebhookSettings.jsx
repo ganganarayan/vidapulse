@@ -47,6 +47,14 @@ export default function WebhookSettings() {
   const [rzpProUrl,       setRzpProUrl]       = useState('');
   const [savingPayment,   setSavingPayment]   = useState(false);
 
+  // Per-event onboarding "stage" webhook URLs (one Divine Leads automation each)
+  const [signupUrl,    setSignupUrl]    = useState('');
+  const [loginUrl,     setLoginUrl]     = useState('');
+  const [videoUrl,     setVideoUrl]     = useState('');
+  const [embedUrl,     setEmbedUrl]     = useState('');
+  const [trackingUrl,  setTrackingUrl]  = useState('');
+  const [savingStages, setSavingStages] = useState(false);
+
   // Governor form state
   const [hourlyCap, setHourlyCap] = useState(25);
   const [isPaused,  setIsPaused]  = useState(false);
@@ -88,6 +96,11 @@ export default function WebhookSettings() {
       setPassResetUrl(s.password_reset_webhook_url ?? '');
       setRzpStarterUrl(s.razorpay_starter_url ?? '');
       setRzpProUrl(s.razorpay_pro_url         ?? '');
+      setSignupUrl(s.signup_webhook_url               ?? '');
+      setLoginUrl(s.login_webhook_url                 ?? '');
+      setVideoUrl(s.video_added_webhook_url           ?? '');
+      setEmbedUrl(s.embed_generated_webhook_url       ?? '');
+      setTrackingUrl(s.tracking_activated_webhook_url ?? '');
       setHourlyCap(g.hourly_cap  ?? 25);
       setIsPaused(g.is_paused    ?? false);
     } catch (err) {
@@ -179,6 +192,28 @@ export default function WebhookSettings() {
       setSaveMsg('payment-err');
     } finally {
       setSavingPayment(false);
+    }
+  }
+
+  // ── Save onboarding stage webhooks ──────────────────────────────────────
+  async function handleSaveStages(e) {
+    e.preventDefault();
+    setSavingStages(true);
+    setSaveMsg('');
+    try {
+      await api.patch('/admin/webhook-settings', {
+        signup_webhook_url             : signupUrl   || null,
+        login_webhook_url              : loginUrl    || null,
+        video_added_webhook_url        : videoUrl    || null,
+        embed_generated_webhook_url    : embedUrl    || null,
+        tracking_activated_webhook_url : trackingUrl || null,
+      });
+      setSaveMsg('stages-ok');
+      setTimeout(() => setSaveMsg(''), 3000);
+    } catch {
+      setSaveMsg('stages-err');
+    } finally {
+      setSavingStages(false);
     }
   }
 
@@ -653,6 +688,40 @@ export default function WebhookSettings() {
           </form>
         </section>
 
+        {/* ── Section 8: Onboarding Stage Webhooks ──────────────────── */}
+        <section className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6">
+          <h2 className="text-sm font-semibold text-gray-300 mb-1">Onboarding Stage Webhooks</h2>
+          <p className="text-xs text-gray-500 mb-5">
+            One dedicated Divine Leads automation per onboarding milestone. Each fires
+            <strong className="text-gray-400"> once per user</strong> with a simple payload:{' '}
+            <code className="text-amber-500/80 text-[11px]">contact_email</code>,{' '}
+            <code className="text-amber-500/80 text-[11px]">contact.event_type</code>,{' '}
+            <code className="text-amber-500/80 text-[11px]">contact.timestamp</code>.
+            Leave a field blank to skip that event. Respects the master toggle + API token above.
+          </p>
+
+          <form onSubmit={handleSaveStages} className="flex flex-col gap-4">
+            <StageUrlField label="Sign-up"            eventType="user_signed_up"     value={signupUrl}   onChange={setSignupUrl}   />
+            <StageUrlField label="First login"        eventType="user_logged_in"     value={loginUrl}    onChange={setLoginUrl}    />
+            <StageUrlField label="First video added"  eventType="first_video_added"  value={videoUrl}    onChange={setVideoUrl}    />
+            <StageUrlField label="Embed generated"    eventType="embed_generated"    value={embedUrl}    onChange={setEmbedUrl}    />
+            <StageUrlField label="Tracking activated" eventType="tracking_activated" value={trackingUrl} onChange={setTrackingUrl} />
+
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="submit"
+                disabled={savingStages}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50
+                           text-sm font-semibold text-gray-900 rounded-lg transition-colors"
+              >
+                {savingStages ? 'Saving…' : 'Save stage webhooks'}
+              </button>
+              {saveMsg === 'stages-ok'  && <span className="text-xs text-emerald-400">✓ Saved</span>}
+              {saveMsg === 'stages-err' && <span className="text-xs text-red-400">Save failed</span>}
+            </div>
+          </form>
+        </section>
+
       </div>
     </AdminShell>
   );
@@ -759,6 +828,31 @@ function WebhookAlertBanner({ queuedCount, pausedAt, pausedReason, onRefresh }) 
 // ─────────────────────────────────────────────────────────────────────────
 // Shared sub-components
 // ─────────────────────────────────────────────────────────────────────────
+
+function StageUrlField({ label, eventType, value, onChange }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium mb-1.5">
+        <span className="text-gray-300">{label}</span>
+        <code className="text-gray-500 ml-2 text-[10px]">{eventType}</code>
+      </label>
+      <input
+        type="text"
+        inputMode="url"
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck="false"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder="https://login.vidapulse.io/api/automations/…/execute"
+        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5
+                   text-sm text-gray-100 placeholder-gray-600
+                   focus:outline-none focus:border-amber-500/60 transition-colors"
+      />
+    </div>
+  );
+}
 
 function AdminShell({ title, children, onBack }) {
   return (

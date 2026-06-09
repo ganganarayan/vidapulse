@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+import { pixelTrackCustom } from '../lib/pixel';
 
 // ── OAuth error messages ──────────────────────────────────────
 const OAUTH_ERRORS = {
@@ -59,6 +60,8 @@ export default function Login() {
     setLoading(true);
     try {
       await api.post('/auth/login', { email, password });
+      // Meta engagement signal — fires on every successful login (no dedup).
+      pixelTrackCustom('UserLogin');
       // Refetch user BEFORE navigating — the httpOnly cookie is now set and
       // AuthContext needs to load the user so ProtectedRoute lets us through.
       await refetch();

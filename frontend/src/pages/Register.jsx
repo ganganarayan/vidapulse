@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
-import { pixelTrack } from '../lib/pixel';
+import { pixelTrack, pixelTrackCustom } from '../lib/pixel';
 import { getLeadSource, clearLeadSource } from '../lib/leadSource';
 import { COUNTRIES, dialForCountry, DEFAULT_COUNTRY } from '../lib/countries';
 
@@ -140,6 +140,8 @@ export default function Register() {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/login', { email: email.trim(), password });
+      // Meta engagement signal — returning user signing in from the register page.
+      pixelTrackCustom('UserLogin');
       await refetch();
       navigate(data.redirect || '/dashboard', { replace: true });
     } catch (err) {

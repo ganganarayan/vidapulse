@@ -27,7 +27,7 @@
 
 const { pool }   = require('../config/database');
 const logger     = require('../config/logger');
-const { fireContactWebhook } = require('./contactWebhookSender');
+const { fireContactWebhook, fireStageWebhook } = require('./contactWebhookSender');
 
 // ── Event classification ──────────────────────────────────────────────────
 
@@ -46,10 +46,27 @@ const CRM_WEBHOOK_EVENTS = new Set([
   'user_deactivated',        // auto-deactivated after 180 days idle
 ]);
 
+// Onboarding "stage" milestones that POST to their OWN dedicated Divine Leads
+// webhook URL (configured per-event in Admin → Webhook Settings). These are
+// one-time per user (see ONE_TIME_USER_EVENTS) so each milestone reaches the
+// CRM exactly once. Independent of CRM_WEBHOOK_EVENTS above — user_signed_up
+// appears in both: its existing main contact webhook stays untouched, and the
+// stage webhook only fires when a signup URL is configured.
+const STAGE_WEBHOOK_EVENTS = new Set([
+  'user_signed_up',
+  'user_logged_in',
+  'first_video_added',
+  'embed_generated',
+  'tracking_activated',
+]);
+
 // One-time per user: skip if a row already exists in behavioral_events
 const ONE_TIME_USER_EVENTS = new Set([
   'user_signed_up',
+  'user_logged_in',
   'first_video_added',
+  'embed_generated',
+  'tracking_activated',
   'wow_moment_seen',
   'first_analytics_milestone',
   'twenty_viewers_milestone',
@@ -175,6 +192,12 @@ async function emitEvent(userId, eventKey, videoId = null, payload = {}) {
         fireContactWebhook(userId, eventKey).catch(() => {});
       }
 
+      // Onboarding stage milestones → their own dedicated per-event webhook URL.
+      // Fires once (this code is only reached after the one-time dedup passes).
+      if (STAGE_WEBHOOK_EVENTS.has(eventKey)) {
+        fireStageWebhook(userId, eventKey).catch(() => {});
+      }
+
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
@@ -209,6 +232,39 @@ async function _updateOnboardingState(client, userId, eventKey, payload = {}) {
          SET signed_up_at = NOW(),
              current_step = 'signed_up',
              updated_at   = NOW()
+         WHERE user_id = $1`,
+        [userId]
+      );
+      break;
+
+    case 'user_logged_in':
+      // First successful login. COALESCE so the timestamp is only ever set once.
+      await client.query(
+        `UPDATE onboarding_state
+         SET first_login_at = COALESCE(first_login_at, NOW()),
+             updated_at     = NOW()
+         WHERE user_id = $1`,
+        [userId]
+      );
+      break;
+
+    case 'embed_generated':
+      await client.query(
+        `UPDATE onboarding_state
+         SET first_embed_generated_at = COALESCE(first_embed_generated_at, NOW()),
+             current_step             = 'embed_generated',
+             updated_at               = NOW()
+         WHERE user_id = $1`,
+        [userId]
+      );
+      break;
+
+    case 'tracking_activated':
+      await client.query(
+        `UPDATE onboarding_state
+         SET first_tracking_activated_at = COALESCE(first_tracking_activated_at, NOW()),
+             current_step                = 'tracking_activated',
+             updated_at                  = NOW()
          WHERE user_id = $1`,
         [userId]
       );

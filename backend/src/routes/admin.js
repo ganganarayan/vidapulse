@@ -270,6 +270,11 @@ const updateSettingsSchema = z.object({
   password_reset_webhook_url   : _urlFieldSchema,
   razorpay_starter_url         : _urlFieldSchema,
   razorpay_pro_url             : _urlFieldSchema,
+  signup_webhook_url             : _urlFieldSchema,
+  login_webhook_url              : _urlFieldSchema,
+  video_added_webhook_url        : _urlFieldSchema,
+  embed_generated_webhook_url    : _urlFieldSchema,
+  tracking_activated_webhook_url : _urlFieldSchema,
   webhook_secret               : z.string().max(200).nullable().optional(),
   api_token                    : z.string().max(500).nullable().optional(),
   is_active                    : z.boolean().optional(),
@@ -299,6 +304,11 @@ router.patch('/webhook-settings', async (req, res, next) => {
     if (settingsFields.password_reset_webhook_url !== undefined) { settingsClauses.push(`password_reset_webhook_url = $${p++}`); settingsVals.push(settingsFields.password_reset_webhook_url); }
     if (settingsFields.razorpay_starter_url       !== undefined) { settingsClauses.push(`razorpay_starter_url       = $${p++}`); settingsVals.push(settingsFields.razorpay_starter_url);       }
     if (settingsFields.razorpay_pro_url           !== undefined) { settingsClauses.push(`razorpay_pro_url           = $${p++}`); settingsVals.push(settingsFields.razorpay_pro_url);           }
+    if (settingsFields.signup_webhook_url             !== undefined) { settingsClauses.push(`signup_webhook_url             = $${p++}`); settingsVals.push(settingsFields.signup_webhook_url);             }
+    if (settingsFields.login_webhook_url              !== undefined) { settingsClauses.push(`login_webhook_url              = $${p++}`); settingsVals.push(settingsFields.login_webhook_url);              }
+    if (settingsFields.video_added_webhook_url        !== undefined) { settingsClauses.push(`video_added_webhook_url        = $${p++}`); settingsVals.push(settingsFields.video_added_webhook_url);        }
+    if (settingsFields.embed_generated_webhook_url    !== undefined) { settingsClauses.push(`embed_generated_webhook_url    = $${p++}`); settingsVals.push(settingsFields.embed_generated_webhook_url);    }
+    if (settingsFields.tracking_activated_webhook_url !== undefined) { settingsClauses.push(`tracking_activated_webhook_url = $${p++}`); settingsVals.push(settingsFields.tracking_activated_webhook_url); }
     if (settingsFields.webhook_secret           !== undefined) { settingsClauses.push(`webhook_secret           = $${p++}`); settingsVals.push(settingsFields.webhook_secret);           }
     if (settingsFields.api_token                !== undefined) { settingsClauses.push(`api_token                = $${p++}`); settingsVals.push(settingsFields.api_token);                }
     if (settingsFields.is_active                !== undefined) { settingsClauses.push(`is_active                = $${p++}`); settingsVals.push(settingsFields.is_active);                }
@@ -452,6 +462,58 @@ router.get('/onboarding-health', async (req, res, next) => {
       plan_breakdown : planBreakdownRes.rows,
       recent_users   : recentRes.rows,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/onboarding-state
+//
+// Raw onboarding_state milestone timestamps per user + funnel counts.
+// Powers the admin "Onboarding State" page. No computed "stage" helper — just
+// the data and how many users reached each milestone (each is one-time).
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/onboarding-state', async (req, res, next) => {
+  try {
+    const [{ rows: users }, { rows: [counts] }] = await Promise.all([
+      pool.query(`
+        SELECT
+          os.user_id,
+          u.email,
+          u.name,
+          p.name                          AS plan,
+          os.signed_up_at,
+          os.first_login_at,
+          os.first_video_added_at,
+          os.first_embed_generated_at,
+          os.first_tracking_activated_at,
+          os.converted_to_paid_at,
+          os.current_step,
+          os.updated_at
+        FROM   onboarding_state os
+        JOIN   users u ON u.id = os.user_id
+        JOIN   plans p ON p.id = u.plan_id
+        WHERE  u.role != 'admin'
+        ORDER  BY os.updated_at DESC
+        LIMIT  200
+      `),
+      pool.query(`
+        SELECT
+          COUNT(*)::int                                                          AS registered,
+          COUNT(*) FILTER (WHERE os.first_login_at              IS NOT NULL)::int AS logged_in,
+          COUNT(*) FILTER (WHERE os.first_video_added_at        IS NOT NULL)::int AS video_added,
+          COUNT(*) FILTER (WHERE os.first_embed_generated_at    IS NOT NULL)::int AS embed_generated,
+          COUNT(*) FILTER (WHERE os.first_tracking_activated_at IS NOT NULL)::int AS tracking_activated,
+          COUNT(*) FILTER (WHERE os.converted_to_paid_at        IS NOT NULL)::int AS paid
+        FROM   onboarding_state os
+        JOIN   users u ON u.id = os.user_id
+        WHERE  u.role != 'admin'
+      `),
+    ]);
+
+    return res.json({ users, counts: counts ?? {} });
   } catch (err) {
     next(err);
   }

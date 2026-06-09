@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
 import { generateEmbedSnippet } from '../lib/embed';
+import { pixelTrackCustom } from '../lib/pixel';
 import { useAuth } from '../contexts/AuthContext';
 import { useUpgrade } from '../contexts/UpgradeContext';
 import { useToast } from '../contexts/ToastContext';
@@ -393,6 +394,10 @@ function VideoCard({ video, onClick, onTitleUpdate, onArchive, onDelete, archive
     navigator.clipboard.writeText(snippet)
       .then(() => { setEmbedCopied(true); setTimeout(() => setEmbedCopied(false), 2500); })
       .catch(() => {});
+    // Meta engagement signal (every copy) + record the embed_generated milestone
+    // server-side (one-time → CRM embed webhook fires only on the first embed).
+    pixelTrackCustom('EmbedGenerated');
+    api.post(`/videos/${video.id}/embed-generated`).catch(() => {});
   }
 
   async function handleArchive(e) {
@@ -867,6 +872,7 @@ function AddVideoButton({ user, onVideoAdded }) {
       const body = { url: trimmed };
       if (title.trim()) body.title = title.trim();
       const { data } = await api.post('/videos', body);
+      pixelTrackCustom('VideoAdded');
       updateUser({ video_count: (user?.video_count ?? 0) + 1 });
       onVideoAdded(data.video);
       setOpen(false);
@@ -976,6 +982,7 @@ function EmptyState({ user, onVideoAdded }) {
     setSubmitting(true);
     try {
       const { data } = await api.post('/videos', { url: trimmed });
+      pixelTrackCustom('VideoAdded');
       onVideoAdded(data.video);
     } catch (err) {
       if (err.response?.data?.error === 'plan_limit') {

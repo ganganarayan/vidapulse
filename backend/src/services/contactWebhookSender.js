@@ -600,8 +600,93 @@ async function discardWebhookEntry(logId) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// STAGE WEBHOOKS (per-event onboarding milestones)
+// ─────────────────────────────────────────────────────────────────────────
+
+// Each onboarding stage event maps to its own webhook URL column in
+// webhook_settings. A blank column = that event is not sent.
+const STAGE_WEBHOOK_URL_COLUMN = {
+  user_signed_up    : 'signup_webhook_url',
+  user_logged_in    : 'login_webhook_url',
+  first_video_added : 'video_added_webhook_url',
+  embed_generated   : 'embed_generated_webhook_url',
+  tracking_activated: 'tracking_activated_webhook_url',
+};
+
+/**
+ * Fire a per-event onboarding "stage" webhook to its own configured URL.
+ *
+ * Simple payload (matches the proven Divine Leads field mapping):
+ *   { contact_email, "contact.event_type", "contact.timestamp" }
+ *
+ * Always resolves (never rejects). Non-blocking — caller should not await.
+ * Logs to contact_webhook_log so every fire is visible in Admin → Webhook Log.
+ *
+ * Called from behavioralEventService AFTER the one-time dedup passes, so each
+ * milestone reaches the CRM exactly once per user.
+ *
+ * @param {string} userId   - User UUID
+ * @param {string} eventKey - Stage event key (user_logged_in, embed_generated, …)
+ */
+async function fireStageWebhook(userId, eventKey) {
+  try {
+    const column = STAGE_WEBHOOK_URL_COLUMN[eventKey];
+    if (!column) return; // not a stage event
+
+    const { rows: [settings] } = await pool.query(
+      `SELECT is_active, api_token,
+              signup_webhook_url, login_webhook_url, video_added_webhook_url,
+              embed_generated_webhook_url, tracking_activated_webhook_url
+       FROM   webhook_settings LIMIT 1`
+    );
+    // Respect the master on/off switch, same as the main contact webhook.
+    if (!settings || !settings.is_active) return;
+
+    const url = settings[column];
+    if (!url) return; // no dedicated URL configured for this event — skip
+
+    const user = await _loadUser(userId);
+    if (!user) {
+      logger.warn(`[stageWebhook] User ${userId} not found — skipping ${eventKey}`);
+      return;
+    }
+
+    const body = {
+      contact_email       : user.email || '',
+      'contact.event_type': eventKey,
+      'contact.timestamp' : new Date().toISOString(),
+    };
+
+    const finalUrl = _buildUrl(url, settings.api_token);
+    const t0 = Date.now();
+    const { ok, statusCode, responseBody, errorMessage } = await _doPost(finalUrl, body);
+    const ms = Date.now() - t0;
+
+    await _insertLog({
+      eventKey,
+      userId,
+      urlSentTo     : url,
+      paramsSent    : body,
+      status        : ok ? 'sent' : 'failed',
+      responseStatus: statusCode,
+      responseBody  : responseBody ? _truncate(responseBody, 1000) : null,
+      errorMessage,
+    }).catch(e => logger.warn(`[stageWebhook] log insert failed: ${e.message}`));
+
+    if (ok) {
+      logger.info(`[stageWebhook] ✓ ${eventKey} → ${statusCode} (${ms}ms) user=${userId}`);
+    } else {
+      logger.warn(`[stageWebhook] ✗ ${eventKey} → ${errorMessage} user=${userId}`);
+    }
+  } catch (err) {
+    logger.error(`[stageWebhook] Unexpected error for ${eventKey} user=${userId}: ${err.message}`);
+  }
+}
+
 module.exports = {
   fireContactWebhook,
+  fireStageWebhook,
   resendQueuedWebhooks,
   resendFailedWebhooks,
   retryWebhookEntry,

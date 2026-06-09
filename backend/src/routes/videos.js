@@ -388,6 +388,30 @@ router.post('/', requireAuth, videoLimitGate, async (req, res, next) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────
+// POST /api/videos/:id/embed-generated
+//
+// Records that the user generated/copied an embed snippet for one of their
+// videos. Emits the embed_generated milestone — one-time per user, so the CRM
+// (embed_generated webhook) fires only on the FIRST embed. The Meta pixel
+// (EmbedGenerated) is fired client-side on every copy, independently.
+// ─────────────────────────────────────────────────────────────────────────
+
+router.post('/:id/embed-generated', requireAuth, async (req, res, next) => {
+  try {
+    const { rows: [video] } = await pool.query(
+      `SELECT id FROM videos WHERE id = $1 AND user_id = $2 AND is_active = TRUE`,
+      [req.params.id, req.user.id]
+    );
+    if (!video) return res.status(404).json({ error: 'Video not found' });
+
+    emitEvent(req.user.id, 'embed_generated', video.id, { video_id: video.id });
+    return res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── GET /api/videos/archived — archived videos list ───────────────────────────
 router.get('/archived', requireAuth, async (req, res, next) => {
   try {

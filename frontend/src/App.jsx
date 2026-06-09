@@ -19,6 +19,7 @@ import Dashboard         from './pages/Dashboard';
 import VideoDetail       from './pages/VideoDetail';
 import WebhookSettings   from './pages/WebhookSettings';
 import OnboardingHealth  from './pages/OnboardingHealth';
+import OnboardingState   from './pages/OnboardingState';
 import AdminUsers        from './pages/AdminUsers';
 import AccountSettings   from './pages/AccountSettings';
 import ScriptGenerator   from './pages/ScriptGenerator';
@@ -318,6 +319,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <OnboardingHealth />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/onboarding-state"
+            element={
+              <AdminRoute>
+                <OnboardingState />
               </AdminRoute>
             }
           />
