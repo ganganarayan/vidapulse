@@ -184,7 +184,7 @@ async function getContactWebhookStatus() {
   const [settingsRes, queuedRes, failedRes] = await Promise.all([
     pool.query(`SELECT contact_webhook_paused, contact_webhook_paused_at, contact_webhook_paused_reason FROM webhook_settings LIMIT 1`),
     pool.query(`SELECT COUNT(*)::int AS cnt FROM contact_webhook_log WHERE status = 'queued'`),
-    pool.query(`SELECT COUNT(*)::int AS cnt FROM contact_webhook_log WHERE status = 'failed' AND event_key NOT LIKE 'magic_link%' AND event_key NOT IN ('webhook_failure_alert','create_user_received')`),
+    pool.query(`SELECT COUNT(*)::int AS cnt FROM contact_webhook_log WHERE status = 'failed' AND event_key NOT IN ('webhook_failure_alert','create_user_received')`),
   ]);
   const s = settingsRes.rows[0] ?? {};
   return {
@@ -212,7 +212,7 @@ async function resendFailedWebhooks() {
 
     const { rows: entries } = await pool.query(
       `SELECT * FROM contact_webhook_log
-        WHERE status = 'failed' AND event_key NOT LIKE 'magic_link%' AND event_key NOT IN ('webhook_failure_alert','create_user_received')
+        WHERE status = 'failed' AND event_key NOT IN ('webhook_failure_alert','create_user_received')
         ORDER BY sent_at ASC`
     );
 
@@ -513,10 +513,10 @@ async function retryWebhookEntry(logId) {
     );
     if (!entry) return { ok: false, statusCode: 0, errorMessage: 'Entry not found' };
 
-    // Only genuine contact-webhook fires are retryable here. Magic-link rows,
-    // inbound receipts (*_received), and failure alerts are log-only.
+    // Only genuine contact-webhook fires are retryable here. Inbound receipts
+    // (*_received) and failure alerts are log-only.
     const ek = entry.event_key || '';
-    if (ek.startsWith('magic_link') || ek.endsWith('_received') || ek === 'webhook_failure_alert') {
+    if (ek.endsWith('_received') || ek === 'webhook_failure_alert') {
       return { ok: false, statusCode: 0, errorMessage: 'This entry is log-only and cannot be retried.' };
     }
 

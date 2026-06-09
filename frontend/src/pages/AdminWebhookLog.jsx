@@ -568,8 +568,8 @@ function LogRow({ row, selected, onToggle, onRefresh }) {
         {/* Actions */}
         <td className="px-3 py-3 align-top" onClick={e => e.stopPropagation()}>
           <div className="flex flex-col gap-1.5">
-            {/* Log-only rows (magic-link, inbound receipts, failure alerts) are not retryable */}
-            {(String(row.event_key).startsWith('magic_link') || String(row.event_key).endsWith('_received') || row.event_key === 'webhook_failure_alert') ? (
+            {/* Log-only rows (inbound receipts, failure alerts) are not retryable */}
+            {(String(row.event_key).endsWith('_received') || row.event_key === 'webhook_failure_alert') ? (
               <span className="text-[10px] text-gray-600">—</span>
             ) : (
             <>
