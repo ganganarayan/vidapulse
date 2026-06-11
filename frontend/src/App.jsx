@@ -20,6 +20,7 @@ import VideoDetail       from './pages/VideoDetail';
 import WebhookSettings   from './pages/WebhookSettings';
 import OnboardingHealth  from './pages/OnboardingHealth';
 import OnboardingState   from './pages/OnboardingState';
+import EventWebhooks     from './pages/EventWebhooks';
 import AdminUsers        from './pages/AdminUsers';
 import AccountSettings   from './pages/AccountSettings';
 import ScriptGenerator   from './pages/ScriptGenerator';
@@ -327,6 +328,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <OnboardingState />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/event-webhooks"
+            element={
+              <AdminRoute>
+                <EventWebhooks />
               </AdminRoute>
             }
           />

@@ -245,6 +245,20 @@ export default function WebhookSettings() {
 
       <div className="max-w-2xl mx-auto flex flex-col gap-8">
 
+        {/* ── Routing moved to Event Webhooks ──────────────────────── */}
+        <div className="bg-amber-500/8 border border-amber-500/25 rounded-xl p-4 flex items-start gap-3">
+          <span className="text-amber-400 text-lg leading-none mt-0.5">⚡</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-200">Per-event webhook routing has moved</p>
+            <p className="text-xs text-amber-200/70 mt-1 leading-relaxed">
+              Each event is now routed to its own endpoint(s) in{' '}
+              <Link to="/admin/event-webhooks" className="text-amber-300 underline hover:text-amber-200">Event Webhooks</Link>.
+              The URL fields below are legacy — they seeded the registry and no longer drive delivery. The API token and the
+              master on/off toggle here still apply.
+            </p>
+          </div>
+        </div>
+
         {/* ── Contact Webhook Status Banner ────────────────────────── */}
         {webhookAlerts.paused && (
           <WebhookAlertBanner

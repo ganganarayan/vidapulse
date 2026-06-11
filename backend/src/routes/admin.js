@@ -43,6 +43,8 @@ const {
   unpauseWebhook,
   getContactWebhookStatus,
 } = require('../services/contactWebhookSender');
+const eventRegistry           = require('../events/registry');
+const { buildSampleEnvelope } = require('../events/envelope');
 
 const {
   getAdminPromotionVideos,
@@ -1269,6 +1271,148 @@ router.get('/analytics-diag', requireAuth, requireAdmin, async (req, res, next) 
       videos,
       recent_sessions: recent,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// EVENT WEBHOOKS REGISTRY  (unified event architecture — name-keyed routing)
+//
+//   GET    /api/admin/event-webhooks                    — rows + event catalog
+//   POST   /api/admin/event-webhooks                    — add { event_name, url, status? }
+//   PATCH  /api/admin/event-webhooks/:id                — update { url?, status? }
+//   DELETE /api/admin/event-webhooks/:id                — remove a row (logs kept)
+//   GET    /api/admin/event-webhooks/preview?event_key= — sample payload
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Reuses the SSRF guard (_isInternalHost) defined above for webhook-settings.
+function _validWebhookUrl(u) {
+  const s = String(u || '');
+  if (s.length > 2000) return 'URL too long';
+  try {
+    if (new URL(s).protocol !== 'https:') return 'Must use HTTPS';
+  } catch {
+    return 'Enter a valid URL';
+  }
+  if (_isInternalHost(s)) return 'Must point to a public external host';
+  return null;
+}
+
+router.get('/event-webhooks', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT ew.id, ew.event_name, ew.url, ew.status, ew.created_at,
+             COALESCE(l.cnt, 0)::int AS log_count,
+             l.last_fired
+      FROM   event_webhooks ew
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS cnt, MAX(sent_at) AS last_fired
+        FROM   contact_webhook_log cwl
+        WHERE  cwl.event_key = ew.event_name
+      ) l ON TRUE
+      ORDER BY ew.event_name ASC, ew.url ASC
+    `);
+    return res.json({ webhooks: rows, events: eventRegistry.listEvents() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/event-webhooks', async (req, res, next) => {
+  try {
+    const eventName = String(req.body?.event_name || '').trim();
+    const url       = String(req.body?.url || '').trim();
+    const status    = req.body?.status === 'inactive' ? 'inactive' : 'active';
+
+    if (!eventRegistry.getEvent(eventName)) {
+      return res.status(400).json({ error: 'Unknown event', message: 'event_name is not in the registry' });
+    }
+    const urlErr = _validWebhookUrl(url);
+    if (urlErr) return res.status(400).json({ error: 'Validation Error', message: urlErr });
+
+    try {
+      const { rows: [row] } = await pool.query(
+        `INSERT INTO event_webhooks (event_name, url, status)
+         VALUES ($1, $2, $3)
+         RETURNING id, event_name, url, status, created_at`,
+        [eventName, url, status]
+      );
+      logger.info(`[admin] Event webhook created: ${eventName} → ${url} by user ${req.user.id}`);
+      return res.status(201).json({ ok: true, webhook: row });
+    } catch (e) {
+      if (e.code === '23505') {
+        return res.status(409).json({ error: 'Conflict', message: 'That event already posts to this URL.' });
+      }
+      throw e;
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/event-webhooks/:id', async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
+
+    const sets = [];
+    const vals = [];
+    let p = 1;
+
+    if (req.body?.url !== undefined) {
+      const url = String(req.body.url || '').trim();
+      const urlErr = _validWebhookUrl(url);
+      if (urlErr) return res.status(400).json({ error: 'Validation Error', message: urlErr });
+      sets.push(`url = $${p++}`); vals.push(url);
+    }
+    if (req.body?.status !== undefined) {
+      sets.push(`status = $${p++}`);
+      vals.push(req.body.status === 'inactive' ? 'inactive' : 'active');
+    }
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to update' });
+
+    sets.push('updated_at = NOW()');
+    vals.push(id);
+
+    try {
+      const { rows: [row] } = await pool.query(
+        `UPDATE event_webhooks SET ${sets.join(', ')} WHERE id = $${p}
+         RETURNING id, event_name, url, status, created_at`,
+        vals
+      );
+      if (!row) return res.status(404).json({ error: 'Not found' });
+      logger.info(`[admin] Event webhook ${id} updated by user ${req.user.id}`);
+      return res.json({ ok: true, webhook: row });
+    } catch (e) {
+      if (e.code === '23505') {
+        return res.status(409).json({ error: 'Conflict', message: 'That event already posts to this URL.' });
+      }
+      throw e;
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/event-webhooks/:id', async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
+    const { rowCount } = await pool.query(`DELETE FROM event_webhooks WHERE id = $1`, [id]);
+    if (rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    logger.info(`[admin] Event webhook ${id} deleted by user ${req.user.id}`);
+    return res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/event-webhooks/preview', async (req, res, next) => {
+  try {
+    const eventKey = String(req.query.event_key || '').trim();
+    if (!eventRegistry.getEvent(eventKey)) return res.status(400).json({ error: 'Unknown event' });
+    return res.json({ payload: buildSampleEnvelope(eventKey) });
   } catch (err) {
     next(err);
   }

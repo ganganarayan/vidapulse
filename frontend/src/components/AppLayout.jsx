@@ -189,6 +189,7 @@ function AppSidebar({ onClose }) {
               active={active('/admin/webhook-log')}
               badge={webhookAlerts.paused ? (webhookAlerts.queuedCount || '!') : null}
             />
+            <SidebarItem to="/admin/event-webhooks" icon={<WebhookIcon />}  label="Event Webhooks" active={active('/admin/event-webhooks')} />
             <SidebarItem to="/admin/help"        icon={<HelpIcon />}     label="Help Editor"  active={active('/admin/help')} />
             <SidebarItem to="/admin/onboarding"       icon={<HeartIcon />}    label="Behavioral Events" active={active('/admin/onboarding', true)} />
             <SidebarItem to="/admin/onboarding-state" icon={<EventsIcon />}   label="Onboarding Stage" active={active('/admin/onboarding-state')} />

@@ -44,6 +44,7 @@
 
 const { pool } = require('../config/database');
 const logger   = require('../config/logger');
+const { buildEnvelope } = require('../events/envelope');
 
 const HTTP_TIMEOUT_MS = 10_000;
 
@@ -126,7 +127,7 @@ async function resendQueuedWebhooks() {
         : (typeof entry.params_sent === 'object' ? entry.params_sent : {});
 
       const bodyParams = _buildBody(logParams);
-      const finalUrl   = _buildUrl(settings.webhook_url, settings.api_token);
+      const finalUrl   = _buildUrl(entry.url_sent_to || settings.webhook_url, settings.api_token);
       const { ok, statusCode, responseBody, errorMessage } = await _doPost(finalUrl, bodyParams);
 
       await pool.query(
@@ -225,7 +226,7 @@ async function resendFailedWebhooks() {
         : (typeof entry.params_sent === 'object' ? entry.params_sent : {});
 
       const bodyParams = _buildBody(logParams);
-      const finalUrl   = _buildUrl(settings.webhook_url, settings.api_token);
+      const finalUrl   = _buildUrl(entry.url_sent_to || settings.webhook_url, settings.api_token);
       const { ok, statusCode, responseBody, errorMessage } = await _doPost(finalUrl, bodyParams);
 
       await pool.query(
@@ -532,7 +533,7 @@ async function retryWebhookEntry(logId) {
       : (typeof entry.params_sent === 'object' ? entry.params_sent : {});
 
     const bodyParams = _buildBody(logParams);
-    const finalUrl   = _buildUrl(settings.webhook_url, settings.api_token);
+    const finalUrl   = _buildUrl(entry.url_sent_to || settings.webhook_url, settings.api_token);
     const { ok, statusCode, responseBody, errorMessage } = await _doPost(finalUrl, bodyParams);
 
     await pool.query(
@@ -684,9 +685,81 @@ async function fireStageWebhook(userId, eventKey) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// UNIFIED EVENT DELIVERY  (event_webhooks registry — Assess360-aligned)
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Deliver an event to EVERY active endpoint registered for it in the
+ * event_webhooks table. Replaces the old CRM/stage Sets + fixed URL columns —
+ * routing now lives in the DB. The canonical envelope (lib/events/envelope) is
+ * the single payload source of truth.
+ *
+ * Behaviour preserved vs. the old path:
+ *   - Respects the master webhook_settings.is_active toggle.
+ *   - Appends the global api_token as a query param (no signature header — same
+ *     as before; event_webhooks.secret is reserved for future HMAC).
+ *   - Logs every attempt to contact_webhook_log (same table the Webhook Log UI
+ *     reads), so retry / expand / filters keep working unchanged.
+ *   - Fires the failure-notification webhook on any failed delivery.
+ *
+ * Always resolves (never rejects). Non-blocking — caller should not await.
+ *
+ * @param {string} userId
+ * @param {string} eventKey  - registry event key (= event_name in event_webhooks)
+ * @param {Object} [extraFields={}] - extra dotted custom fields for the envelope
+ */
+async function deliverEventWebhooks(userId, eventKey, extraFields = {}) {
+  try {
+    const settings = await _loadSettings();
+    if (!settings || !settings.is_active) return; // master switch off
+
+    const { rows: hooks } = await pool.query(
+      `SELECT id, url FROM event_webhooks WHERE event_name = $1 AND status = 'active'`,
+      [eventKey]
+    );
+    if (!hooks.length) return; // no endpoint configured for this event
+
+    const user = await _loadUser(userId);
+    if (!user) {
+      logger.warn(`[eventWebhook] User ${userId} not found — skipping ${eventKey}`);
+      return;
+    }
+
+    for (const hook of hooks) {
+      const envelope = buildEnvelope(eventKey, { user, extraFields });
+      const finalUrl = _buildUrl(hook.url, settings.api_token);
+      const t0 = Date.now();
+      const { ok, statusCode, responseBody, errorMessage } = await _doPost(finalUrl, envelope);
+      const ms = Date.now() - t0;
+
+      await _insertLog({
+        eventKey,
+        userId,
+        urlSentTo     : hook.url,
+        paramsSent    : envelope,
+        status        : ok ? 'sent' : 'failed',
+        responseStatus: statusCode,
+        responseBody  : responseBody ? _truncate(responseBody, 1000) : null,
+        errorMessage,
+      }).catch(e => logger.warn(`[eventWebhook] log insert failed: ${e.message}`));
+
+      if (ok) {
+        logger.info(`[eventWebhook] ✓ ${eventKey} → ${statusCode} (${ms}ms) url=${hook.url}`);
+      } else {
+        logger.warn(`[eventWebhook] ✗ ${eventKey} → ${errorMessage} url=${hook.url}`);
+        await _fireNotificationWebhook(settings, eventKey, errorMessage || `HTTP ${statusCode}`, user.email || null);
+      }
+    }
+  } catch (err) {
+    logger.error(`[eventWebhook] Unexpected error for ${eventKey} user=${userId}: ${err.message}`);
+  }
+}
+
 module.exports = {
   fireContactWebhook,
   fireStageWebhook,
+  deliverEventWebhooks,
   resendQueuedWebhooks,
   resendFailedWebhooks,
   retryWebhookEntry,

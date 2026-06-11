@@ -27,7 +27,8 @@
 
 const { pool }   = require('../config/database');
 const logger     = require('../config/logger');
-const { fireContactWebhook, fireStageWebhook } = require('./contactWebhookSender');
+const { deliverEventWebhooks } = require('./contactWebhookSender');
+const { ONE_TIME_KEYS }        = require('../events/registry');
 
 // ── Event classification ──────────────────────────────────────────────────
 
@@ -38,41 +39,11 @@ const { fireContactWebhook, fireStageWebhook } = require('./contactWebhookSender
 // CRM automations before a payment is actually completed.
 // Payment success events (plan_upgraded_to_starter, plan_upgraded_to_pro, etc.)
 // will be added here once the payment flow is wired.
-const CRM_WEBHOOK_EVENTS = new Set([
-  'user_signed_up',
-  'user_restored',           // a deactivated account self-restored (or admin-restored)
-  'inactivity_reminder_10d', // 10 days before auto-deactivation
-  'inactivity_reminder_3d',  // 3 days before auto-deactivation
-  'user_deactivated',        // auto-deactivated after 180 days idle
-]);
-
-// Onboarding "stage" milestones that POST to their OWN dedicated Divine Leads
-// webhook URL (configured per-event in Admin → Webhook Settings). These are
-// one-time per user (see ONE_TIME_USER_EVENTS) so each milestone reaches the
-// CRM exactly once. Independent of CRM_WEBHOOK_EVENTS above — user_signed_up
-// appears in both: its existing main contact webhook stays untouched, and the
-// stage webhook only fires when a signup URL is configured.
-const STAGE_WEBHOOK_EVENTS = new Set([
-  'user_signed_up',
-  'user_logged_in',
-  'first_video_added',
-  'embed_generated',
-  'tracking_activated',
-]);
-
-// One-time per user: skip if a row already exists in behavioral_events
-const ONE_TIME_USER_EVENTS = new Set([
-  'user_signed_up',
-  'user_logged_in',
-  'first_video_added',
-  'embed_generated',
-  'tracking_activated',
-  'wow_moment_seen',
-  'first_analytics_milestone',
-  'twenty_viewers_milestone',
-  'fifty_viewers_milestone',
-  'converted_to_paid',
-]);
+// One-time-per-user dedup membership now comes from the event registry (the
+// single source of truth) instead of a hardcoded Set. Webhook ROUTING likewise
+// moved out of code into the event_webhooks table (see deliverEventWebhooks) —
+// there are no more per-destination Sets here.
+const ONE_TIME_USER_EVENTS = ONE_TIME_KEYS;
 
 // Max once per 7 days per user
 const WEEKLY_CAP_EVENTS = new Set([
@@ -185,18 +156,12 @@ async function emitEvent(userId, eventKey, videoId = null, payload = {}) {
       await client.query('COMMIT');
       logger.info(`[behavioralEvents] ✓ ${eventKey} | user=${userId} | event_id=${eventRow.id}`);
 
-      // Fire contact webhook only for genuine CRM lead/conversion events.
-      // Upgrade-intent clicks (pro_feature_attempted, free_limit_hit, etc.)
-      // are intentionally excluded — only successful payments will be added later.
-      if (CRM_WEBHOOK_EVENTS.has(eventKey)) {
-        fireContactWebhook(userId, eventKey).catch(() => {});
-      }
-
-      // Onboarding stage milestones → their own dedicated per-event webhook URL.
-      // Fires once (this code is only reached after the one-time dedup passes).
-      if (STAGE_WEBHOOK_EVENTS.has(eventKey)) {
-        fireStageWebhook(userId, eventKey).catch(() => {});
-      }
+      // Deliver to every ACTIVE endpoint registered for this event in the
+      // event_webhooks registry (replaces the old CRM/stage Sets + fixed URL
+      // columns). Which events go where now lives in the DB, not in code; the
+      // seed migration reproduced the previous routing exactly, so behaviour is
+      // unchanged until an admin edits the registry.
+      deliverEventWebhooks(userId, eventKey).catch(() => {});
 
     } catch (err) {
       await client.query('ROLLBACK');
