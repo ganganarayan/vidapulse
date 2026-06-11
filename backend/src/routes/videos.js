@@ -19,6 +19,8 @@ const { requireAuth }            = require('../middleware/requireAuth');
 const { planGate, videoLimitGate } = require('../middleware/planGate');
 const { emitEvent }              = require('../services/behavioralEventService');
 const { fetchDuration }          = require('../services/durationService');
+const { DEFAULT_EVENT_MAPPING }  = require('../tracking/trackingService');
+const trackingRegistry           = require('../events/registry');
 
 // ─────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -1580,6 +1582,94 @@ router.get('/:id/viewer-engagement', requireAuth, planGate('heatmap'), async (re
   } catch (err) {
     next(err);
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// VIDEO TRACKING SETTINGS (viewer-plane, per video)
+// ─────────────────────────────────────────────────────────────────────────
+
+// Known viewer event keys — for validating the event_mapping payload.
+const VIEWER_EVENT_KEYS = new Set(
+  trackingRegistry.listEvents({ scope: 'viewer', includeReserved: false }).map(e => e.key)
+);
+
+// GET /api/videos/:id/tracking-settings — owner reads config + fired counts.
+router.get('/:id/tracking-settings', requireAuth, async (req, res, next) => {
+  try {
+    const { rows: [video] } = await pool.query(
+      `SELECT id FROM videos WHERE id = $1 AND user_id = $2 AND is_active = TRUE`,
+      [req.params.id, req.user.id]
+    );
+    if (!video) return res.status(404).json({ error: 'Video not found' });
+
+    const [{ rows: [ts] }, { rows: counts }] = await Promise.all([
+      pool.query(`SELECT enabled, pixel_id, event_mapping FROM video_tracking_settings WHERE video_id = $1`, [req.params.id]),
+      pool.query(`SELECT event_key, count FROM tracking_event_counts WHERE video_id = $1`, [req.params.id]),
+    ]);
+
+    return res.json({
+      settings: ts
+        ? { enabled: ts.enabled, pixel_id: ts.pixel_id, event_mapping: ts.event_mapping }
+        : { enabled: false, pixel_id: null, event_mapping: DEFAULT_EVENT_MAPPING },
+      counts: Object.fromEntries(counts.map(c => [c.event_key, Number(c.count)])),
+      plan: req.user.plan,
+    });
+  } catch (err) { next(err); }
+});
+
+// PUT /api/videos/:id/tracking-settings — owner (Pro) upserts config.
+router.put('/:id/tracking-settings', requireAuth, planGate('video_tracking'), async (req, res, next) => {
+  try {
+    const { rows: [video] } = await pool.query(
+      `SELECT id FROM videos WHERE id = $1 AND user_id = $2 AND is_active = TRUE`,
+      [req.params.id, req.user.id]
+    );
+    if (!video) return res.status(404).json({ error: 'Video not found' });
+
+    const enabled  = req.body?.enabled === true;
+    const pixelRaw = req.body?.pixel_id;
+    const pixelId  = (pixelRaw === null || pixelRaw === undefined || pixelRaw === '') ? null : String(pixelRaw).trim();
+    if (pixelId !== null && !/^\d{6,20}$/.test(pixelId)) {
+      return res.status(400).json({ error: 'Validation Error', message: 'Meta Pixel ID must be 6–20 digits.' });
+    }
+    // A video can't be enabled without a pixel id (nothing to fire to).
+    if (enabled && pixelId === null) {
+      return res.status(400).json({ error: 'Validation Error', message: 'Add a Meta Pixel ID before enabling tracking.' });
+    }
+
+    // Validate + sanitise event_mapping (keys ⊆ viewer events).
+    let mapping = DEFAULT_EVENT_MAPPING;
+    if (req.body?.event_mapping !== undefined) {
+      const m = req.body.event_mapping;
+      if (m === null || typeof m !== 'object' || Array.isArray(m)) {
+        return res.status(400).json({ error: 'Validation Error', message: 'event_mapping must be an object' });
+      }
+      const clean = {};
+      for (const [k, v] of Object.entries(m)) {
+        if (!VIEWER_EVENT_KEYS.has(k)) continue; // ignore unknown keys
+        clean[k] = {
+          meta   : typeof v?.meta === 'string' ? v.meta.trim().slice(0, 64) : '',
+          webhook: v?.webhook === true,
+        };
+      }
+      mapping = clean;
+    }
+
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO video_tracking_settings (video_id, enabled, pixel_id, event_mapping, updated_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (video_id) DO UPDATE SET
+         enabled       = EXCLUDED.enabled,
+         pixel_id      = EXCLUDED.pixel_id,
+         event_mapping = EXCLUDED.event_mapping,
+         updated_at    = NOW()
+       RETURNING enabled, pixel_id, event_mapping`,
+      [req.params.id, enabled, pixelId, JSON.stringify(mapping)]
+    );
+
+    logger.info(`[videos] tracking settings updated for video ${req.params.id} (enabled=${enabled})`);
+    return res.json({ ok: true, settings: row });
+  } catch (err) { next(err); }
 });
 
 module.exports = router;

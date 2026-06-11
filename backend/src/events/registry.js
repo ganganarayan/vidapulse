@@ -64,10 +64,6 @@ const EVENTS = [
   { key: 'vsl_75',      display_name: 'VSL 75%',   description: 'A viewer reached 75% of the video.',            category: 'Video', scope: 'viewer', frequency: 'once_per_session', payload_schema: { video_id: 'string' } },
   { key: 'vsl_100',     display_name: 'VSL 100%',  description: 'A viewer completed the video.',                 category: 'Video', scope: 'viewer', frequency: 'once_per_session', payload_schema: { video_id: 'string' } },
   { key: 'cta_clicked', display_name: 'CTA Clicked', description: 'A viewer clicked a CTA on the embedded video.', category: 'Video', scope: 'viewer', frequency: 'many',            payload_schema: { video_id: 'string', cta_name: 'string' } },
-
-  // ── Reserved (DEFINED, not emitted yet) ───────────────────────────────────
-  { key: 'video_published', display_name: 'Video Published', description: 'A video was published (reserved).', category: 'Video (reserved)', scope: 'viewer', frequency: 'many', reserved: true, payload_schema: { video_id: 'string' } },
-  { key: 'video_archived',  display_name: 'Video Archived',  description: 'A video was archived (reserved).',  category: 'Video (reserved)', scope: 'viewer', frequency: 'many', reserved: true, payload_schema: { video_id: 'string' } },
 ];
 
 // Fast lookup by key.

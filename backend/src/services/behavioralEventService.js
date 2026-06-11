@@ -27,8 +27,9 @@
 
 const { pool }   = require('../config/database');
 const logger     = require('../config/logger');
-const { deliverEventWebhooks } = require('./contactWebhookSender');
-const { ONE_TIME_KEYS }        = require('../events/registry');
+const { deliverEventWebhooks }    = require('./contactWebhookSender');
+const { deliverTrackingWebhooks } = require('../tracking/trackingService');
+const { ONE_TIME_KEYS, getScope } = require('../events/registry');
 
 // ── Event classification ──────────────────────────────────────────────────
 
@@ -156,12 +157,14 @@ async function emitEvent(userId, eventKey, videoId = null, payload = {}) {
       await client.query('COMMIT');
       logger.info(`[behavioralEvents] ✓ ${eventKey} | user=${userId} | event_id=${eventRow.id}`);
 
-      // Deliver to every ACTIVE endpoint registered for this event in the
-      // event_webhooks registry (replaces the old CRM/stage Sets + fixed URL
-      // columns). Which events go where now lives in the DB, not in code; the
-      // seed migration reproduced the previous routing exactly, so behaviour is
-      // unchanged until an admin edits the registry.
-      deliverEventWebhooks(userId, eventKey).catch(() => {});
+      // Route by plane (registry scope) — platform + viewer stay strictly
+      // separate (Constraint 1): a platform event can ONLY reach event_webhooks,
+      // a viewer event can ONLY reach tracking_webhooks. No shared routing.
+      if (getScope(eventKey) === 'viewer') {
+        deliverTrackingWebhooks(userId, eventKey, {}).catch(() => {});
+      } else {
+        deliverEventWebhooks(userId, eventKey).catch(() => {});
+      }
 
     } catch (err) {
       await client.query('ROLLBACK');
