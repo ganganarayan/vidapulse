@@ -23,6 +23,7 @@ export default function EventWebhooks() {
   const [newUrl,   setNewUrl]   = useState('');
   const [adding,   setAdding]   = useState(false);
   const [addMsg,   setAddMsg]   = useState('');
+  const [search,   setSearch]   = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,6 +56,14 @@ export default function EventWebhooks() {
     return g;
   }, [events]);
 
+  // How many endpoints each event currently has — shown in the picker so a
+  // missing config (0) is obvious at a glance.
+  const countByEvent = useMemo(() => {
+    const m = new Map();
+    webhooks.forEach(w => m.set(w.event_name, (m.get(w.event_name) || 0) + 1));
+    return m;
+  }, [webhooks]);
+
   async function handleAdd(e) {
     e.preventDefault();
     if (!newEvent || !newUrl.trim()) return;
@@ -74,12 +83,19 @@ export default function EventWebhooks() {
     }
   }
 
-  // Webhooks grouped by event_name for display.
+  // Webhooks grouped by event_name for display, filtered by the search box
+  // (matches event key, display name, or URL).
   const byEvent = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const matches = (w) => {
+      if (!q) return true;
+      const dn = (eventMeta.get(w.event_name)?.display_name || '').toLowerCase();
+      return w.event_name.toLowerCase().includes(q) || dn.includes(q) || (w.url || '').toLowerCase().includes(q);
+    };
     const g = {};
-    webhooks.forEach(w => { (g[w.event_name] ??= []).push(w); });
+    webhooks.filter(matches).forEach(w => { (g[w.event_name] ??= []).push(w); });
     return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [webhooks]);
+  }, [webhooks, search, eventMeta]);
 
   return (
     <AdminShell title="Event Webhooks" onBack={() => navigate('/dashboard')}>
@@ -111,7 +127,7 @@ export default function EventWebhooks() {
                 <optgroup key={cat} label={cat}>
                   {list.map(ev => (
                     <option key={ev.key} value={ev.key}>
-                      {ev.display_name}{ev.reserved ? ' — reserved' : ''}
+                      {ev.display_name} ({countByEvent.get(ev.key) || 0}) — {ev.key}{ev.reserved ? ' · reserved' : ''}
                     </option>
                   ))}
                 </optgroup>
@@ -143,6 +159,18 @@ export default function EventWebhooks() {
           {addMsg && addMsg !== 'ok' && <p className="text-xs text-red-400">{addMsg}</p>}
           {addMsg === 'ok' && <p className="text-xs text-emerald-400">✓ Added</p>}
         </form>
+
+        {/* Search */}
+        {webhooks.length > 0 && (
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search events or URLs…"
+            className="w-full sm:w-80 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm
+                       text-gray-200 placeholder-gray-600 focus:outline-none focus:border-amber-500/60"
+          />
+        )}
 
         {fetchError && (
           <div className="bg-red-500/5 border border-red-500/20 rounded-lg px-4 py-3">
@@ -192,6 +220,7 @@ function WebhookRow({ hook, onChanged }) {
   const [url,      setUrl]      = useState(hook.url);
   const [saving,   setSaving]   = useState(false);
   const [busy,     setBusy]     = useState(false);
+  const [testing,  setTesting]  = useState(false);
   const [rowMsg,   setRowMsg]   = useState('');
   const [preview,  setPreview]  = useState(null); // null | 'loading' | object
   const dirty = url.trim() !== hook.url;
@@ -237,6 +266,20 @@ function WebhookRow({ hook, onChanged }) {
     }
   }
 
+  async function testFire() {
+    setTesting(true);
+    setRowMsg('');
+    try {
+      const { data } = await api.post(`/admin/event-webhooks/${hook.id}/test`);
+      setRowMsg(data.ok ? `✓ ${data.statusCode}` : `✗ ${data.errorMessage || data.statusCode || 'failed'}`);
+      onChanged(); // refresh fires / last-fired
+    } catch {
+      setRowMsg('✗ test failed');
+    } finally {
+      setTesting(false);
+    }
+  }
+
   async function togglePreview() {
     if (preview) { setPreview(null); return; }
     setPreview('loading');
@@ -263,8 +306,8 @@ function WebhookRow({ hook, onChanged }) {
         >
           <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${isActive ? 'translate-x-4' : 'translate-x-0'}`} />
         </button>
-        <span className={`text-[11px] font-medium w-14 ${isActive ? 'text-emerald-400' : 'text-gray-500'}`}>
-          {isActive ? 'Active' : 'Paused'}
+        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold w-20 ${isActive ? 'text-emerald-400' : 'text-gray-500'}`}>
+          {isActive ? '● Active' : '○ Disabled'}
         </span>
 
         {/* URL */}
@@ -295,6 +338,16 @@ function WebhookRow({ hook, onChanged }) {
           title="Preview the payload this endpoint receives"
         >
           {preview ? 'Hide' : 'Preview'}
+        </button>
+
+        {/* Test */}
+        <button
+          onClick={testFire}
+          disabled={testing}
+          className="px-2.5 py-2 bg-sky-500/10 border border-sky-500/25 text-sky-300 hover:bg-sky-500/20 hover:text-sky-200 text-xs rounded-lg disabled:opacity-50"
+          title="Send a sample payload to this endpoint now (logged to Webhook Log)"
+        >
+          {testing ? '…' : 'Test'}
         </button>
 
         {/* Delete */}

@@ -44,7 +44,7 @@
 
 const { pool } = require('../config/database');
 const logger   = require('../config/logger');
-const { buildEnvelope } = require('../events/envelope');
+const { buildEnvelope, buildSampleEnvelope } = require('../events/envelope');
 
 const HTTP_TIMEOUT_MS = 10_000;
 
@@ -756,10 +756,51 @@ async function deliverEventWebhooks(userId, eventKey, extraFields = {}) {
   }
 }
 
+/**
+ * Fire a one-off SAMPLE payload to a single event_webhooks endpoint (the admin
+ * "Test" button). Builds the canonical sample envelope, POSTs it, and records a
+ * contact_webhook_log row so the test shows up in the Webhook Log like any
+ * other delivery. Never throws.
+ *
+ * @param {number|string} id - event_webhooks row id
+ * @returns {{ok:boolean, statusCode:number|null, errorMessage:string|null}}
+ */
+async function testEventWebhook(id) {
+  try {
+    const { rows: [hook] } = await pool.query(
+      `SELECT id, event_name, url FROM event_webhooks WHERE id = $1`, [id]
+    );
+    if (!hook) return { ok: false, statusCode: 0, errorMessage: 'Webhook not found' };
+
+    const settings = await _loadSettings();
+    const envelope = buildSampleEnvelope(hook.event_name);
+    const finalUrl = _buildUrl(hook.url, settings?.api_token);
+    const { ok, statusCode, responseBody, errorMessage } = await _doPost(finalUrl, envelope);
+
+    await _insertLog({
+      eventKey      : hook.event_name,
+      userId        : null,
+      urlSentTo     : hook.url,
+      paramsSent    : envelope,
+      status        : ok ? 'sent' : 'failed',
+      responseStatus: statusCode,
+      responseBody  : responseBody ? _truncate(responseBody, 1000) : null,
+      errorMessage,
+    }).catch(e => logger.warn(`[eventWebhook] test log insert failed: ${e.message}`));
+
+    logger.info(`[eventWebhook] TEST ${hook.event_name} → ${statusCode} url=${hook.url}`);
+    return { ok, statusCode, errorMessage };
+  } catch (err) {
+    logger.error(`[eventWebhook] testEventWebhook error: ${err.message}`);
+    return { ok: false, statusCode: 0, errorMessage: err.message };
+  }
+}
+
 module.exports = {
   fireContactWebhook,
   fireStageWebhook,
   deliverEventWebhooks,
+  testEventWebhook,
   resendQueuedWebhooks,
   resendFailedWebhooks,
   retryWebhookEntry,

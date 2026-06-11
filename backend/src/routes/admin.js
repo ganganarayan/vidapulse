@@ -42,6 +42,7 @@ const {
   discardWebhookEntry,
   unpauseWebhook,
   getContactWebhookStatus,
+  testEventWebhook,
 } = require('../services/contactWebhookSender');
 const eventRegistry           = require('../events/registry');
 const { buildSampleEnvelope } = require('../events/envelope');
@@ -1413,6 +1414,19 @@ router.get('/event-webhooks/preview', async (req, res, next) => {
     const eventKey = String(req.query.event_key || '').trim();
     if (!eventRegistry.getEvent(eventKey)) return res.status(400).json({ error: 'Unknown event' });
     return res.json({ payload: buildSampleEnvelope(eventKey) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST — fire a sample payload to one endpoint now (logged to Webhook Log)
+router.post('/event-webhooks/:id/test', async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
+    const result = await testEventWebhook(id);
+    logger.info(`[admin] Test-fired event webhook ${id} by user ${req.user.id} → ok=${result.ok}`);
+    return res.json(result);
   } catch (err) {
     next(err);
   }
