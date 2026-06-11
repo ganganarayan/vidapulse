@@ -140,19 +140,19 @@ function TrackingPanel({ videoId }) {
   return (
     <div className="px-6 py-6 min-w-0 max-w-3xl">
       <div className="mb-6">
-        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">Settings</p>
+        <p className="text-xs text-gray-400 uppercase tracking-widest font-semibold mb-1">Settings</p>
         <h2 className="text-2xl font-bold text-gray-50">Tracking</h2>
-        <p className="text-xs text-gray-400 mt-1">Send this video's engagement to your Meta Pixel and CRM.</p>
+        <p className="text-sm text-gray-300 mt-1">Send this video's engagement to your Meta Pixel and CRM.</p>
       </div>
 
       {/* How it works */}
       <div className="mb-6 bg-gradient-to-br from-amber-500/10 to-amber-500/5 border border-amber-500/20 rounded-xl p-5">
         <p className="text-sm font-semibold text-amber-200 mb-2">How Meta Tracking Works</p>
-        <p className="text-xs text-amber-100/70 leading-relaxed mb-3">
+        <p className="text-sm text-amber-100/90 leading-relaxed mb-3">
           When you add your Meta Pixel, VidaPulse automatically sends engagement signals to Meta whenever
           viewers watch your video. The more engagement events collected, the stronger Meta's optimization becomes.
         </p>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-amber-100/70">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-amber-100/90">
           <span>✓ Build warm audiences</span><span>✓ Improve retargeting</span>
           <span>✓ Optimize campaigns</span><span>✓ Find lookalike audiences</span>
           <span>✓ Higher conversion quality</span><span>✓ Better optimization over time</span>
@@ -163,23 +163,23 @@ function TrackingPanel({ videoId }) {
       <div className="flex items-center justify-between bg-gray-800/40 border border-gray-700/50 rounded-xl px-5 py-4">
         <div>
           <p className="text-sm font-medium text-gray-200">Enable Tracking</p>
-          <p className="text-xs text-gray-500 mt-0.5">When off, nothing fires for this video.</p>
+          <p className="text-sm text-gray-400 mt-0.5">When off, nothing fires for this video.</p>
         </div>
         <Toggle on={enabled} onClick={() => setEnabled(v => !v)} />
       </div>
 
       {/* Pixel ID */}
       <div className="mt-4">
-        <label className="block text-xs text-gray-400 mb-1.5">Meta Pixel ID</label>
+        <label className="block text-sm font-medium text-gray-300 mb-1.5">Meta Pixel ID</label>
         <input
           value={pixelId}
           onChange={e => setPixelId(e.target.value.replace(/[^\d]/g, ''))}
           placeholder="123456789012345"
           inputMode="numeric"
-          className="w-full sm:w-80 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-gray-100
-                     placeholder-gray-600 focus:outline-none focus:border-amber-500/60"
+          className="w-full sm:w-80 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2.5 text-base text-gray-50
+                     placeholder-gray-500 focus:outline-none focus:border-amber-500"
         />
-        <p className="text-[11px] text-gray-500 mt-1">Digits only — find it in Meta Events Manager.</p>
+        <p className="text-xs text-gray-400 mt-1.5">Digits only — find it in Meta Events Manager.</p>
       </div>
 
       {/* Pixel Setup table */}
@@ -187,7 +187,7 @@ function TrackingPanel({ videoId }) {
         <p className="text-sm font-semibold text-gray-300 mb-2">Pixel Setup</p>
         <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-800/70 text-[11px] uppercase tracking-wider text-gray-500">
+            <thead className="bg-gray-800/70 text-xs uppercase tracking-wider text-gray-300 font-semibold">
               <tr>
                 <th className="text-left px-4 py-2.5">VidaPulse Event</th>
                 <th className="text-left px-4 py-2.5">Meta Event</th>
@@ -198,22 +198,23 @@ function TrackingPanel({ videoId }) {
             <tbody className="divide-y divide-gray-700/40">
               {VIEWER_EVENTS.map(ev => (
                 <tr key={ev.key}>
-                  <td className="px-4 py-3 text-gray-200 whitespace-nowrap">
-                    {ev.label} <code className="text-[10px] text-gray-600 ml-1">{ev.key}</code>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className="text-sm font-medium text-gray-100">{ev.label}</span>
+                    <code className="ml-2 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded">{ev.key}</code>
                   </td>
                   <td className="px-4 py-3">
                     <input
                       list="vp-meta-events"
                       value={mapping[ev.key]?.meta || ''}
                       onChange={e => setMeta(ev.key, e.target.value)}
-                      className="w-40 bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-100
-                                 focus:outline-none focus:border-amber-500/60"
+                      className="w-44 bg-gray-900 border border-gray-600 rounded px-2.5 py-1.5 text-sm text-gray-50
+                                 focus:outline-none focus:border-amber-500"
                     />
                   </td>
                   <td className="px-4 py-3 text-center">
                     <Toggle on={!!mapping[ev.key]?.webhook} onClick={() => toggleHook(ev.key)} small />
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-gray-400">
+                  <td className="px-4 py-3 text-right tabular-nums text-sm font-semibold text-gray-100">
                     {(counts[ev.key] || 0).toLocaleString()}
                   </td>
                 </tr>
@@ -240,7 +241,7 @@ function TrackingPanel({ videoId }) {
       {/* Tracking webhooks */}
       <div className="mt-8">
         <p className="text-sm font-semibold text-gray-300 mb-1">Tracking Webhooks</p>
-        <p className="text-xs text-gray-500 mb-3">
+        <p className="text-sm text-gray-400 mb-3">
           Your CRM endpoint(s). They receive the events toggled "Webhook" above, across all your videos.
         </p>
         <form onSubmit={addWebhook} className="flex gap-2 mb-3">
@@ -262,7 +263,7 @@ function TrackingPanel({ videoId }) {
         </form>
         {hookMsg && <p className="text-xs text-red-400 mb-2">{hookMsg}</p>}
         {webhooks.length === 0 ? (
-          <p className="text-xs text-gray-600">No tracking webhooks yet.</p>
+          <p className="text-sm text-gray-400">No tracking webhooks yet.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {webhooks.map(h => (
