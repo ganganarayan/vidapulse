@@ -223,6 +223,8 @@ function WebhookRow({ hook, onChanged }) {
   const [testing,  setTesting]  = useState(false);
   const [rowMsg,   setRowMsg]   = useState('');
   const [preview,  setPreview]  = useState(null); // null | 'loading' | object
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const confirmTimer = React.useRef(null);
   const dirty = url.trim() !== hook.url;
 
   async function saveUrl() {
@@ -254,8 +256,20 @@ function WebhookRow({ hook, onChanged }) {
     }
   }
 
-  async function remove() {
-    if (!window.confirm('Delete this webhook endpoint? Delivery history is kept.')) return;
+  // Two-click delete (no popup): 1st click arms "Sure?", 2nd click within 5s
+  // deletes, otherwise it auto-resets.
+  function handleDeleteClick() {
+    if (confirmDelete) {
+      if (confirmTimer.current) clearTimeout(confirmTimer.current);
+      setConfirmDelete(false);
+      doDelete();
+      return;
+    }
+    setConfirmDelete(true);
+    confirmTimer.current = setTimeout(() => setConfirmDelete(false), 5000);
+  }
+
+  async function doDelete() {
     setBusy(true);
     try {
       await api.delete(`/admin/event-webhooks/${hook.id}`);
@@ -350,14 +364,17 @@ function WebhookRow({ hook, onChanged }) {
           {testing ? '…' : 'Test'}
         </button>
 
-        {/* Delete */}
+        {/* Delete — two-click confirm, no popup */}
         <button
-          onClick={remove}
+          onClick={handleDeleteClick}
           disabled={busy}
-          className="px-2.5 py-2 bg-red-500/8 border border-red-500/20 text-red-400 hover:bg-red-500/15 hover:text-red-300 text-xs rounded-lg disabled:opacity-50"
-          title="Delete this endpoint"
+          className={`px-2.5 py-2 border text-xs rounded-lg disabled:opacity-50 transition-colors inline-flex items-center gap-1
+            ${confirmDelete
+              ? 'bg-red-500/20 border-red-500/50 text-red-200 font-semibold'
+              : 'bg-red-500/8 border-red-500/20 text-red-400 hover:bg-red-500/15 hover:text-red-300'}`}
+          title="Delete"
         >
-          ✕
+          {confirmDelete ? 'Sure?' : <BinIcon />}
         </button>
 
         {rowMsg && (
@@ -442,6 +459,17 @@ function BackIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <line x1="19" y1="12" x2="5" y2="12" />
       <polyline points="12 19 5 12 12 5" />
+    </svg>
+  );
+}
+
+function BinIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
     </svg>
   );
 }
