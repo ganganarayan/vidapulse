@@ -227,8 +227,9 @@ async function createSubscription(user, planKey, returnUrl) {
     quantity         : 1,
     total_count      : 120,        // max 120 months (10 years) — effectively perpetual
     customer_notify  : 0,          // we handle comms via DivineLead CRM
-    callback_url     : returnUrl,
-    callback_method  : 'get',
+    // NO callback_url / callback_method — the Razorpay Subscriptions API rejects
+    // them (HTTP 400). Activation is webhook-driven (subscription.charged); the
+    // client opens Razorpay Checkout in-page and returns the user to /payment/:plan.
     notes            : {
       user_id: user.id,
       plan   : planKey,
