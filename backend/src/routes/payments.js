@@ -86,7 +86,9 @@ router.post('/subscribe', requireAuth, async (req, res, next) => {
 
     logger.info(`[payments] Subscription ${subscriptionId} created for user ${user.id} (${plan})`);
 
-    return res.json({ paymentUrl, subscriptionId });
+    // keyId is the PUBLIC Razorpay key — safe to expose; the client needs it to
+    // open Razorpay Checkout in-page with this subscription_id (same-tab flow).
+    return res.json({ paymentUrl, subscriptionId, keyId: env.RAZORPAY_KEY_ID });
 
   } catch (err) {
     logger.error(`[payments] /subscribe error: ${err.message}`);

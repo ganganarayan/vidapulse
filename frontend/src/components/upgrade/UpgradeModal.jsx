@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../lib/api';
-import { savePurchaseIntent }  from '../../lib/pixel';
+import { useAuth } from '../../contexts/AuthContext';
+import { startSubscriptionCheckout } from '../../lib/razorpayCheckout';
 import { getLockColor } from '../PlanTierBadge';
 
 /**
@@ -68,6 +69,7 @@ function defaultUpgradeData(currentPlan) {
 }
 
 export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClose }) {
+  const { user }                        = useAuth();
   const [upgradeData,  setUpgradeData]  = useState(() => defaultUpgradeData(currentPlan));
   const [subscribing,  setSubscribing]  = useState(null); // plan key being subscribed
   const [subError,     setSubError]     = useState('');
@@ -79,22 +81,19 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
       .catch(() => {}); // keep defaults on failure
   }, []);
 
-  // Create Razorpay subscription on-the-fly and redirect
+  // Open Razorpay Checkout in-page (same tab). On success the helper sends the
+  // user to /payment/:plan, which polls until the webhook activates the plan.
   async function handleSubscribe(plan) {
     setSubError('');
     setSubscribing(plan);
-    try {
-      const { data } = await api.post('/payments/subscribe', { plan });
-      savePurchaseIntent({
-        plan,
-        currency: upgradeData.currency ?? 'INR',
-        value   : upgradeData.pricing?.[plan]?.price ?? (plan === 'starter' ? 999 : 1999),
-      });
-      window.location.href = data.paymentUrl;
-    } catch (err) {
-      setSubError(err.response?.data?.error || 'Something went wrong. Please try again.');
-      setSubscribing(null);
-    }
+    await startSubscriptionCheckout({
+      plan,
+      currency : upgradeData.currency ?? 'INR',
+      value    : upgradeData.pricing?.[plan]?.price ?? (plan === 'starter' ? 999 : 1999),
+      user,
+      onError  : (msg) => { setSubError(msg); setSubscribing(null); },
+      onDismiss: () => setSubscribing(null),
+    });
   }
 
   // Close on Escape key

@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useUpgrade }        from '../contexts/UpgradeContext';
 import { useAuth }           from '../contexts/AuthContext';
-import api                   from '../lib/api';
-import { savePurchaseIntent } from '../lib/pixel';
+import { startSubscriptionCheckout } from '../lib/razorpayCheckout';
 import { getLockColor }       from './PlanTierBadge';
 
 // Plan color: Starter=#00FFFF  Pro=#F59E0B  (single source of truth)
@@ -70,22 +69,17 @@ export default function UpgradeModal() {
   const handleSubscribe = useCallback(async (plan) => {
     setError('');
     setLoading(plan);
-    try {
-      const { data } = await api.post('/payments/subscribe', { plan });
-      // Save purchase intent (INR only — this modal has no currency toggle)
-      savePurchaseIntent({
-        plan,
-        currency: 'INR',
-        value   : plan === 'starter' ? 999 : 1999,
-      });
-      // Redirect to Razorpay hosted payment page (full page navigation)
-      window.location.href = data.paymentUrl;
-    } catch (err) {
-      const msg = err.response?.data?.error || 'Something went wrong. Please try again.';
-      setError(msg);
-      setLoading(null);
-    }
-  }, []);
+    // Opens Razorpay Checkout in-page (same tab). On success the helper sends the
+    // user to /payment/:plan, which polls until the webhook activates the plan.
+    await startSubscriptionCheckout({
+      plan,
+      currency : 'INR',
+      value    : plan === 'starter' ? 999 : 1999,
+      user,
+      onError  : (msg) => { setError(msg); setLoading(null); },
+      onDismiss: () => setLoading(null),
+    });
+  }, [user]);
 
   if (!upgradeTarget) return null;
 
