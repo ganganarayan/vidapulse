@@ -150,6 +150,7 @@ function AppSidebar({ onClose }) {
         <SidebarItem to="/events"       icon={<EventsIcon />}  label="Events"       active={active('/events')}       plan="pro" userPlan={user?.plan} />
         <SidebarItem to="/funnels"      icon={<FunnelIcon />}  label="Funnels"      active={active('/funnels')}      plan="pro" userPlan={user?.plan} />
         <SidebarItem to="/cta-tracking" icon={<CtaIcon />}     label="CTA Tracking" active={active('/cta-tracking')} plan="pro" userPlan={user?.plan} />
+        <SidebarItem to="/tracking-logs" icon={<LogIcon />}    label="Tracking Logs" active={active('/tracking-logs')} plan="pro" userPlan={user?.plan} />
         <SidebarItem to="/reports"      icon={<ReportsIcon />} label="Reports"      active={active('/reports')}      plan="pro" userPlan={user?.plan} />
         <SidebarItem to="/alerts"       icon={<BellIcon />}    label="Alerts"       active={active('/alerts')}       plan="pro" userPlan={user?.plan} />
 
@@ -190,6 +191,7 @@ function AppSidebar({ onClose }) {
               badge={webhookAlerts.paused ? (webhookAlerts.queuedCount || '!') : null}
             />
             <SidebarItem to="/admin/event-webhooks" icon={<WebhookIcon />}  label="Event Webhooks" active={active('/admin/event-webhooks')} />
+            <SidebarItem to="/admin/tracking-logs"  icon={<LogIcon />}      label="Tracking Logs"  active={active('/admin/tracking-logs')} />
             <SidebarItem to="/admin/help"        icon={<HelpIcon />}     label="Help Editor"  active={active('/admin/help')} />
             <SidebarItem to="/admin/onboarding"       icon={<HeartIcon />}    label="Behavioral Events" active={active('/admin/onboarding', true)} />
             <SidebarItem to="/admin/onboarding-state" icon={<EventsIcon />}   label="Onboarding Stage" active={active('/admin/onboarding-state')} />

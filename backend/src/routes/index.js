@@ -63,6 +63,7 @@ const ctaLinksRoutes  = require('./ctaLinks');
 const paymentsRoutes  = require('./payments');
 const trackRoutes           = require('./track');
 const trackingWebhookRoutes = require('./trackingWebhooks');
+const trackingLogRoutes     = require('./trackingLogs');
 
 router.use('/health',    healthRoutes);
 router.use('/webhook',   webhookRoutes);
@@ -77,6 +78,7 @@ router.use('/cta-links', ctaLinksRoutes);
 router.use('/payments',  paymentsRoutes);
 router.use('/track',             trackRoutes);            // public viewer events (embed)
 router.use('/tracking-webhooks', trackingWebhookRoutes);  // subscriber-owned CRUD
+router.use('/tracking-logs',     trackingLogRoutes);      // subscriber-owned read-only log
 
 // ── GET /api/geo ──────────────────────────────────────────────────────────
 // Public (no auth). Returns the requester's ISO-3166 alpha-2 country code,

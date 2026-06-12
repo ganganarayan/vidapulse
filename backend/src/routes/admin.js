@@ -1656,6 +1656,24 @@ router.get('/contact-webhook-log', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/tracking-logs
+//
+// All-users VIEWER-plane fire log: every Meta-pixel fire + every tracking-webhook
+// fire across every subscriber. READ-ONLY — kept separate from the platform
+// contact-webhook-log above (different plane, different visibility).
+//
+// Query params: page, limit, sort=date|video|event|type|status, dir=asc|desc.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/tracking-logs', async (req, res, next) => {
+  try {
+    const { getTrackingLogs } = require('../tracking/trackingService');
+    const { page, limit, sort, dir } = req.query;
+    const data = await getTrackingLogs({ ownerId: null, page, limit, sort, dir });
+    return res.json(data);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PROMOTION VIDEOS
 // ─────────────────────────────────────────────────────────────────────────────
 
