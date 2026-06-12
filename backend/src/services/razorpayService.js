@@ -267,9 +267,18 @@ async function cancelSubscription(subscriptionId) {
   logger.info(`[razorpay] Cancelled subscription ${subscriptionId}`);
 }
 
+/**
+ * Fetch a Razorpay payment entity — used to record accurate amount/currency/
+ * method when activating a plan from the client checkout callback.
+ */
+async function fetchPayment(paymentId) {
+  return _razorpayRequest('GET', `/v1/payments/${paymentId}`);
+}
+
 module.exports = {
   getOrCreateCustomer,
   getOrCreatePlan,
   createSubscription,
   cancelSubscription,
+  fetchPayment,
 };

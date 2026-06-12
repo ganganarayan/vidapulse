@@ -80,8 +80,20 @@ export async function startSubscriptionCheckout({ plan, value, currency, user, o
         contact: user?.phone || '',
       },
       theme          : { color: '#F59E0B' },
-      // Success: stay in the same tab and go to the polling success page.
-      handler        : function () {
+      // Success: verify + activate immediately (no waiting on the webhook), then
+      // go to the polling success page in the same tab. If verify fails, the
+      // webhook is still the backstop — the success page keeps polling.
+      handler        : async function (response) {
+        try {
+          await api.post('/payments/verify', {
+            razorpay_payment_id     : response?.razorpay_payment_id,
+            razorpay_subscription_id: response?.razorpay_subscription_id,
+            razorpay_signature      : response?.razorpay_signature,
+            plan,
+          });
+        } catch (_) {
+          // fall through — /payment/:plan will poll for the webhook activation
+        }
         window.location.href = `/payment/${plan}`;
       },
       modal          : {
