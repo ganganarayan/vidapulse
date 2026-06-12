@@ -36,14 +36,10 @@ export default function TrackingLogTable({ rows = [], sort, dir, onSort, showOwn
               <SortHeader label="Video"       col="video"  sort={sort} dir={dir} onSort={onSort} />
               <SortHeader label="Event"       col="event"  sort={sort} dir={dir} onSort={onSort} />
               <SortHeader label="Type"        col="type"   sort={sort} dir={dir} onSort={onSort} className="w-[90px]" />
-              <th className="text-left px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell">
-                Destination
-              </th>
+              <SortHeader label="Destination" col="dest"   sort={sort} dir={dir} onSort={onSort} className="hidden lg:table-cell" />
               <SortHeader label="Status"      col="status" sort={sort} dir={dir} onSort={onSort} className="w-[110px]" />
               {showOwner && (
-                <th className="text-left px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                  Owner
-                </th>
+                <SortHeader label="Owner"     col="owner"  sort={sort} dir={dir} onSort={onSort} />
               )}
             </tr>
           </thead>

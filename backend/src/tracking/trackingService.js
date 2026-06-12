@@ -218,7 +218,9 @@ const _LOG_SORT = {
   video : 'v.title',
   event : 'tl.event_key',
   type  : 'tl.kind',
+  dest  : 'COALESCE(tl.meta_event, tl.url)',
   status: 'tl.status',
+  owner : 'u.email',
 };
 
 /**
