@@ -1340,7 +1340,11 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
       /* Removes the 300ms click delay on iOS Safari for all tap interactions */
       touch-action:manipulation;}
     #player-wrap>iframe,#player-wrap>video{width:100%;height:100%;display:block}
-    #yt-wrap,#yt-wrap>div{position:absolute;inset:0}
+    /* Only the YT player iframe fills the wrap. NOT a blanket #yt-wrap>div rule —
+       that forced inset:0 (top:0) onto #vp-bar, stretching it full-height and
+       centering the controls in the MIDDLE. #vp-bar/#vp-center carry their own
+       positioning (#vp-bar = bottom:0, #vp-center = inset:0). */
+    #yt-wrap{position:absolute;inset:0}
     #yt-player{position:absolute;inset:0}
     ${extraStyles}
   </style>

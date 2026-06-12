@@ -99,6 +99,90 @@ router.post('/subscribe', requireAuth, async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /api/payments/verify   (authenticated)
+// Called by the client immediately after Razorpay Checkout succeeds. Verifies
+// the subscription payment signature and activates the plan RIGHT AWAY, so the
+// user gets access without waiting on the webhook (which may be delayed or, on
+// staging, not configured). The webhook remains the source of truth for
+// renewals and as a backstop; _logPayment de-dupes by razorpay_payment_id.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/verify', requireAuth, async (req, res, next) => {
+  try {
+    const { razorpay_payment_id, razorpay_subscription_id, razorpay_signature, plan } = req.body || {};
+
+    if (!razorpay_payment_id || !razorpay_subscription_id || !razorpay_signature) {
+      return res.status(400).json({ error: 'Missing payment verification fields' });
+    }
+    if (!['starter', 'pro'].includes(plan)) {
+      return res.status(400).json({ error: 'Invalid plan' });
+    }
+    if (!env.RAZORPAY_KEY_SECRET) {
+      return res.status(503).json({ error: 'Payment service not configured' });
+    }
+
+    // 1. Verify the signature. For subscriptions Razorpay signs
+    //    HMAC_SHA256(payment_id + '|' + subscription_id, key_secret).
+    const expected = crypto
+      .createHmac('sha256', env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_payment_id}|${razorpay_subscription_id}`)
+      .digest('hex');
+    const a = Buffer.from(expected);
+    const b = Buffer.from(String(razorpay_signature));
+    const valid = a.length === b.length && crypto.timingSafeEqual(a, b);
+    if (!valid) {
+      logger.warn(`[payments] /verify signature mismatch — user=${req.user.id} sub=${razorpay_subscription_id}`);
+      return res.status(400).json({ error: 'Payment verification failed' });
+    }
+
+    // 2. Confirm the subscription belongs to the calling user (set at creation).
+    const { rows: uRows } = await pool.query(
+      `SELECT u.razorpay_subscription_id, p.name AS current_plan
+       FROM users u JOIN plans p ON p.id = u.plan_id
+       WHERE u.id = $1`,
+      [req.user.id]
+    );
+    if (uRows[0]?.razorpay_subscription_id !== razorpay_subscription_id) {
+      logger.warn(`[payments] /verify subscription not owned by user=${req.user.id}`);
+      return res.status(403).json({ error: 'Subscription does not belong to this account' });
+    }
+
+    // 3. Idempotency: if the webhook already upgraded this user, just confirm.
+    const PLAN_ORDER = { free: 0, starter: 1, pro: 2, admin_lifetime: 3 };
+    if ((PLAN_ORDER[uRows[0].current_plan] ?? 0) >= (PLAN_ORDER[plan] ?? 0)) {
+      return res.json({ ok: true, plan, already: true });
+    }
+
+    // 4. Best-effort accurate payment record (amount/currency/method), then activate.
+    let amountPaise = null, currency = 'INR', paymentMethod = null;
+    try {
+      const pay = await razorpay.fetchPayment(razorpay_payment_id);
+      amountPaise   = parseInt(pay.amount || 0, 10) || null;
+      currency      = pay.currency || 'INR';
+      paymentMethod = _extractPaymentMethod(pay);
+    } catch (e) {
+      logger.warn(`[payments] /verify fetchPayment failed: ${e.message}`);
+    }
+
+    await _logPayment({
+      userId: req.user.id, razorpayPaymentId: razorpay_payment_id, razorpayOrderId: null,
+      razorpayLinkId: razorpay_subscription_id, plan, amountPaise, currency,
+      status: 'captured', notes: { user_id: req.user.id, plan },
+      eventType: 'subscription.verified', paymentMethod,
+    });
+
+    await _upgradePlan(req.user.id, plan, amountPaise, razorpay_payment_id, 'subscription.verified');
+
+    logger.info(`[payments] ✓ /verify activated ${plan} for user ${req.user.id}`);
+    return res.json({ ok: true, plan });
+
+  } catch (err) {
+    logger.error(`[payments] /verify error: ${err.message}`);
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/payments/billing   (authenticated)
 // Returns the calling user's payment history for the Billing page.
 // Rows are ordered newest-first; each includes a computed period_end_at
