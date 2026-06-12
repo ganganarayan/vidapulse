@@ -28,6 +28,7 @@
 const { pool }   = require('../config/database');
 const logger     = require('../config/logger');
 const registry   = require('../events/registry');
+const { buildEnvelope } = require('../events/envelope');
 
 const TRACK_TIMEOUT_MS = 8_000;
 
@@ -60,6 +61,7 @@ async function recordViewerEvent({ videoId, eventKey, sessionId = null }) {
     // 2. Resolve video → owner → plan → this video's tracking settings (one query).
     const { rows: [ctx] } = await pool.query(
       `SELECT v.user_id                       AS owner_id,
+              v.title                          AS video_title,
               u.is_active                      AS owner_active,
               COALESCE(p.name::text, 'free')   AS owner_plan,
               ts.enabled                       AS enabled,
@@ -112,7 +114,9 @@ async function recordViewerEvent({ videoId, eventKey, sessionId = null }) {
 
     // 5b. Webhook delivery — only if the per-video mapping opts this event in.
     if (mapping[eventKey]?.webhook === true) {
-      deliverTrackingWebhooks(ctx.owner_id, eventKey, { video_id: videoId, session_id: sessionId }).catch(() => {});
+      deliverTrackingWebhooks(ctx.owner_id, eventKey, {
+        video_id: videoId, video_title: ctx.video_title, session_id: sessionId,
+      }).catch(() => {});
     }
 
     return { ok: true };
@@ -139,7 +143,7 @@ async function deliverTrackingWebhooks(ownerId, eventKey, ctx = {}) {
     );
     if (!hooks.length) return;
 
-    const payload = _buildTrackingPayload(eventKey, ctx);
+    const payload = await _buildViewerEnvelope(ownerId, eventKey, ctx);
 
     for (const hook of hooks) {
       const { ok, statusCode, responseBody, errorMessage } = await _post(hook.url, payload);
@@ -162,15 +166,58 @@ async function deliverTrackingWebhooks(ownerId, eventKey, ctx = {}) {
 // HELPERS (self-contained — no shared routing with the platform sender)
 // ─────────────────────────────────────────────────────────────────────────
 
-/** Viewer-event payload. No contact identity — the viewer is anonymous. */
-function _buildTrackingPayload(eventKey, ctx = {}) {
-  return {
-    event    : eventKey,
-    source   : 'vidapulse',
-    timestamp: new Date().toISOString(),
-    video_id : ctx.video_id || null,
-    ...(ctx.session_id ? { session_id: ctx.session_id } : {}),
-  };
+/**
+ * Build the viewer-plane webhook payload.
+ *
+ * The VIEWER is anonymous (no lead PII, by policy), so the CRM's "≥2 of
+ * name/email/phone" rule is satisfied with the SUBSCRIBER (video owner) as the
+ * contact identity. We also attach the viewer's UTM (campaign attribution, no
+ * PII) and the event/video context. Reuses the same HYBRID envelope the
+ * platform CRM already maps (buildEnvelope) — but delivered ONLY to the owner's
+ * tracking_webhooks, so plane separation is preserved (it's a pure formatter,
+ * not a delivery route).
+ */
+async function _buildViewerEnvelope(ownerId, eventKey, ctx = {}) {
+  // Subscriber (owner) identity — the contact the CRM ties the event to.
+  let owner = {};
+  try {
+    const { rows: [o] } = await pool.query(
+      `SELECT u.name, u.email, u.phone, COALESCE(p.name::text, 'free') AS plan
+         FROM users u LEFT JOIN plans p ON p.id = u.plan_id
+        WHERE u.id = $1`,
+      [ownerId]
+    );
+    if (o) owner = o;
+  } catch (e) { logger.warn(`[tracking] owner lookup failed: ${e.message}`); }
+
+  // Viewer's campaign attribution — UTM from the analytics session (no PII).
+  let utm = {};
+  if (ctx.session_id) {
+    try {
+      const { rows: [s] } = await pool.query(
+        `SELECT utm_source, utm_medium, utm_campaign, utm_term, utm_content
+           FROM analytics_sessions WHERE id = $1`,
+        [ctx.session_id]
+      );
+      if (s) utm = s;
+    } catch (_) { /* non-uuid / missing session — UTM just stays empty */ }
+  }
+
+  return buildEnvelope(eventKey, {
+    user: { name: owner.name, email: owner.email, phone: owner.phone, plan: owner.plan },
+    extraFields: {
+      identity    : 'subscriber',   // the contact is the account OWNER, not the viewer
+      viewer      : 'anonymous',
+      video_id    : ctx.video_id    || '',
+      video_title : ctx.video_title || '',
+      session_id  : ctx.session_id  || '',
+      utm_source  : utm.utm_source   || '',
+      utm_medium  : utm.utm_medium   || '',
+      utm_campaign: utm.utm_campaign || '',
+      utm_term    : utm.utm_term     || '',
+      utm_content : utm.utm_content  || '',
+    },
+  });
 }
 
 async function _post(url, body) {
