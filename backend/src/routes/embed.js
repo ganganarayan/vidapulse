@@ -47,9 +47,15 @@ router.get('/:videoId', async (req, res) => {
     // Join the owner and require the owner be active — a deactivated owner's
     // videos are frozen (won't play) until the account is restored.
     const { rows: [video] } = await pool.query(
-      `SELECT v.id, v.title, v.source_type, v.original_url, v.playable_url, v.processing_status
+      `SELECT v.id, v.title, v.source_type, v.original_url, v.playable_url, v.processing_status,
+              COALESCE(p.name::text, 'free') AS owner_plan,
+              ts.enabled       AS track_enabled,
+              ts.pixel_id      AS track_pixel_id,
+              ts.event_mapping AS track_mapping
        FROM   videos v
        JOIN   users  u ON u.id = v.user_id
+       LEFT JOIN plans p ON p.id = u.plan_id
+       LEFT JOIN video_tracking_settings ts ON ts.video_id = v.id
        WHERE  v.id = $1 AND v.is_active = TRUE AND u.is_active = TRUE`,
       [videoId]
     );
@@ -84,7 +90,20 @@ router.get('/:videoId', async (req, res) => {
       if (ps) playerSettings = { ...DEFAULTS, ...ps };
     } catch (_) { /* use defaults */ }
 
-    res.type('html').send(buildEmbedPage(video, videoUrl, apiBase, playerSettings));
+    // Resolve viewer-tracking config. The owner's pixel fires ONLY when the
+    // owner is Pro+, enabled tracking, and set a pixel id. map = event → Meta
+    // event name (from the per-video destination mapping).
+    const ownerPro     = video.owner_plan === 'pro' || video.owner_plan === 'admin_lifetime';
+    const trackEnabled = ownerPro && video.track_enabled === true && !!video.track_pixel_id;
+    const trackMap     = {};
+    if (trackEnabled && video.track_mapping && typeof video.track_mapping === 'object') {
+      for (const [k, v] of Object.entries(video.track_mapping)) {
+        if (v && typeof v.meta === 'string' && v.meta) trackMap[k] = v.meta;
+      }
+    }
+    const tracking = { enabled: trackEnabled, pixelId: trackEnabled ? video.track_pixel_id : null, map: trackMap };
+
+    res.type('html').send(buildEmbedPage(video, videoUrl, apiBase, playerSettings, tracking));
 
   } catch (err) {
     logger.error(`[embed] ${err.message}`, { videoId });
@@ -96,8 +115,18 @@ router.get('/:videoId', async (req, res) => {
 // HTML builders
 // ─────────────────────────────────────────────────────────────────────────
 
-function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
+function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
   const { id, title, source_type } = video;
+
+  // Meta Pixel — the OWNER's pixel only, injected when the owner (Pro+) enabled
+  // tracking and set a pixel id. There is NO global VidaPulse pixel here. The
+  // standard fbq snippet inits the owner's pixel; trackEvent() (in trackerCore)
+  // fires the mapped standard events on watch milestones.
+  const trackEnabled = !!(tracking.enabled && tracking.pixelId);
+  const trackingMap  = tracking.map || {};
+  const metaPixelInit = trackEnabled
+    ? `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init',${JSON.stringify(tracking.pixelId)});`
+    : '';
 
   // Individual player settings — every control has its own toggle
   const autoplay          = ps.autoplay              ?? false;
@@ -333,7 +362,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
                 if(player.getPlayerState()===YT.PlayerState.PLAYING){
                   var c=player.getCurrentTime()||0;
                   var d=player.getDuration()||ytDur;
-                  if(d>0){ytDur=d;dur=d;curPos=c;_ytUpdateSeek(c,d);}
+                  if(d>0){ytDur=d;dur=d;curPos=c;_ytUpdateSeek(c,d);_checkThresholds(c,d);}
                 }
               },250);
               /* 15-second analytics heartbeat */
@@ -619,6 +648,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
           maxP=100;_ended=true;ping('end');
         });
         p.on('timeupdate',function(d){
+          _checkThresholds(d.seconds, dur);
           p.getDuration().then(function(dur){
             if(dur>0)maxP=Math.max(maxP,d.seconds/dur*100);
           });
@@ -1124,6 +1154,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
 
         /* ── Analytics ──────────────────────────────── */
         v.addEventListener('loadedmetadata',function(){if(v.duration>0)dur=v.duration;});
+        v.addEventListener('timeupdate',function(){if(v.duration>0)_checkThresholds(v.currentTime,v.duration);});
         v.addEventListener('play',function(){if(!on){on=true;t0=v.currentTime;curPos=v.currentTime;ping('play');}});
         v.addEventListener('pause',function(){
           if(on){on=false;var e=v.currentTime;curPos=e;secs+=e-t0;ivs.push([t0,e]);
@@ -1198,6 +1229,33 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
     console.log('[VidaPulse] viewer cookie:', ck);
 
     var sid=null, pq=[], on=false,t0=0,maxP=0,secs=0,ivs=[],dur=0,curPos=0;
+
+    /* ── Viewer tracking (owner pixel + /api/track) ──────────────────────
+       Gated by TRACK_ENABLED (server already verified Pro + enabled + pixel).
+       trackEvent fires the owner's Meta event (every occurrence) and POSTs to
+       /api/track (server dedups once_per_session for the CRM webhook + counter).
+       Thresholds fire at most once per page-load via _vpFired. */
+    var TRACK_ENABLED=${trackEnabled ? 'true' : 'false'};
+    var PIXEL_MAP=${JSON.stringify(trackingMap)};
+    var _vpFired={};
+    function trackEvent(name){
+      if(!TRACK_ENABLED)return;
+      try{ if(typeof window.fbq==='function'&&PIXEL_MAP[name]){window.fbq('track',PIXEL_MAP[name]);} }catch(_){}
+      try{ fetch(API+'/track',{method:'POST',keepalive:true,
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({video_id:VID,event:name,session_id:sid})}).catch(function(){}); }catch(_){}
+    }
+    function _checkThresholds(cur,d){
+      if(!TRACK_ENABLED)return;
+      if(cur>=5&&!_vpFired.vsl_view){_vpFired.vsl_view=1;trackEvent('vsl_view');}
+      if(d>0){
+        var pct=cur/d*100;
+        if(pct>=25  &&!_vpFired.vsl_25 ){_vpFired.vsl_25=1; trackEvent('vsl_25');}
+        if(pct>=50  &&!_vpFired.vsl_50 ){_vpFired.vsl_50=1; trackEvent('vsl_50');}
+        if(pct>=75  &&!_vpFired.vsl_75 ){_vpFired.vsl_75=1; trackEvent('vsl_75');}
+        if(pct>=99.5&&!_vpFired.vsl_100){_vpFired.vsl_100=1;trackEvent('vsl_100');}
+      }
+    }
     var dv=window.innerWidth<768?'mobile':window.innerWidth<1024?'tablet':'desktop';
 
     /* ── UTM capture ──────────────────────────────────────────────────────
@@ -1354,6 +1412,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}) {
     ${playerHtml}
   </div>
   <script>
+    ${metaPixelInit}
     ${trackerCore}
     ${extraScript}
   </script>

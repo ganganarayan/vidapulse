@@ -42,7 +42,10 @@ const {
   discardWebhookEntry,
   unpauseWebhook,
   getContactWebhookStatus,
+  testEventWebhook,
 } = require('../services/contactWebhookSender');
+const eventRegistry           = require('../events/registry');
+const { buildSampleEnvelope } = require('../events/envelope');
 
 const {
   getAdminPromotionVideos,
@@ -270,6 +273,11 @@ const updateSettingsSchema = z.object({
   password_reset_webhook_url   : _urlFieldSchema,
   razorpay_starter_url         : _urlFieldSchema,
   razorpay_pro_url             : _urlFieldSchema,
+  signup_webhook_url             : _urlFieldSchema,
+  login_webhook_url              : _urlFieldSchema,
+  video_added_webhook_url        : _urlFieldSchema,
+  embed_generated_webhook_url    : _urlFieldSchema,
+  tracking_activated_webhook_url : _urlFieldSchema,
   webhook_secret               : z.string().max(200).nullable().optional(),
   api_token                    : z.string().max(500).nullable().optional(),
   is_active                    : z.boolean().optional(),
@@ -299,6 +307,11 @@ router.patch('/webhook-settings', async (req, res, next) => {
     if (settingsFields.password_reset_webhook_url !== undefined) { settingsClauses.push(`password_reset_webhook_url = $${p++}`); settingsVals.push(settingsFields.password_reset_webhook_url); }
     if (settingsFields.razorpay_starter_url       !== undefined) { settingsClauses.push(`razorpay_starter_url       = $${p++}`); settingsVals.push(settingsFields.razorpay_starter_url);       }
     if (settingsFields.razorpay_pro_url           !== undefined) { settingsClauses.push(`razorpay_pro_url           = $${p++}`); settingsVals.push(settingsFields.razorpay_pro_url);           }
+    if (settingsFields.signup_webhook_url             !== undefined) { settingsClauses.push(`signup_webhook_url             = $${p++}`); settingsVals.push(settingsFields.signup_webhook_url);             }
+    if (settingsFields.login_webhook_url              !== undefined) { settingsClauses.push(`login_webhook_url              = $${p++}`); settingsVals.push(settingsFields.login_webhook_url);              }
+    if (settingsFields.video_added_webhook_url        !== undefined) { settingsClauses.push(`video_added_webhook_url        = $${p++}`); settingsVals.push(settingsFields.video_added_webhook_url);        }
+    if (settingsFields.embed_generated_webhook_url    !== undefined) { settingsClauses.push(`embed_generated_webhook_url    = $${p++}`); settingsVals.push(settingsFields.embed_generated_webhook_url);    }
+    if (settingsFields.tracking_activated_webhook_url !== undefined) { settingsClauses.push(`tracking_activated_webhook_url = $${p++}`); settingsVals.push(settingsFields.tracking_activated_webhook_url); }
     if (settingsFields.webhook_secret           !== undefined) { settingsClauses.push(`webhook_secret           = $${p++}`); settingsVals.push(settingsFields.webhook_secret);           }
     if (settingsFields.api_token                !== undefined) { settingsClauses.push(`api_token                = $${p++}`); settingsVals.push(settingsFields.api_token);                }
     if (settingsFields.is_active                !== undefined) { settingsClauses.push(`is_active                = $${p++}`); settingsVals.push(settingsFields.is_active);                }
@@ -354,7 +367,7 @@ router.post('/webhook-settings/test', async (req, res, next) => {
 
 router.get('/onboarding-health', async (req, res, next) => {
   try {
-    const [funnelRes, timingRes, recentRes, planBreakdownRes] = await Promise.all([
+    const [funnelRes, timingRes, recentRes, planBreakdownRes] = await Promise.allSettled([
 
       // Admin-role accounts are excluded from all onboarding metrics so they
       // don't pollute conversion data with internal test/setup activity.
@@ -428,19 +441,35 @@ router.get('/onboarding-health', async (req, res, next) => {
       `),
     ]);
 
-    const funnel = funnelRes.rows[0];
-    const timing = timingRes.rows[0];
+    // Unwrap each settled result independently. A failing query yields [] plus a
+    // diagnostic line (with the real Postgres error) instead of blanking the whole
+    // page — Railway hides 500 bodies in production, so surfacing the error in the
+    // payload is the only way to see what's actually wrong.
+    const diagnostics = [];
+    const _rows = (label, settled) => {
+      if (settled.status === 'fulfilled') return settled.value.rows;
+      logger.error(`[onboarding-health] ${label} query failed: ${settled.reason?.message}`);
+      diagnostics.push(`${label}: ${settled.reason?.message || 'query failed'}`);
+      return [];
+    };
+    const funnelRows = _rows('funnel',         funnelRes);
+    const timingRows = _rows('timing',         timingRes);
+    const recentRows = _rows('recent_users',   recentRes);
+    const planRows   = _rows('plan_breakdown', planBreakdownRes);
+
+    const funnel = funnelRows[0] ?? {};
+    const timing = timingRows[0] ?? {};
     const total  = funnel.total_users || 0;
     const pct    = n => total > 0 ? Math.round((parseInt(n || 0, 10) / total) * 100) : 0;
 
     return res.json({
       funnel: {
         total_users  : total,
-        added_video  : { count: parseInt(funnel.added_video,    10), pct: pct(funnel.added_video)    },
-        saw_wow      : { count: parseInt(funnel.saw_wow_moment, 10), pct: pct(funnel.saw_wow_moment) },
-        hit_limit    : { count: parseInt(funnel.hit_free_limit, 10), pct: pct(funnel.hit_free_limit) },
-        attempted_pro: { count: parseInt(funnel.attempted_pro,  10), pct: pct(funnel.attempted_pro)  },
-        converted    : { count: parseInt(funnel.converted,      10), pct: pct(funnel.converted)      },
+        added_video  : { count: parseInt(funnel.added_video    || 0, 10), pct: pct(funnel.added_video)    },
+        saw_wow      : { count: parseInt(funnel.saw_wow_moment || 0, 10), pct: pct(funnel.saw_wow_moment) },
+        hit_limit    : { count: parseInt(funnel.hit_free_limit || 0, 10), pct: pct(funnel.hit_free_limit) },
+        attempted_pro: { count: parseInt(funnel.attempted_pro  || 0, 10), pct: pct(funnel.attempted_pro)  },
+        converted    : { count: parseInt(funnel.converted      || 0, 10), pct: pct(funnel.converted)      },
         avg_limit_hits: parseFloat(funnel.avg_limit_hits ?? 0),
       },
       timing: {
@@ -449,9 +478,62 @@ router.get('/onboarding-health', async (req, res, next) => {
         median_wow_to_paid    : timing.median_wow_to_paid     != null ? Number(timing.median_wow_to_paid)     : null,
         median_limit_to_paid  : timing.median_limit_to_paid   != null ? Number(timing.median_limit_to_paid)   : null,
       },
-      plan_breakdown : planBreakdownRes.rows,
-      recent_users   : recentRes.rows,
+      plan_breakdown : planRows,
+      recent_users   : recentRows,
+      diagnostics,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/onboarding-state
+//
+// Raw onboarding_state milestone timestamps per user + funnel counts.
+// Powers the admin "Onboarding State" page. No computed "stage" helper — just
+// the data and how many users reached each milestone (each is one-time).
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/onboarding-state', async (req, res, next) => {
+  try {
+    const [{ rows: users }, { rows: [counts] }] = await Promise.all([
+      pool.query(`
+        SELECT
+          os.user_id,
+          u.email,
+          u.name,
+          p.name                          AS plan,
+          os.signed_up_at,
+          os.first_login_at,
+          os.first_video_added_at,
+          os.first_embed_generated_at,
+          os.first_tracking_activated_at,
+          os.converted_to_paid_at,
+          os.current_step,
+          os.updated_at
+        FROM   onboarding_state os
+        JOIN   users u ON u.id = os.user_id
+        JOIN   plans p ON p.id = u.plan_id
+        WHERE  u.role != 'admin'
+        ORDER  BY os.updated_at DESC
+        LIMIT  200
+      `),
+      pool.query(`
+        SELECT
+          COUNT(*)::int                                                          AS registered,
+          COUNT(*) FILTER (WHERE os.first_login_at              IS NOT NULL)::int AS logged_in,
+          COUNT(*) FILTER (WHERE os.first_video_added_at        IS NOT NULL)::int AS video_added,
+          COUNT(*) FILTER (WHERE os.first_embed_generated_at    IS NOT NULL)::int AS embed_generated,
+          COUNT(*) FILTER (WHERE os.first_tracking_activated_at IS NOT NULL)::int AS tracking_activated,
+          COUNT(*) FILTER (WHERE os.converted_to_paid_at        IS NOT NULL)::int AS paid
+        FROM   onboarding_state os
+        JOIN   users u ON u.id = os.user_id
+        WHERE  u.role != 'admin'
+      `),
+    ]);
+
+    return res.json({ users, counts: counts ?? {} });
   } catch (err) {
     next(err);
   }
@@ -1195,6 +1277,161 @@ router.get('/analytics-diag', requireAuth, requireAdmin, async (req, res, next) 
   }
 });
 
+// ═════════════════════════════════════════════════════════════════════════════
+// EVENT WEBHOOKS REGISTRY  (unified event architecture — name-keyed routing)
+//
+//   GET    /api/admin/event-webhooks                    — rows + event catalog
+//   POST   /api/admin/event-webhooks                    — add { event_name, url, status? }
+//   PATCH  /api/admin/event-webhooks/:id                — update { url?, status? }
+//   DELETE /api/admin/event-webhooks/:id                — remove a row (logs kept)
+//   GET    /api/admin/event-webhooks/preview?event_key= — sample payload
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Reuses the SSRF guard (_isInternalHost) defined above for webhook-settings.
+function _validWebhookUrl(u) {
+  const s = String(u || '');
+  if (s.length > 2000) return 'URL too long';
+  try {
+    if (new URL(s).protocol !== 'https:') return 'Must use HTTPS';
+  } catch {
+    return 'Enter a valid URL';
+  }
+  if (_isInternalHost(s)) return 'Must point to a public external host';
+  return null;
+}
+
+router.get('/event-webhooks', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT ew.id, ew.event_name, ew.url, ew.status, ew.created_at,
+             COALESCE(l.cnt, 0)::int AS log_count,
+             l.last_fired
+      FROM   event_webhooks ew
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS cnt, MAX(sent_at) AS last_fired
+        FROM   contact_webhook_log cwl
+        WHERE  cwl.event_key = ew.event_name
+      ) l ON TRUE
+      ORDER BY ew.event_name ASC, ew.url ASC
+    `);
+    return res.json({ webhooks: rows, events: eventRegistry.listEvents() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/event-webhooks', async (req, res, next) => {
+  try {
+    const eventName = String(req.body?.event_name || '').trim();
+    const url       = String(req.body?.url || '').trim();
+    const status    = req.body?.status === 'inactive' ? 'inactive' : 'active';
+
+    if (!eventRegistry.getEvent(eventName)) {
+      return res.status(400).json({ error: 'Unknown event', message: 'event_name is not in the registry' });
+    }
+    const urlErr = _validWebhookUrl(url);
+    if (urlErr) return res.status(400).json({ error: 'Validation Error', message: urlErr });
+
+    try {
+      const { rows: [row] } = await pool.query(
+        `INSERT INTO event_webhooks (event_name, url, status)
+         VALUES ($1, $2, $3)
+         RETURNING id, event_name, url, status, created_at`,
+        [eventName, url, status]
+      );
+      logger.info(`[admin] Event webhook created: ${eventName} → ${url} by user ${req.user.id}`);
+      return res.status(201).json({ ok: true, webhook: row });
+    } catch (e) {
+      if (e.code === '23505') {
+        return res.status(409).json({ error: 'Conflict', message: 'That event already posts to this URL.' });
+      }
+      throw e;
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/event-webhooks/:id', async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
+
+    const sets = [];
+    const vals = [];
+    let p = 1;
+
+    if (req.body?.url !== undefined) {
+      const url = String(req.body.url || '').trim();
+      const urlErr = _validWebhookUrl(url);
+      if (urlErr) return res.status(400).json({ error: 'Validation Error', message: urlErr });
+      sets.push(`url = $${p++}`); vals.push(url);
+    }
+    if (req.body?.status !== undefined) {
+      sets.push(`status = $${p++}`);
+      vals.push(req.body.status === 'inactive' ? 'inactive' : 'active');
+    }
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to update' });
+
+    sets.push('updated_at = NOW()');
+    vals.push(id);
+
+    try {
+      const { rows: [row] } = await pool.query(
+        `UPDATE event_webhooks SET ${sets.join(', ')} WHERE id = $${p}
+         RETURNING id, event_name, url, status, created_at`,
+        vals
+      );
+      if (!row) return res.status(404).json({ error: 'Not found' });
+      logger.info(`[admin] Event webhook ${id} updated by user ${req.user.id}`);
+      return res.json({ ok: true, webhook: row });
+    } catch (e) {
+      if (e.code === '23505') {
+        return res.status(409).json({ error: 'Conflict', message: 'That event already posts to this URL.' });
+      }
+      throw e;
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/event-webhooks/:id', async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
+    const { rowCount } = await pool.query(`DELETE FROM event_webhooks WHERE id = $1`, [id]);
+    if (rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    logger.info(`[admin] Event webhook ${id} deleted by user ${req.user.id}`);
+    return res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/event-webhooks/preview', async (req, res, next) => {
+  try {
+    const eventKey = String(req.query.event_key || '').trim();
+    if (!eventRegistry.getEvent(eventKey)) return res.status(400).json({ error: 'Unknown event' });
+    return res.json({ payload: buildSampleEnvelope(eventKey) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST — fire a sample payload to one endpoint now (logged to Webhook Log)
+router.post('/event-webhooks/:id/test', async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
+    const result = await testEventWebhook(id);
+    logger.info(`[admin] Test-fired event webhook ${id} by user ${req.user.id} → ok=${result.ok}`);
+    return res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/contact-webhook-status
 //
@@ -1416,6 +1653,24 @@ router.get('/contact-webhook-log', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/tracking-logs
+//
+// All-users VIEWER-plane fire log: every Meta-pixel fire + every tracking-webhook
+// fire across every subscriber. READ-ONLY — kept separate from the platform
+// contact-webhook-log above (different plane, different visibility).
+//
+// Query params: page, limit, sort=date|video|event|type|status, dir=asc|desc.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/tracking-logs', async (req, res, next) => {
+  try {
+    const { getTrackingLogs } = require('../tracking/trackingService');
+    const { page, limit, sort, dir } = req.query;
+    const data = await getTrackingLogs({ ownerId: null, page, limit, sort, dir });
+    return res.json(data);
+  } catch (err) { next(err); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

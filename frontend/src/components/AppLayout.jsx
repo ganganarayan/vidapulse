@@ -150,6 +150,7 @@ function AppSidebar({ onClose }) {
         <SidebarItem to="/events"       icon={<EventsIcon />}  label="Events"       active={active('/events')}       plan="pro" userPlan={user?.plan} />
         <SidebarItem to="/funnels"      icon={<FunnelIcon />}  label="Funnels"      active={active('/funnels')}      plan="pro" userPlan={user?.plan} />
         <SidebarItem to="/cta-tracking" icon={<CtaIcon />}     label="CTA Tracking" active={active('/cta-tracking')} plan="pro" userPlan={user?.plan} />
+        <SidebarItem to="/tracking-logs" icon={<LogIcon />}    label="Tracking Logs" active={active('/tracking-logs')} plan="pro" userPlan={user?.plan} />
         <SidebarItem to="/reports"      icon={<ReportsIcon />} label="Reports"      active={active('/reports')}      plan="pro" userPlan={user?.plan} />
         <SidebarItem to="/alerts"       icon={<BellIcon />}    label="Alerts"       active={active('/alerts')}       plan="pro" userPlan={user?.plan} />
 
@@ -189,9 +190,12 @@ function AppSidebar({ onClose }) {
               active={active('/admin/webhook-log')}
               badge={webhookAlerts.paused ? (webhookAlerts.queuedCount || '!') : null}
             />
+            <SidebarItem to="/admin/event-webhooks" icon={<WebhookIcon />}  label="Event Webhooks" active={active('/admin/event-webhooks')} />
+            <SidebarItem to="/admin/tracking-logs"  icon={<LogIcon />}      label="Tracking Logs"  active={active('/admin/tracking-logs')} />
             <SidebarItem to="/admin/help"        icon={<HelpIcon />}     label="Help Editor"  active={active('/admin/help')} />
-            <SidebarItem to="/admin/onboarding"  icon={<HeartIcon />}    label="Onboarding"   active={active('/admin/onboarding')} />
-            <SidebarItem to="/admin/copy-data"   icon={<CopyDataIcon />} label="Copy Data"    active={active('/admin/copy-data')} />
+            <SidebarItem to="/admin/onboarding"       icon={<HeartIcon />}    label="Behavioral Events" active={active('/admin/onboarding', true)} />
+            <SidebarItem to="/admin/onboarding-state" icon={<EventsIcon />}   label="Onboarding Stage" active={active('/admin/onboarding-state')} />
+            <SidebarItem to="/admin/copy-data"        icon={<CopyDataIcon />} label="Copy Data"        active={active('/admin/copy-data')} />
           </>
         )}
       </nav>
@@ -340,6 +344,9 @@ export function VideoSidebar({ video, activeView, onViewChange, user, drawerOpen
         <SidebarDivider label="Settings" />
         {navItem('embed',       <EmbedIcon />,   'Share & Embed',   false, null, isPromo && !isAdmin, 'Not available for promotion videos')}
         {navItem('player',      <PlayerIcon />,  'Player Settings', false, null, isPromo && !isAdmin, 'Not available for promotion videos')}
+        {navItem('tracking',
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></svg>,
+          'Tracking', !isPro, 'pro', isPromo && !isAdmin, 'Not available for promotion videos')}
       </nav>
 
       {/* User section */}

@@ -188,6 +188,7 @@ const router  = express.Router();
 const { pool }      = require('../config/database');
 const logger        = require('../config/logger');
 const { emitEvent } = require('../services/behavioralEventService');
+const { recordViewerEvent } = require('../tracking/trackingService');
 
 // ── CORS: tracker runs on any third-party domain ─────────────────────────
 router.use((req, res, next) => {
@@ -615,6 +616,12 @@ router.post('/ping', async (req, res) => {
          WHERE id = $1`,
         [video_id]
       );
+
+      // First real play → the owner's tracking is "activated". emitEvent dedups
+      // one-time events, so this reaches the CRM exactly once per owner (their
+      // first play across any video). No Meta pixel here — a viewer triggers
+      // this request, not the owner.
+      emitEvent(ctx.video_owner_id, 'tracking_activated', video_id, { video_id });
     }
 
     // ── 4. Recompute video aggregates atomically on end or first play ────────
@@ -887,6 +894,11 @@ router.post('/event', async (req, res) => {
     }
     return;
   }
+
+  // Viewer-plane: route cta_clicked to the owner's tracking webhooks + counter
+  // (the click redirects away, so the owner's Meta pixel can't fire reliably
+  // here — webhook + counter only). Fire-and-forget, gated server-side.
+  recordViewerEvent({ videoId: video_id, eventKey: 'cta_clicked', sessionId: session_id || null }).catch(() => {});
 
   try {
     const safePosition = (position !== null && position !== undefined)

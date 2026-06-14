@@ -72,6 +72,28 @@ export function pixelTrack(event, data) {
   }
 }
 
+/**
+ * Fire a CUSTOM Meta Pixel event — fbq('trackCustom', …).
+ *
+ * Used for the onboarding engagement signals (UserLogin, VideoAdded,
+ * EmbedGenerated). These are engagement events, NOT milestones — they fire
+ * on EVERY occurrence (no client-side dedup). Once-only logic lives on the
+ * server (onboarding_state + behavioralEventService) for the CRM side only.
+ *
+ * Silently no-ops when the pixel has not been initialised.
+ *
+ * @param {string} event  — custom event name, e.g. 'UserLogin'
+ * @param {object} [data] — optional event parameters
+ */
+export function pixelTrackCustom(event, data) {
+  if (!initialized || typeof window.fbq !== 'function') return;
+  if (data && Object.keys(data).length > 0) {
+    window.fbq('trackCustom', event, data);
+  } else {
+    window.fbq('trackCustom', event);
+  }
+}
+
 /** Convenience shorthand: fire a PageView event. */
 export function pixelPageView() {
   pixelTrack('PageView');

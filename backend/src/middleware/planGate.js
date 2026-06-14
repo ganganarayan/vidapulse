@@ -65,6 +65,7 @@ const FEATURE_PLAN_REQUIREMENTS = {
   avg_time_watched    : 'starter',
 
   // ── Pro-only features ─────────────────────────────────────────────────
+  video_tracking      : 'pro',  // per-video Meta Pixel + tracking webhooks
   heatmap             : 'pro',
   viewer_level        : 'pro',
   audience_segmentation: 'pro',

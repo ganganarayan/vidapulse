@@ -16,6 +16,7 @@ import BrowsersSection             from './BrowsersSection';
 import IndividualViewerSection     from './IndividualViewerSection';
 import TrafficSourcesSection       from './TrafficSourcesSection';
 import DomainsSection              from './DomainsSection';
+import TrackingSettingsView        from './TrackingSettingsView';
 import PlanTierBadge, { PlanCrown, getLockColor, PadLockIcon } from '../PlanTierBadge';
 import { useUpgrade }          from '../../contexts/UpgradeContext';
 
@@ -321,6 +322,11 @@ export default function VideoAnalyticsView({
         {/* ── Player settings view ─────────────────────────────────── */}
         {activeView === 'player' && (
           video?.is_promo && !isAdmin ? <PromoRestricted /> : <PlayerSettingsView videoId={video?.id} />
+        )}
+
+        {/* ── Tracking view (viewer-plane, Pro) ────────────────────── */}
+        {activeView === 'tracking' && (
+          video?.is_promo && !isAdmin ? <PromoRestricted /> : <TrackingSettingsView videoId={video?.id} />
         )}
 
         {/* ── Overview ─────────────────────────────────────────────── */}

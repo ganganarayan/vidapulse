@@ -27,7 +27,9 @@
 
 const { pool }   = require('../config/database');
 const logger     = require('../config/logger');
-const { fireContactWebhook } = require('./contactWebhookSender');
+const { deliverEventWebhooks }    = require('./contactWebhookSender');
+const { deliverTrackingWebhooks } = require('../tracking/trackingService');
+const { ONE_TIME_KEYS, getScope } = require('../events/registry');
 
 // ── Event classification ──────────────────────────────────────────────────
 
@@ -38,24 +40,11 @@ const { fireContactWebhook } = require('./contactWebhookSender');
 // CRM automations before a payment is actually completed.
 // Payment success events (plan_upgraded_to_starter, plan_upgraded_to_pro, etc.)
 // will be added here once the payment flow is wired.
-const CRM_WEBHOOK_EVENTS = new Set([
-  'user_signed_up',
-  'user_restored',           // a deactivated account self-restored (or admin-restored)
-  'inactivity_reminder_10d', // 10 days before auto-deactivation
-  'inactivity_reminder_3d',  // 3 days before auto-deactivation
-  'user_deactivated',        // auto-deactivated after 180 days idle
-]);
-
-// One-time per user: skip if a row already exists in behavioral_events
-const ONE_TIME_USER_EVENTS = new Set([
-  'user_signed_up',
-  'first_video_added',
-  'wow_moment_seen',
-  'first_analytics_milestone',
-  'twenty_viewers_milestone',
-  'fifty_viewers_milestone',
-  'converted_to_paid',
-]);
+// One-time-per-user dedup membership now comes from the event registry (the
+// single source of truth) instead of a hardcoded Set. Webhook ROUTING likewise
+// moved out of code into the event_webhooks table (see deliverEventWebhooks) —
+// there are no more per-destination Sets here.
+const ONE_TIME_USER_EVENTS = ONE_TIME_KEYS;
 
 // Max once per 7 days per user
 const WEEKLY_CAP_EVENTS = new Set([
@@ -168,11 +157,13 @@ async function emitEvent(userId, eventKey, videoId = null, payload = {}) {
       await client.query('COMMIT');
       logger.info(`[behavioralEvents] ✓ ${eventKey} | user=${userId} | event_id=${eventRow.id}`);
 
-      // Fire contact webhook only for genuine CRM lead/conversion events.
-      // Upgrade-intent clicks (pro_feature_attempted, free_limit_hit, etc.)
-      // are intentionally excluded — only successful payments will be added later.
-      if (CRM_WEBHOOK_EVENTS.has(eventKey)) {
-        fireContactWebhook(userId, eventKey).catch(() => {});
+      // Route by plane (registry scope) — platform + viewer stay strictly
+      // separate (Constraint 1): a platform event can ONLY reach event_webhooks,
+      // a viewer event can ONLY reach tracking_webhooks. No shared routing.
+      if (getScope(eventKey) === 'viewer') {
+        deliverTrackingWebhooks(userId, eventKey, {}).catch(() => {});
+      } else {
+        deliverEventWebhooks(userId, eventKey).catch(() => {});
       }
 
     } catch (err) {
@@ -209,6 +200,39 @@ async function _updateOnboardingState(client, userId, eventKey, payload = {}) {
          SET signed_up_at = NOW(),
              current_step = 'signed_up',
              updated_at   = NOW()
+         WHERE user_id = $1`,
+        [userId]
+      );
+      break;
+
+    case 'user_logged_in':
+      // First successful login. COALESCE so the timestamp is only ever set once.
+      await client.query(
+        `UPDATE onboarding_state
+         SET first_login_at = COALESCE(first_login_at, NOW()),
+             updated_at     = NOW()
+         WHERE user_id = $1`,
+        [userId]
+      );
+      break;
+
+    case 'embed_generated':
+      await client.query(
+        `UPDATE onboarding_state
+         SET first_embed_generated_at = COALESCE(first_embed_generated_at, NOW()),
+             current_step             = 'embed_generated',
+             updated_at               = NOW()
+         WHERE user_id = $1`,
+        [userId]
+      );
+      break;
+
+    case 'tracking_activated':
+      await client.query(
+        `UPDATE onboarding_state
+         SET first_tracking_activated_at = COALESCE(first_tracking_activated_at, NOW()),
+             current_step                = 'tracking_activated',
+             updated_at                  = NOW()
          WHERE user_id = $1`,
         [userId]
       );

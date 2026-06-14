@@ -19,6 +19,8 @@ import Dashboard         from './pages/Dashboard';
 import VideoDetail       from './pages/VideoDetail';
 import WebhookSettings   from './pages/WebhookSettings';
 import OnboardingHealth  from './pages/OnboardingHealth';
+import OnboardingState   from './pages/OnboardingState';
+import EventWebhooks     from './pages/EventWebhooks';
 import AdminUsers        from './pages/AdminUsers';
 import AccountSettings   from './pages/AccountSettings';
 import ScriptGenerator   from './pages/ScriptGenerator';
@@ -31,7 +33,9 @@ import FunnelsPage       from './pages/FunnelsPage';
 import AlertsPage        from './pages/AlertsPage';
 import ReportsPage       from './pages/ReportsPage';
 import CTATrackingPage   from './pages/CTATrackingPage';
+import TrackingLogs      from './pages/TrackingLogs';
 import AdminWebhookLog   from './pages/AdminWebhookLog';
+import AdminTrackingLogs from './pages/AdminTrackingLogs';
 import AdminPromotionPage from './pages/AdminPromotionPage';
 import AdminRevenue       from './pages/AdminRevenue';
 import AdminCopyData     from './pages/AdminCopyData';
@@ -234,7 +238,8 @@ export default function App() {
           {/* ── Analytics pages (all authenticated users) ───────── */}
           <Route path="/events"       element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
           <Route path="/funnels"      element={<ProtectedRoute><FunnelsPage /></ProtectedRoute>} />
-          <Route path="/cta-tracking" element={<ProtectedRoute><CTATrackingPage /></ProtectedRoute>} />
+          <Route path="/cta-tracking"  element={<ProtectedRoute><CTATrackingPage /></ProtectedRoute>} />
+          <Route path="/tracking-logs" element={<ProtectedRoute><TrackingLogs /></ProtectedRoute>} />
           <Route path="/alerts"       element={<ProtectedRoute><AlertsPage /></ProtectedRoute>} />
           <Route path="/reports"      element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
 
@@ -322,6 +327,22 @@ export default function App() {
             }
           />
           <Route
+            path="/admin/onboarding-state"
+            element={
+              <AdminRoute>
+                <OnboardingState />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/event-webhooks"
+            element={
+              <AdminRoute>
+                <EventWebhooks />
+              </AdminRoute>
+            }
+          />
+          <Route
             path="/admin/copy-data"
             element={
               <AdminRoute>
@@ -334,6 +355,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminWebhookLog />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/tracking-logs"
+            element={
+              <AdminRoute>
+                <AdminTrackingLogs />
               </AdminRoute>
             }
           />

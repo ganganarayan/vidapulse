@@ -69,4 +69,10 @@ module.exports = {
   RAZORPAY_PLAN_ID_STARTER: process.env.RAZORPAY_PLAN_ID_STARTER || null,
   RAZORPAY_PLAN_ID_PRO    : process.env.RAZORPAY_PLAN_ID_PRO     || null,
 
+  // Meta Pixel ID for the public embed player. The embed fires a
+  // 'TrackingActivated' custom event on every play (engagement signal). Same
+  // pixel as the app + landing page. Defaults to the known VidaPulse pixel;
+  // set META_PIXEL_ID='' on Railway to disable embed-side pixel firing.
+  META_PIXEL_ID: process.env.META_PIXEL_ID ?? '2487979631600404',
+
 };
