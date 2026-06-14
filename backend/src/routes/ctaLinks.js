@@ -49,15 +49,16 @@ async function requirePro(userId, res) {
 router.get('/', requireAuth, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
+      // Clicks come from cta_click_logs — the canonical store the redirect
+      // handler (/api/analytics/cta/link/:id) writes to. (Old analytics_events
+      // cta_click rows were backfilled into cta_click_logs by migration 034.)
       `SELECT c.id, c.cta_name, c.page_name, c.destination_url, c.created_at,
               (SELECT COUNT(*)::int
-                 FROM analytics_events ae
-                WHERE ae.event_type = 'cta_click'
-                  AND ae.metadata->>'cta_link_id' = c.id::text) AS clicks,
-              (SELECT MAX(ae.occurred_at)
-                 FROM analytics_events ae
-                WHERE ae.event_type = 'cta_click'
-                  AND ae.metadata->>'cta_link_id' = c.id::text) AS last_click_at
+                 FROM cta_click_logs l
+                WHERE l.cta_link_id = c.id) AS clicks,
+              (SELECT MAX(l.occurred_at)
+                 FROM cta_click_logs l
+                WHERE l.cta_link_id = c.id) AS last_click_at
        FROM   video_cta_links c
        WHERE  c.user_id = $1
        ORDER  BY c.created_at ASC`,
@@ -126,30 +127,28 @@ router.post('/', requireAuth, async (req, res, next) => {
 });
 
 // ── GET /api/cta-links/clicks ────────────────────────────────────────────
-// Full per-click log across all of the user's CTA links, newest first.
-// Each row: timestamp, button (cta_name), page, device, browser, country,
-// destination, and viewer_id (only present for player-session-linked clicks;
-// null for redirect-based clicks which carry no viewer cookie).
+// Full per-click log across all of the user's CTA links, newest first, read
+// from the canonical cta_click_logs table (where the redirect handler records
+// every click). Survives link deletion — past clicks stay in the log.
+// Each row: timestamp, button (cta_name), page, device, browser, country, city,
+// destination, and viewer_id (the first-party vp_cta_vid cookie).
 
 router.get('/clicks', requireAuth, async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 500, 2000);
     const { rows } = await pool.query(
-      `SELECT ae.occurred_at,
-              ae.metadata->>'cta_name'        AS cta_name,
-              ae.metadata->>'page_name'       AS page_name,
-              ae.metadata->>'device'          AS device,
-              ae.metadata->>'browser'         AS browser,
-              ae.metadata->>'country'         AS country,
-              ae.metadata->>'city'            AS city,
-              ae.metadata->>'destination_url' AS destination_url,
-              COALESCE(s.viewer_id::text, ae.metadata->>'viewer_id') AS viewer_id
-       FROM   analytics_events ae
-       JOIN   video_cta_links c ON c.id::text = ae.metadata->>'cta_link_id'
-       LEFT   JOIN analytics_sessions s ON s.id = ae.session_id
-       WHERE  ae.event_type = 'cta_click'
-         AND  c.user_id     = $1
-       ORDER  BY ae.occurred_at DESC
+      `SELECT l.occurred_at,
+              l.cta_name,
+              l.page_name,
+              l.device,
+              l.browser,
+              l.country,
+              l.city,
+              l.destination_url,
+              l.viewer_id
+       FROM   cta_click_logs l
+       WHERE  l.user_id = $1
+       ORDER  BY l.occurred_at DESC
        LIMIT  $2`,
       [req.user.id, limit]
     );
