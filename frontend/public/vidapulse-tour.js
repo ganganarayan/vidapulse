@@ -160,8 +160,8 @@
     videos: [
       { target: { text: 'Add video' }, title: 'Add your first video', body: 'Click to paste a video URL.',
         click: true, waitFor: { title: 'Edit video name' } },
-      { target: { title: 'Edit video name' }, title: 'Rename it', body: 'Click the pencil to set a clear name.' },
-      { target: { title: 'Copy embed code' }, title: 'Grab the embed', body: 'Copy the tracked player for any page.' },
+      { target: { title: 'Edit video name' }, title: 'Rename it', body: 'The pencil renames your video.' },
+      { target: { title: 'Copy embed code' }, title: 'Grab the embed', body: 'This holds the player code for any page.' },
       { target: { row: 'Edit video name' }, title: 'Open the video', body: 'Click a video to see its analytics.',
         click: true, nav: true }
     ],
@@ -186,10 +186,11 @@
     st.id = 'vp-tour-style';
     st.textContent =
       '#vp-tour-root{position:fixed;inset:0;z-index:' + Z + ';pointer-events:none;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}' +
-      '.vp-mask{position:fixed;background:rgba(2,6,23,.62);pointer-events:auto}' +
+      '.vp-mask{position:fixed;background:rgba(2,6,23,.5);pointer-events:auto}' +
+      '.vp-block{position:fixed;background:transparent;pointer-events:auto;cursor:pointer}' +
       '.vp-ring{position:fixed;border-radius:12px;pointer-events:none;box-shadow:0 0 0 3px var(--vp-accent),0 0 0 9px rgba(245,158,11,.25);transition:all .25s ease}' +
       (REDUCED ? '' : '.vp-ring.vp-pulse{animation:vpPulse 1.6s ease-out infinite}@keyframes vpPulse{0%{box-shadow:0 0 0 3px var(--vp-accent),0 0 0 6px rgba(245,158,11,.35)}70%{box-shadow:0 0 0 3px var(--vp-accent),0 0 0 16px rgba(245,158,11,0)}100%{box-shadow:0 0 0 3px var(--vp-accent),0 0 0 16px rgba(245,158,11,0)}}') +
-      '.vp-bubble{position:fixed;pointer-events:auto;width:320px;max-width:calc(100vw - 24px);background:var(--vp-panel);color:var(--vp-fg);border:1px solid var(--vp-line);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.45);padding:16px 16px 14px;box-sizing:border-box;' + (REDUCED ? '' : 'animation:vpIn .18s ease') + '}' +
+      '.vp-bubble{position:fixed;z-index:' + (Z + 2) + ';pointer-events:auto;width:320px;max-width:calc(100vw - 24px);background:var(--vp-panel);color:var(--vp-fg);border:1px solid var(--vp-line);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.45);padding:16px 16px 14px;box-sizing:border-box;' + (REDUCED ? '' : 'animation:vpIn .18s ease') + '}' +
       (REDUCED ? '' : '@keyframes vpIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}') +
       '.vp-eyebrow{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--vp-accent)}' +
       '.vp-title{font-size:16px;font-weight:700;margin:6px 0 4px;line-height:1.3}' +
@@ -232,16 +233,23 @@
     root.innerHTML =
       '<div class="vp-mask" data-m="t"></div><div class="vp-mask" data-m="r"></div>' +
       '<div class="vp-mask" data-m="b"></div><div class="vp-mask" data-m="l"></div>' +
-      '<div class="vp-ring"></div>';
+      '<div class="vp-ring"></div><div class="vp-block" style="display:none"></div>';
     document.body.appendChild(root);
     // Clicking the dimmed area does nothing (prevents accidental page clicks);
     // the transparent hole has no overlay element, so clicks pass to the app.
     var masks = root.querySelectorAll('.vp-mask');
     for (var i = 0; i < masks.length; i++) masks[i].addEventListener('click', function (e) { e.stopPropagation(); });
+    // Passive-step hole cover: absorbs a stray click on the highlighted element
+    // (so it can't open a modal UNDER the overlay) and just advances instead.
+    root.querySelector('.vp-block').addEventListener('click', function (e) {
+      e.stopPropagation(); if (state) gotoStep(state.idx + 1);
+    });
   }
 
-  function layoutSpotlight(rect) {
+  function layoutSpotlight(rect, opts) {
+    opts = opts || {};
     ensureRoot();
+    root.style.display = '';                 // re-show if a prior click hid it
     var pad = 6, W = innerWidth, H = innerHeight;
     var x = rect ? Math.max(0, rect.left - pad) : 0;
     var y = rect ? Math.max(0, rect.top - pad) : 0;
@@ -251,18 +259,30 @@
       t: root.querySelector('[data-m="t"]'), r: root.querySelector('[data-m="r"]'),
       b: root.querySelector('[data-m="b"]'), l: root.querySelector('[data-m="l"]')
     };
-    function box(el, L, T, Wd, Ht) { el.style.cssText = 'position:fixed;left:' + L + 'px;top:' + T + 'px;width:' + Math.max(0, Wd) + 'px;height:' + Math.max(0, Ht) + 'px;background:rgba(2,6,23,.62);pointer-events:auto'; }
-    if (!rect) { box(m.t, 0, 0, W, H); box(m.r, 0, 0, 0, 0); box(m.b, 0, 0, 0, 0); box(m.l, 0, 0, 0, 0); root.querySelector('.vp-ring').style.opacity = '0'; return; }
+    var ring = root.querySelector('.vp-ring');
+    var block = root.querySelector('.vp-block');
+    function box(el, L, T, Wd, Ht) { el.style.cssText = 'position:fixed;left:' + L + 'px;top:' + T + 'px;width:' + Math.max(0, Wd) + 'px;height:' + Math.max(0, Ht) + 'px;background:rgba(2,6,23,.5);pointer-events:auto'; }
+    if (!rect) { box(m.t, 0, 0, W, H); box(m.r, 0, 0, 0, 0); box(m.b, 0, 0, 0, 0); box(m.l, 0, 0, 0, 0); ring.style.opacity = '0'; block.style.display = 'none'; return; }
     box(m.t, 0, 0, W, y);
     box(m.b, 0, y + h, W, H - (y + h));
     box(m.l, 0, y, x, h);
     box(m.r, x + w, y, W - (x + w), h);
-    var ring = root.querySelector('.vp-ring');
     ring.style.opacity = '1';
     ring.style.left = x + 'px'; ring.style.top = y + 'px';
     ring.style.width = w + 'px'; ring.style.height = h + 'px';
     ring.className = 'vp-ring' + (REDUCED ? '' : ' vp-pulse');
+    // Passive steps: cover the hole so a stray click can't trigger the app (and
+    // open a modal UNDER the dimmer). Click-driven steps leave the hole open.
+    if (opts.block) {
+      block.style.cssText = 'position:fixed;left:' + x + 'px;top:' + y + 'px;width:' + Math.max(0, w) + 'px;height:' + Math.max(0, h) + 'px;background:transparent;pointer-events:auto;cursor:pointer;display:block';
+    } else {
+      block.style.display = 'none';
+    }
   }
+
+  // Hide the dimmer (keeps the bubble) the instant the user clicks a click-driven
+  // target, so the modal/page it opens is fully interactive.
+  function hideOverlay() { if (root) root.style.display = 'none'; }
 
   function placeBubble(rect) {
     if (!bubble) return;
@@ -347,7 +367,7 @@
     }
     var draw = function () {
       var rect = target ? target.getBoundingClientRect() : null;
-      layoutSpotlight(rect);
+      layoutSpotlight(rect, { block: !step.click });   // passive steps block the hole
       placeBubble(rect);
     };
     renderBubble(step, idx, state.steps.length);
@@ -366,7 +386,17 @@
   //    (e.g. pasting a URL into the Add-video modal) take longer than a render.
   //    The user can Skip if they abandon. Cap the poll so it never runs forever.
   function armClickStep(step, target) {
-    if (step.nav) return;
+    // The instant the user clicks the highlighted target, hide the dimmer so the
+    // modal/page it opens is fully usable (no frozen canvas under the overlay).
+    state.hideClick = function (e) {
+      if (!target || target === e.target || target.contains(e.target)) {
+        hideOverlay();
+        document.removeEventListener('click', state.hideClick, true); state.hideClick = null;
+      }
+    };
+    document.addEventListener('click', state.hideClick, true);
+
+    if (step.nav) return;              // navigation → route handler starts the next tour
     if (step.waitFor) {
       var t0 = Date.now();
       state.waitIv = setInterval(function () {
@@ -375,7 +405,7 @@
       }, POLL_MS);
       return;
     }
-    // No waitFor: simply advance when the highlighted target is clicked.
+    // No waitFor: advance when the highlighted target is clicked.
     state.onClick = function (e) {
       if (!target || target === e.target || target.contains(e.target)) {
         document.removeEventListener('click', state.onClick, true); state.onClick = null;
@@ -388,6 +418,7 @@
   function clearWatch() {
     if (!state) return;
     if (state.onClick) { document.removeEventListener('click', state.onClick, true); state.onClick = null; }
+    if (state.hideClick) { document.removeEventListener('click', state.hideClick, true); state.hideClick = null; }
     [state.waitIv, state.pollIv, state.findIv].forEach(function (iv) { if (iv) clearInterval(iv); });
     state.waitIv = state.pollIv = state.findIv = null;
   }
