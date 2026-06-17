@@ -120,6 +120,7 @@
     if (!m) return null;
     if (m.title) { var a = findByAttr('title', m.title); if (a) return a; }
     if (m.aria)  { var b = findByAttr('aria-label', m.aria); if (b) return b; }
+    if (m.placeholder) { var pf = findByAttr('placeholder', m.placeholder); if (pf) return pf; }
     if (m.row)   { var c = findByAttr('title', m.row); if (c) return rowOf(c); }
     if (m.text)  { var d = findByText(m.text, true) || findByText(m.text, false); if (d) return d; }
     if (m.css)   { var e = document.querySelector(m.css); if (e && visible(e)) return e; }
@@ -173,13 +174,32 @@
       { target: { text: 'Copy embed code' }, title: 'Copy your embed', body: 'Paste it on any page to track views.' },
       { target: { text: 'Player Settings' }, title: 'Player Settings', body: 'Customise the player look and behaviour here. Done!' }
     ],
-    cta:          [ { title: 'CTA Tracking', body: 'Create named links for your buttons — every click is logged here.' } ],
+    cta: [
+      { title: 'Track any button — no code', body: 'A CTA link logs every click, then redirects to your page.' },
+      { target: { text: 'Add link' }, title: 'Add a link', body: 'Click to start a new tracking link.',
+        click: true, waitFor: { placeholder: 'Buy Now' } },
+      { target: { placeholder: 'Buy Now' }, title: 'Name the button', body: 'A label for you, e.g. "Buy Now".' },
+      { target: { placeholder: 'Sales Page' }, title: 'Page name (optional)', body: 'Where the button lives, e.g. "Sales Page".' },
+      { target: { placeholder: 'your-checkout-page' }, title: 'Destination URL', body: 'Where the click should send people.' },
+      { target: { text: 'Create tracking link' }, title: 'Create it', body: 'This generates a unique tracking URL.' },
+      { target: { text: 'Copy' }, title: 'Copy & use it', body: "Copy the link and set it as your button's URL — that's it." },
+      { target: { text: 'Click Log' }, title: 'Watch the clicks', body: 'Every click lands here and in your Events log. Done!' }
+    ],
     tracking:     [ { title: 'Tracking Logs', body: 'Every Meta Pixel fire and webhook fire from your videos. Click a row for details.' } ],
     audience:     [ { title: 'Audience', body: 'See who watches — geography, devices and traffic sources.' } ],
     events:       [ { title: 'Events', body: 'A live log of every play, pause and completion across your videos.' } ],
     funnels:      [ { title: 'Funnels', body: 'See where viewers drop off, step by step.' } ],
-    reports:      [ { title: 'Reports', body: 'Performance summaries for your videos.' } ],
-    alerts:       [ { title: 'Alerts', body: 'Get notified when key events happen — set them up here.' } ],
+    reports: [
+      { target: { placeholder: 'April video performance' }, title: 'Name your report', body: 'Optional — a label so you can find it later.' },
+      { target: { text: 'Date range' }, title: 'Pick the period', body: 'Choose the time window to report on.' },
+      { target: { text: 'Metrics to include' }, title: 'Choose metrics', body: 'Tick what to include — or use "Select all".' },
+      { target: { text: 'Generate Report' }, title: 'Generate', body: 'Build it — it runs in the background.' },
+      { title: 'Download it', body: 'When ready, it appears under "Your Reports" to download as CSV. Done!' }
+    ],
+    alerts: [
+      { target: { css: '[role="switch"]' }, title: 'Turn an alert on', body: 'Flip a toggle to enable it. This first one, "Traffic Spike", fires when a video suddenly spikes in plays.' },
+      { title: "How you're notified", body: 'When a rule fires you get an in-app notification — the bell, top-right of your dashboard. The Weekly Digest also arrives by email.' }
+    ],
     settings:     [ { title: 'Settings', body: 'Manage your account, profile and preferences here.' } ],
     billing:      [ { title: 'Billing', body: 'Your plan, invoices and payment history live here.' } ],
     integrations: [ { title: 'Integrations', body: 'Connect VidaPulse to your other tools.' } ],
