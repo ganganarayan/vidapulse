@@ -143,6 +143,8 @@
     if (p.indexOf('/account') === 0)       return 'settings';
     if (p.indexOf('/billing') === 0)       return 'billing';
     if (p.indexOf('/integrations') === 0)  return 'integrations';
+    if (p.indexOf('/alerts') === 0)        return 'alerts';
+    if (p.indexOf('/help') === 0)          return 'help';
     return null;
   }
 
@@ -154,8 +156,8 @@
   var TOURS = {
     overview: [
       { title: 'Welcome to VidaPulse 👋', body: 'A 30-second tour. Use Next, or Skip anytime.' },
-      { target: { text: 'Add video' }, title: 'Start here', body: 'Add a video to begin tracking.',
-        click: true, nav: true }
+      { target: { title: 'Switch to' }, title: 'Light or dark', body: 'Tap the sun / moon to switch themes.' },
+      { target: { text: 'Add video' }, title: 'Add a video', body: 'Add your first video to start tracking.' }
     ],
     videos: [
       { target: { text: 'Add video' }, title: 'Add your first video', body: 'Click to paste a video URL.',
@@ -168,11 +170,20 @@
     video: [
       { target: { text: 'Share & Embed' }, title: 'Share & Embed', body: 'Open this for the link and embed code.',
         click: true, waitFor: { text: 'Copy embed code' } },
-      { target: { text: 'Copy embed code' }, title: 'Copy your embed', body: 'Paste it on any page to track views. Done!' }
+      { target: { text: 'Copy embed code' }, title: 'Copy your embed', body: 'Paste it on any page to track views.' },
+      { target: { text: 'Player Settings' }, title: 'Player Settings', body: 'Customise the player look and behaviour here. Done!' }
     ],
-    cta:      [ { title: 'CTA Tracking', body: 'Create named links for your buttons — every click is logged here.' } ],
-    tracking: [ { title: 'Tracking Logs', body: 'Every Meta Pixel fire and webhook fire from your videos. Click a row for details.' } ],
-    audience: [ { title: 'Audience', body: 'See who watches — geography, devices and traffic sources.' } ]
+    cta:          [ { title: 'CTA Tracking', body: 'Create named links for your buttons — every click is logged here.' } ],
+    tracking:     [ { title: 'Tracking Logs', body: 'Every Meta Pixel fire and webhook fire from your videos. Click a row for details.' } ],
+    audience:     [ { title: 'Audience', body: 'See who watches — geography, devices and traffic sources.' } ],
+    events:       [ { title: 'Events', body: 'A live log of every play, pause and completion across your videos.' } ],
+    funnels:      [ { title: 'Funnels', body: 'See where viewers drop off, step by step.' } ],
+    reports:      [ { title: 'Reports', body: 'Performance summaries for your videos.' } ],
+    alerts:       [ { title: 'Alerts', body: 'Get notified when key events happen — set them up here.' } ],
+    settings:     [ { title: 'Settings', body: 'Manage your account, profile and preferences here.' } ],
+    billing:      [ { title: 'Billing', body: 'Your plan, invoices and payment history live here.' } ],
+    integrations: [ { title: 'Integrations', body: 'Connect VidaPulse to your other tools.' } ],
+    help:         [ { title: 'Help & Support', body: 'Guides and answers — replay any tour from the "?" button.' } ]
   };
 
   // ==========================================================================

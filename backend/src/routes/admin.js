@@ -737,7 +737,9 @@ router.patch('/users/:id/plan', async (req, res, next) => {
 
     // Verify target user exists and is not admin
     const { rows: [target] } = await pool.query(
-      `SELECT id, email, role FROM users WHERE id = $1`,
+      `SELECT u.id, u.email, u.role, p.name AS current_plan
+       FROM   users u LEFT JOIN plans p ON p.id = u.plan_id
+       WHERE  u.id = $1`,
       [userId]
     );
     if (!target) {
@@ -771,6 +773,19 @@ router.patch('/users/:id/plan', async (req, res, next) => {
     logger.info(
       `[admin] Plan changed for user ${target.email}: plan=${plan} expires_at=${expiresAt ?? 'null'} by admin ${req.user.id}`
     );
+
+    // Fire the SAME plan_upgraded event a purchase fires, so the CRM is notified
+    // of the change and the new end date — but with NO pricing/billing fields,
+    // since this was an admin grant and nothing was paid. Only for paid plans
+    // that actually changed ('free' is a downgrade/clear, not an upgrade).
+    if (plan !== 'free' && plan !== target.current_plan) {
+      emitEvent(userId, 'plan_upgraded', null, {
+        old_plan       : target.current_plan || '',
+        new_plan       : plan,
+        plan_expires_at: expiresAt || '',   // end date; blank = no expiry (lifetime)
+        via            : 'admin_manual',
+      });
+    }
 
     return res.json({
       ok          : true,
