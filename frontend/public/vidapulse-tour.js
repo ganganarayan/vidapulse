@@ -86,13 +86,15 @@
     }
     return null;
   }
-  // Find the smallest visible clickable element whose text matches.
-  function findByText(text, clickableOnly) {
+  // Find a visible element whose text matches. By default returns the smallest
+  // (most specific) match; with last=true returns the LAST one in DOM order —
+  // e.g. the most recently created row, which the app appends to the end.
+  function findByText(text, clickableOnly, last) {
     var want = norm(text);
     var sels = ['button', 'a', '[role="button"]', '[role="menuitem"]', 'summary'];
     if (!clickableOnly) sels = sels.concat(['li', 'span', 'p', 'h1', 'h2', 'h3', 'div']);
     var nodes = document.querySelectorAll(sels.join(','));
-    var best = null, bestArea = Infinity;
+    var best = null, bestArea = Infinity, lastHit = null;
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
       if (!visible(el)) continue;
@@ -100,10 +102,11 @@
       if (!t) continue;
       var hit = (t === want) || (t.indexOf(want) > -1 && t.length <= want.length + 24);
       if (!hit) continue;
+      lastHit = el;                                          // last in DOM order
       var r = el.getBoundingClientRect(), area = r.width * r.height;
-      if (area < bestArea) { best = el; bestArea = area; }   // prefer most specific
+      if (area < bestArea) { best = el; bestArea = area; }   // smallest = most specific
     }
-    return best;
+    return last ? lastHit : best;
   }
   // Climb to the row/card that contains a matched action button.
   function rowOf(el) {
@@ -122,7 +125,7 @@
     if (m.aria)  { var b = findByAttr('aria-label', m.aria); if (b) return b; }
     if (m.placeholder) { var pf = findByAttr('placeholder', m.placeholder); if (pf) return pf; }
     if (m.row)   { var c = findByAttr('title', m.row); if (c) return rowOf(c); }
-    if (m.text)  { var d = findByText(m.text, true) || findByText(m.text, false); if (d) return d; }
+    if (m.text)  { var d = findByText(m.text, true, m.last) || findByText(m.text, false, m.last); if (d) return d; }
     if (m.css)   { var e = document.querySelector(m.css); if (e && visible(e)) return e; }
     return null;
   }
@@ -182,7 +185,7 @@
       { target: { placeholder: 'Sales Page' }, title: 'Page name (optional)', body: 'Where the button lives, e.g. "Sales Page".' },
       { target: { placeholder: 'your-checkout-page' }, title: 'Destination URL', body: 'Where the click should send people.' },
       { target: { text: 'Create tracking link' }, title: 'Create it', body: 'This generates a unique tracking URL.' },
-      { target: { text: 'Copy' }, title: 'Copy & use it', body: "Copy the link and set it as your button's URL — that's it." },
+      { target: { text: 'Copy', last: true }, title: 'Copy & use it', body: "Copy the link you just created (highlighted) and set it as your button's URL — that's it." },
       { target: { text: 'Click Log' }, title: 'Watch the clicks', body: 'Every click lands here and in your Events log. Done!' }
     ],
     tracking:     [ { title: 'Tracking Logs', body: 'Every Meta Pixel fire and webhook fire from your videos. Click a row for details.' } ],
