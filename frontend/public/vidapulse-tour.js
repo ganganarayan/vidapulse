@@ -270,11 +270,6 @@
     // the transparent hole has no overlay element, so clicks pass to the app.
     var masks = root.querySelectorAll('.vp-mask');
     for (var i = 0; i < masks.length; i++) masks[i].addEventListener('click', function (e) { e.stopPropagation(); });
-    // Passive-step hole cover: absorbs a stray click on the highlighted element
-    // (so it can't open a modal UNDER the overlay) and just advances instead.
-    root.querySelector('.vp-block').addEventListener('click', function (e) {
-      e.stopPropagation(); if (state) gotoStep(state.idx + 1);
-    });
   }
 
   function layoutSpotlight(rect, opts) {
@@ -302,18 +297,20 @@
     ring.style.left = x + 'px'; ring.style.top = y + 'px';
     ring.style.width = w + 'px'; ring.style.height = h + 'px';
     ring.className = 'vp-ring' + (REDUCED ? '' : ' vp-pulse');
-    // Passive steps: cover the hole so a stray click can't trigger the app (and
-    // open a modal UNDER the dimmer). Click-driven steps leave the hole open.
-    if (opts.block) {
-      block.style.cssText = 'position:fixed;left:' + x + 'px;top:' + y + 'px;width:' + Math.max(0, w) + 'px;height:' + Math.max(0, h) + 'px;background:transparent;pointer-events:auto;cursor:pointer;display:block';
-    } else {
-      block.style.display = 'none';
-    }
+    // The hole is always interactive — the user can type in a highlighted field
+    // or click a highlighted button directly. (The unused blocker stays hidden.)
+    block.style.display = 'none';
   }
 
-  // Hide the dimmer (keeps the bubble) the instant the user clicks a click-driven
-  // target, so the modal/page it opens is fully interactive.
+  // Hide the dimmer (keeps the bubble) the instant the user acts on the target,
+  // so the modal/page it opens is fully interactive.
   function hideOverlay() { if (root) root.style.display = 'none'; }
+
+  function isInput(el) {
+    if (!el) return false;
+    var t = el.tagName;
+    return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || el.isContentEditable;
+  }
 
   function placeBubble(rect) {
     if (!bubble) return;
@@ -398,7 +395,7 @@
     }
     var draw = function () {
       var rect = target ? target.getBoundingClientRect() : null;
-      layoutSpotlight(rect, { block: !step.click });   // passive steps block the hole
+      layoutSpotlight(rect);
       placeBubble(rect);
     };
     renderBubble(step, idx, state.steps.length);
@@ -406,7 +403,22 @@
     setTimeout(draw, 60); setTimeout(draw, 260);   // settle after scroll/anim
     state.redraw = draw;
 
-    if (step.click) armClickStep(step, target);
+    if (step.click) {
+      armClickStep(step, target);
+    } else if (target && !isInput(target)) {
+      // Passive button (e.g. the rename pencil, Copy, Create): let the user
+      // actually click it. Hide the dimmer on that click so whatever it opens is
+      // fully usable; the user moves on with Next when ready.
+      state.hideClick = function (e) {
+        if (target === e.target || target.contains(e.target)) {
+          hideOverlay();
+          document.removeEventListener('click', state.hideClick, true); state.hideClick = null;
+        }
+      };
+      document.addEventListener('click', state.hideClick, true);
+    }
+    // Passive INPUT steps need no wiring — the field is directly typeable and
+    // the user advances with Next.
   }
 
   // Click-driven steps.
