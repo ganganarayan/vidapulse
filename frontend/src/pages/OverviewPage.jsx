@@ -459,8 +459,7 @@ function RetentionChart({ data, totalViewers = 0, _noHover = false }) {
                 return <line key={pct} x1="0" y1={y} x2={W} y2={y}
                   stroke="#374151" strokeWidth="0.4" strokeDasharray="3 3" />;
               })}
-              <path d={areaPath} fill="url(#ovAreaGrad)" clipPath="url(#ovDrawClip)" />
-              <path d={linePath} fill="none" stroke="#F59E0B" strokeWidth="1.5"
+              <path d={linePath} fill="none" stroke="#F59E0B" strokeWidth="0.8"
                 strokeLinecap="round" strokeLinejoin="round" clipPath="url(#ovDrawClip)" />
               {hoverSvgX != null && hoverBucket && (
                 <>
