@@ -258,8 +258,8 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
       <div className="px-2 pt-3 pb-1 select-none">
         <div className="flex">
           {/* Y-axis labels */}
-          <div className="flex flex-col justify-between items-end pr-2 text-[9px] text-gray-500 font-mono"
-               style={{ height: `${CHART_H}px`, minWidth: '28px' }}>
+          <div className="flex flex-col justify-between items-end pr-2.5 text-[11px] text-gray-300 font-mono font-medium"
+               style={{ height: `${CHART_H}px`, minWidth: '34px' }}>
             {[...Y_LABELS].reverse().map(v => <span key={v}>{v}%</span>)}
           </div>
 
@@ -314,11 +314,29 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
                 </>
               )}
             </svg>
+
+            {/* Floating tooltip — shows time (x) and retention % (y) at cursor */}
+            {hoverSvgX != null && hoverBucket && (
+              <div
+                className="absolute z-10 pointer-events-none -translate-x-1/2 -translate-y-full"
+                style={{
+                  left: `${Math.max(6, Math.min(94, hoverSvgX))}%`,
+                  top : `${((CHART_H_SVG - (hoverBucket.pct / 100) * CHART_H_SVG) / H) * CHART_H - 10}px`,
+                }}
+              >
+                <div className="flex items-center gap-1.5 bg-gray-900 border border-gray-700 rounded-lg
+                                px-2.5 py-1.5 shadow-xl whitespace-nowrap">
+                  <span className="text-[10px] text-gray-400 font-mono">{formatTime(hoverBucket.second)}</span>
+                  <span className="text-gray-600">·</span>
+                  <span className="text-xs font-bold text-amber-400">{Math.round(hoverBucket.pct)}%</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* X-axis time labels */}
-        <div className="flex justify-between pl-7 mt-1 text-[9px] text-gray-500 font-mono">
+        <div className="flex justify-between pl-9 mt-1.5 text-[11px] text-gray-300 font-mono font-medium">
           <span>0:00</span>
           {durationSeconds > 0 && [0.25, 0.5, 0.75].map(f => (
             <span key={f}>{formatTime(durationSeconds * f)}</span>
