@@ -291,11 +291,8 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
                   stroke="#374151" strokeWidth="0.4" strokeDasharray="3 3" />;
               })}
 
-              {/* Subtle area fill */}
-              <path d={areaPath} fill="url(#retAreaGrad)" clipPath="url(#retDrawClip)" />
-
-              {/* Amber line */}
-              <path d={linePath} fill="none" stroke="#F59E0B" strokeWidth="1.5"
+              {/* Thin amber line — single colour, no area fill */}
+              <path d={linePath} fill="none" stroke="#F59E0B" strokeWidth="0.8"
                 strokeLinecap="round" strokeLinejoin="round"
                 clipPath="url(#retDrawClip)" />
 
