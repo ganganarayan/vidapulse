@@ -21,9 +21,34 @@ const site       = require('./data/site');
 const categories = require('./data/categories');
 const questions  = require('./data/questions');
 const T          = require('./lib/template');
+const D          = require('./lib/diagrams');
 
 const PUBLIC = path.join(__dirname, 'public');
 const HUB    = site.hubPath; // /video-analytics-guide
+const ARTICLES_DIR = path.join(__dirname, 'data', 'articles');
+const PUBLISH_DATE = '2026-06-22';
+
+// Load every article body module (data/articles/<slug>.js). A question is
+// "published" iff a module exists for its slug — adding a module auto-emits
+// the page, links it everywhere, and adds it to the sitemap + search.
+const articleBySlug = new Map();
+if (fs.existsSync(ARTICLES_DIR)) {
+  for (const f of fs.readdirSync(ARTICLES_DIR)) {
+    if (f.endsWith('.js')) articleBySlug.set(f.replace(/\.js$/, ''), require(path.join(ARTICLES_DIR, f)));
+  }
+}
+
+// Hero diagram per article slug (omitted slugs get no diagram).
+const DIAGRAMS = {
+  'why-is-my-vsl-not-converting': D.retentionCurve,
+  'why-viewers-leave-in-the-first-3-seconds': D.retentionCurve,
+  'how-to-find-video-drop-off-points': D.retentionCurve,
+  'how-to-improve-vsl-retention': D.retentionCurve,
+  'what-is-a-video-heatmap': D.heatmapStrip,
+  'what-is-video-engagement-tracking': D.heatmapStrip,
+  'how-much-revenue-can-poor-retention-cost': D.conversionFunnel,
+  'leads-but-no-bookings': D.conversionFunnel,
+};
 
 // ── Resolve every question to a slug / path / status, grouped by category ──
 
@@ -37,7 +62,7 @@ const resolved = questions.map((q) => {
     ...q,
     slug,
     catTitle: cat.title,
-    status: q.status || 'planned',
+    status: articleBySlug.has(slug) ? 'published' : 'planned',
     path: `${HUB}/${cat.slug}/${slug}`,
   };
 });
@@ -51,6 +76,9 @@ for (const r of resolved) {
 
 const byCat = new Map(categories.map((c) => [c.slug, []]));
 resolved.forEach((r) => byCat.get(r.cat).push(r));
+
+const resBySlug       = new Map(resolved.map((r) => [r.slug, r]));
+const publishedOrdered = resolved.filter((r) => r.status === 'published');
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -81,10 +109,11 @@ function renderQuestionList(items) {
   }).join('\n');
 }
 
-function ctaBlock() {
+function ctaBlock(line) {
+  const text = line || 'See exactly where your own video loses viewers — create a free VidaPulse account and analyze your first video in minutes.';
   return `      <div class="kb-ctablock">
         <hr />
-        <p class="kb-ctaline">See exactly where your own video loses viewers — create a free VidaPulse account and analyze your first video in minutes.</p>
+        <p class="kb-ctaline">${T.escapeHtml(text)}</p>
         <p><a class="kb-cta" href="${T.escapeHtml(site.ctaUrl)}">Start free →</a></p>
       </div>`;
 }
@@ -201,6 +230,93 @@ ${ctaBlock()}`;
   }));
 }
 
+// ── Article pages ─────────────────────────────────────────────────
+
+function buildArticle(r) {
+  const art = articleBySlug.get(r.slug);
+  const cat = catBySlug.get(r.cat);
+  const crumb = [
+    { name: 'Guide', path: HUB },
+    { name: cat.title, path: `${HUB}/${cat.slug}` },
+    { name: r.q, path: r.path },
+  ];
+
+  const diagram = DIAGRAMS[r.slug] ? '\n' + DIAGRAMS[r.slug]() : '';
+  const sections = (art.sections || [])
+    .map((s) => `      <h2>${T.escapeHtml(s.h2)}</h2>\n${s.html}`).join('\n');
+
+  const faqHtml = (art.faq && art.faq.length)
+    ? `\n      <h2>People also ask</h2>\n` + art.faq
+        .map((f) => `      <h3>${T.escapeHtml(f.q)}</h3>\n      <p>${T.escapeHtml(f.a)}</p>`).join('\n')
+    : '';
+
+  // Related = article-supplied slugs, kept only if that article is published.
+  const related = (art.related || [])
+    .map((s) => resBySlug.get(s))
+    .filter((x) => x && x.status === 'published' && x.slug !== r.slug);
+  const relatedHtml = related.length
+    ? `\n      <h2>Related questions</h2>\n      <div class="kb-related">\n` +
+      related.map((x) => `        <a href="${x.path}">${T.escapeHtml(x.q)}</a>`).join('\n') +
+      `\n      </div>`
+    : '';
+
+  const body = `${T.renderCrumb(crumb)}
+      <p class="kb-eyebrow">${T.escapeHtml(cat.title)}</p>
+      <h1>${T.escapeHtml(r.q)}</h1>
+      <p class="kb-lead">${T.escapeHtml(art.answer)}</p>${diagram}
+
+${sections}
+
+      <h2>How VidaPulse solves this</h2>
+${art.solve}
+${faqHtml}
+
+${ctaBlock(art.ctaLine)}
+${relatedHtml}`;
+
+  // prev/next across the published reading order.
+  const i = publishedOrdered.findIndex((x) => x.slug === r.slug);
+  const prev = i > 0 ? publishedOrdered[i - 1] : null;
+  const next = i < publishedOrdered.length - 1 ? publishedOrdered[i + 1] : null;
+  const pager = T.renderPager(
+    prev && { title: prev.q, path: prev.path },
+    next && { title: next.q, path: next.path },
+  );
+
+  const faqEntities = [{ q: r.q, a: art.answer }, ...(art.faq || [])].map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  }));
+
+  const graph = [
+    {
+      '@type': 'Article',
+      headline: r.q,
+      description: art.metaDescription,
+      inLanguage: 'en',
+      datePublished: art.datePublished || PUBLISH_DATE,
+      dateModified: PUBLISH_DATE,
+      author: { '@type': 'Organization', name: site.brand, url: 'https://vidapulse.io/' },
+      publisher: { '@type': 'Organization', name: site.brand, url: 'https://vidapulse.io/' },
+      image: site.ogImage,
+      mainEntityOfPage: { '@type': 'WebPage', '@id': T.absUrl(r.path) },
+    },
+    { '@type': 'FAQPage', mainEntity: faqEntities },
+    T.breadcrumbLd(crumb),
+  ];
+
+  write(`video-analytics-guide/${cat.slug}/${r.slug}.html`, T.renderPage({
+    title: art.metaTitle,
+    description: art.metaDescription,
+    canonicalPath: r.path,
+    graph,
+    body,
+    bodyClass: 'kb-article',
+    pager,
+  }));
+}
+
 // ── Search index + client script ──────────────────────────────────
 
 function buildSearch() {
@@ -275,6 +391,7 @@ function run() {
   write('kb-assets/kb.css', T.buildCss());
   buildHub();
   categories.forEach(buildCategory);
+  publishedOrdered.forEach(buildArticle);
   buildSearch();
   buildSitemap();
 

@@ -1,0 +1,43 @@
+module.exports = {
+  metaTitle: `How to improve VSL retention | VidaPulse`,
+  metaDescription: `A practical playbook to improve VSL retention: measure your baseline curve, fix the open, rewrite the biggest drop, tighten pacing, and re-test against data.`,
+  answer: `You improve VSL retention by measuring it before you touch it, then changing one thing at a time and re-measuring. Pull your second-by-second retention curve to see exactly where viewers leave, fix the single biggest drop, and compare the new curve to the old one. The loop is always the same: measure, change one thing, measure again. Guessing at edits without the curve is how good VSLs get worse.`,
+  sections: [
+    {
+      h2: `Step 1: measure your baseline retention curve first`,
+      html: `<p>Before you rewrite a single line, you need to know where viewers actually leave. Most people skip this and edit on instinct, which means they often "fix" a section that was working and leave the real leak untouched.</p><ol><li>Get your VSL into an analytics player and let real traffic run through it until you have a stable curve, not a handful of sessions.</li><li>Read the audience-retention curve as your map: the y-axis is the share of viewers still watching, the x-axis is time. Flat stretches are healthy; steep cliffs are where you are losing people.</li><li>Note the two or three steepest drops and the timestamp of each. Those are your targets, in order of how much damage they do.</li></ol><p>This baseline is the thing every later step gets compared against. Save it. Without it, you have no way to prove an edit helped instead of hurt.</p>`,
+    },
+    {
+      h2: `Step 2: fix the first 10 to 15 seconds`,
+      html: `<p>The opening is almost always the biggest single leak. If the curve drops sharply in the first few seconds, viewers are quitting before you have said anything worth staying for. Fix this before anything else, because every later improvement only matters for people who are still watching.</p><ol><li>Cut the intro. No logo animation, no "hey guys," no slow throat-clearing. Those seconds are the most expensive in the whole video.</li><li>Open on the promise. State who it is for and what they will get within the first sentence, so the right viewer immediately confirms they are in the right place.</li><li>Match the open to the click. If traffic arrives from an ad or a link with a specific hook, the first line should pay that hook off, not restart the story.</li></ol><p>Then re-measure the open before touching anything else. A steep first-seconds cliff that flattens out is the highest-leverage win you will get.</p>`,
+    },
+    {
+      h2: `Step 3: find and rewrite the biggest mid-video drop`,
+      html: `<p>After the hook lands, attention sags. The backstory runs long, the promise turns vague, and interested viewers quietly drift away before the proof and the pitch. On the curve this shows up as a long downhill slide or a sharp cliff somewhere in the middle.</p><p>Find the single steepest mid-video drop and treat the seconds right before it as suspect. Read what is happening there: a tangent, a repeated point, a section that asks for patience without giving a reason. Then rewrite just that segment to be tighter and to keep a forward pull, a reason to stay for what comes next.</p><p class="kb-example">Example: Suppose your curve shows a steep slide between roughly 1:30 and 2:10. That two-thirds-of-a-minute is where you are bleeding viewers, so that is the only part you rewrite this round. You leave the rest alone so you can tell whether the change is what moved the curve.</p>`,
+    },
+    {
+      h2: `Step 4: tighten pacing and add pattern interrupts where attention dips`,
+      html: `<p>Not every dip is a content problem. Some are pure pacing: the energy flattens, the delivery slows, and viewers leave out of boredom rather than disagreement. The second-by-second engagement heatmap is useful here because it shows which exact moments hold attention and which get skipped or abandoned, down to the sentence.</p><ul class="kb-list"><li><strong>Cut dead air.</strong> Trim pauses, restated points, and any sentence that does not move the argument forward.</li><li><strong>Vary the texture.</strong> Change visuals, switch to a demonstration, or shift tone at the exact spots where the heatmap shows attention cooling.</li><li><strong>Add a pattern interrupt before a known dip.</strong> A question, a visual change, or a sharp transition placed just ahead of a drop can carry viewers across it.</li></ul><p>Make these changes only where the data points, not everywhere. The goal is to flatten specific dips, then confirm they flattened.</p>`,
+    },
+    {
+      h2: `Step 5: get the offer in front of viewers, then re-test the curve`,
+      html: `<p>You can have a great hook and tight pacing and still lose the sale if the pitch shows up too late. The question is not whether your offer is good, it is what percentage of viewers are still there when the offer appears.</p><ol><li>Find the timestamp where your offer or call to action begins, and read the curve at that exact point to see what share of viewers reached it.</li><li>If that number is low, use one of two levers: move the offer earlier, or fix the drops in front of it so more people survive to that moment.</li><li>After every change, run real traffic through the new version and lay the new retention curve next to the baseline you saved.</li></ol><p>Compare them honestly. If the targeted drop got shallower and more viewers reached the offer, keep the edit; if a new drop appeared or the curve got worse, revert and try a different fix for the same spot. Change one thing, re-measure, compare. Editing a single section per round is what lets you attribute the result, instead of changing five things and never knowing which one mattered. Repeat the loop on the next biggest drop until the curve is as flat as you can make it.</p>`,
+    },
+  ],
+  solve: `<p>The whole playbook depends on seeing your real VSL's retention, and that is exactly what VidaPulse gives you without re-hosting. You paste your existing video URL from wherever it already lives (YouTube, S3, Google Drive, Dropbox, OneDrive, Vimeo, a direct MP4 or HLS link, and more), VidaPulse wraps it in an analytics player, and you embed one line of script or a script-free iframe on your page. Your video stays put and keeps its URL.</p><p>From there, every step in this guide is measured instead of guessed:</p><ul class="kb-list"><li>Read the <strong>audience-retention curve</strong> to set your baseline and spot the steepest drops (Steps 1 and 3).</li><li>Use the <strong>second-by-second engagement heatmap</strong> (Pro) to tie a dip to a specific sentence and place pattern interrupts precisely (Step 4).</li><li>Check the <strong>percentage of viewers who reach any point</strong> to see how many actually make it to your offer (Step 5).</li><li>Confirm with <strong>average watch time</strong>, <strong>play rate</strong>, and <strong>replays vs first-time watches</strong> as you go.</li></ul><p>Because the analytics live on the same video, you can republish an edit and compare the new curve directly against the old one (Step 6). That makes the measure to change-one-thing to re-measure loop fast and honest. To start, create a free VidaPulse account, wrap your own VSL, and pull your baseline curve before you change anything.</p>`,
+  faq: [
+    {
+      q: `What retention rate is good for a VSL?`,
+      a: `There is no universal number, and chasing a benchmark is a distraction. What matters is your own curve over time: a shallower drop at your worst leak point, and a higher percentage of viewers reaching your offer than last version. Compare against your own baseline, not someone else's.`,
+    },
+    {
+      q: `Should I change several things at once to improve faster?`,
+      a: `No. If you change five things and the curve moves, you will not know which edit did it, and you cannot repeat the win or undo the harm. Change one section, re-measure, then move to the next biggest drop. The loop is slower per round but far faster at actually improving the video.`,
+    },
+    {
+      q: `Where do I start if my whole curve looks bad?`,
+      a: `Start at the front. Fix the first 10 to 15 seconds, because the opening is usually the biggest single leak and every later improvement only helps the viewers who stay past it. Once the open holds, move to the steepest mid-video drop.`,
+    },
+  ],
+  related: ['why-is-my-vsl-not-converting', 'why-viewers-leave-in-the-first-3-seconds', 'how-to-find-video-drop-off-points'],
+};

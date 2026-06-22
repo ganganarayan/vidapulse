@@ -57,7 +57,7 @@ body{margin:0;background:var(--bg);color:var(--body);
 a{color:var(--accent-ink);text-decoration:none}
 a:hover{text-decoration:underline}
 .kb-wrap{max-width:720px;margin:0 auto;padding:0 24px}
-header.kb-header{border-bottom:1px solid var(--line)}
+header.kb-header{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid var(--line)}
 .kb-header-in{max-width:720px;margin:0 auto;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px}
 .kb-brand{font-size:18px;font-weight:600;color:var(--ink);letter-spacing:.2px}
 .kb-brand:hover{text-decoration:none;color:var(--ink)}
@@ -108,8 +108,24 @@ footer.kb-footer{border-top:1px solid var(--line);margin-top:44px}
 .kb-footer-links{display:flex;flex-wrap:wrap;gap:20px;margin-bottom:14px}
 .kb-footer-links a{color:var(--body);font-size:14px}
 .kb-footer-tag{font-size:13px;color:var(--muted)}
+figure.kb-fig{margin:26px 0}
+figure.kb-fig svg{width:100%;height:auto;display:block}
+figure.kb-fig figcaption{font-size:13px;color:var(--muted);margin-top:10px;text-align:center}
+.kb-example{border-left:2px solid var(--accent);padding:2px 0 2px 16px;margin:0 0 18px;color:var(--lead)}
+.kb-related a{display:block;padding:13px 2px;border-top:1px solid var(--line);color:var(--ink)}
+.kb-related a:last-child{border-bottom:1px solid var(--line)}
+.kb-related a:hover{color:var(--accent-ink);text-decoration:none}
+.kb-pager{position:fixed;left:0;right:0;bottom:16px;z-index:45;pointer-events:none}
+.kb-pager-in{max-width:760px;margin:0 auto;padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.kb-pager a{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;max-width:47%;background:#fffdf8;border:1px solid var(--line);color:var(--ink);padding:9px 15px;border-radius:999px;font-size:13px;font-weight:600;box-shadow:0 3px 14px rgba(51,39,26,.10)}
+.kb-pager a:hover{text-decoration:none;border-color:var(--accent)}
+.kb-pager .kb-pdir{color:var(--accent-ink)}
+.kb-pager .kb-pt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.kb-article main{padding-bottom:86px}
+body.kb-article footer.kb-footer .kb-footer-in{padding-bottom:96px}
 @media (max-width:560px){
   h1{font-size:26px}.kb-lead{font-size:17px}.kb-intro{font-size:16px}body{font-size:16px}
+  .kb-pager .kb-pt{display:none}.kb-pager a{padding:11px 15px}
 }
 `;
 }
@@ -190,22 +206,36 @@ function breadcrumbLd(items) {
   };
 }
 
+// Sticky, always-visible Back / Forward article pager.
+// prev/next = {title, path} or null. Forward (next) goes to the next article.
+function renderPager(prev, next) {
+  const left = prev
+    ? `<a class="kb-prev" href="${prev.path}" aria-label="Back: ${escapeHtml(prev.title)}"><span class="kb-pdir">‹ Back</span><span class="kb-pt">${escapeHtml(prev.title)}</span></a>`
+    : '<span aria-hidden="true"></span>';
+  const right = next
+    ? `<a class="kb-next" href="${next.path}" aria-label="Forward: ${escapeHtml(next.title)}"><span class="kb-pt">${escapeHtml(next.title)}</span><span class="kb-pdir">Forward ›</span></a>`
+    : '<span aria-hidden="true"></span>';
+  return `<nav class="kb-pager" aria-label="Article navigation"><div class="kb-pager-in">${left}${right}</div></nav>`;
+}
+
 // ── Full document ─────────────────────────────────────────────────
 
-function renderPage({ title, description, canonicalPath, graph, body, bodyScript }) {
+function renderPage({ title, description, canonicalPath, graph, body, bodyScript, bodyClass, pager }) {
   const script = bodyScript ? `\n  ${bodyScript}` : '';
+  const cls = bodyClass ? ` class="${bodyClass}"` : '';
+  const pagerHtml = pager ? `\n  ${pager}` : '';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 ${renderHead({ title, description, canonicalPath, graph })}
 </head>
-<body>
+<body${cls}>
   ${renderHeader()}
   <main>
     <div class="kb-wrap">
 ${body}
     </div>
-  </main>
+  </main>${pagerHtml}
   ${renderFooter()}${script}
 </body>
 </html>
@@ -218,6 +248,7 @@ module.exports = {
   absUrl,
   buildCss,
   renderPage,
+  renderPager,
   renderCrumb,
   breadcrumbLd,
 };

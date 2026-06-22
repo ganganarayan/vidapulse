@@ -18,7 +18,7 @@ const ORIGIN = 'https://app.vidapulse.io';
 
 module.exports = {
   brand: 'VidaPulse',
-  tagline: 'Video analytics for VSLs, ads & product videos',
+  tagline: 'Video analytics for VSLs and product videos',
 
   // Canonical production origin (never the staging origin).
   originUrl: ORIGIN,
