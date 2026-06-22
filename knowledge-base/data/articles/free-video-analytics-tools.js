@@ -1,0 +1,42 @@
+module.exports = {
+  metaTitle: `Free video analytics tools | VidaPulse`,
+  metaDescription: `Genuinely free video analytics tools: YouTube Analytics for YouTube videos, GA4 for coarse milestone events, and VidaPulse's free plan for any-source retention.`,
+  answer: `There are genuinely free video analytics tools, but each covers a different job. YouTube Analytics is free and capable, but only for videos hosted publicly on YouTube. Google Analytics (GA4) is free and can track coarse video milestone events through Google Tag Manager, but it is not purpose-built for retention. VidaPulse's Free plan is free forever for one video and gives retention basics on a video you host anywhere, on your own page. The best free choice depends on where your video lives and how much detail you need. Below is what each one does, and does not, do.`,
+  sections: [
+    {
+      h2: `Free does not mean identical`,
+      html: `<p>"Free video analytics" covers tools that measure very different things, so it is worth being precise about what each gives you before you pick one. The two questions that separate them are the same as for paid tools: where does your video have to live, and how deep does the data go?</p><p>One tool is free because your video is already on its platform. One is free but generic, built for websites rather than video. And one is free for a single video as the entry tier of a purpose-built retention product. None of them is a trick, but choosing the wrong one for your situation wastes time, so match the tool to the job.</p>`,
+    },
+    {
+      h2: `YouTube Analytics`,
+      html: `<p>If your video is hosted publicly on YouTube, YouTube Analytics is free and genuinely strong. It is the easiest, most capable free option for that specific case.</p><ul class="kb-list"><li><strong>What it does:</strong> audience-retention reports, average view duration, traffic sources, and demographics, all at no cost, for your YouTube-hosted videos.</li><li><strong>What it does not do:</strong> it only covers videos hosted publicly on YouTube. It will not measure a video on your own landing page, an unlisted file, or a video hosted on S3, Drive, or Vimeo. The data is aggregate, not viewer-level, and the player carries YouTube branding and suggested videos.</li></ul><p>If YouTube is where your video lives and you are happy with that, start here. If your sales video must live on your own page, this does not apply.</p>`,
+    },
+    {
+      h2: `Google Analytics (GA4)`,
+      html: `<p>Google Analytics is free and can capture some video data, but it is a website analytics tool, not a video analytics tool, and that distinction matters.</p><ul class="kb-list"><li><strong>What it does:</strong> through Google Tag Manager, GA4 can record video milestone events, such as start, 25 percent, 50 percent, 75 percent, and complete, for embedded video. That gives you a coarse sense of how far people get, for free, alongside the rest of your site analytics.</li><li><strong>What it does not do:</strong> it is not purpose-built for retention. You get a handful of milestone buckets, not a smooth second-by-second retention curve or a heatmap, and setting it up usually means configuring Tag Manager triggers yourself. It will not tell you the exact second viewers leave or tie drop-off to a specific sentence.</li></ul><p>GA4 is a reasonable free starting point if you already run it and only need rough checkpoints, but it is not where you go to find the precise moment your message breaks.</p>`,
+    },
+    {
+      h2: `VidaPulse Free plan`,
+      html: `<p>VidaPulse has a Free plan that is free forever, with no card required, for one video. It is the free option built specifically for retention on a video you host anywhere, on your own page.</p><ul class="kb-list"><li><strong>What it does:</strong> you paste one video URL, from YouTube, S3, Google Drive, Dropbox, OneDrive, Azure Blob, Loom, a Zoom recording, Vimeo, or a direct MP4 or HLS file, embed one line of script or a script-free iframe, and get retention basics, including an audience-retention curve, the percentage of viewers reaching any point, and viewer counts, with no re-hosting and no personal data collected.</li><li><strong>What it does not do on Free:</strong> the second-by-second heatmap, viewer-level history, and conversion tracking are Pro features, and the Free plan covers one video. For more videos or those deeper features, Starter (10 dollars/mo) adds ten videos and Pro (19 dollars/mo) unlocks unlimited videos plus heatmaps, viewer-level history, and conversion tracking.</li></ul><p>It is the free option to reach for when your video lives on your own page and you want a real retention curve, not just milestone buckets.</p>`,
+    },
+    {
+      h2: `Which free tool fits your case`,
+      html: `<p>Pick by where your video lives and how much detail you need.</p><table class="kb-table"><thead><tr><th></th><th>Free for</th><th>Best at</th><th>Main limit</th></tr></thead><tbody><tr><td>YouTube Analytics</td><td>YouTube-hosted public videos</td><td>Strong retention reports, no setup</td><td>YouTube-hosted and aggregate only</td></tr><tr><td>Google Analytics (GA4)</td><td>Any embedded video on your site</td><td>Coarse milestone events with site data</td><td>Not purpose-built for retention; manual setup</td></tr><tr><td>VidaPulse Free</td><td>One video hosted anywhere</td><td>Real retention curve on your own page</td><td>One video; heatmap and viewer-level are Pro</td></tr></tbody></table><p class="kb-example">Example: your VSL is a direct file on your landing page. YouTube Analytics does not apply, and GA4 would only give you milestone buckets. The VidaPulse Free plan lets you paste that URL and read an actual retention curve for free, on the page where the video already lives.</p>`,
+    },
+  ],
+  solve: `<p>If your video lives on your own page and you want a real retention curve for free, the VidaPulse Free plan is the direct path. It is free forever for one video, with no card. Paste your existing video URL, embed one line of script or a script-free iframe, and there is no re-hosting or second upload.</p><p>On Free you can read the <strong>audience-retention curve</strong>, the <strong>percentage of viewers reaching any point</strong>, and your viewer counts, with no personal data collected, which is enough to find where viewers leave your main video. When you need more, Starter (10 dollars/mo) adds ten videos, and Pro (19 dollars/mo) unlocks unlimited videos plus the <strong>second-by-second heatmap</strong>, <strong>viewer-level history</strong>, and <strong>conversion tracking</strong>. Create a free account and analyze one of your own videos to see exactly where attention drops.</p>`,
+  faq: [
+    {
+      q: `Is there a genuinely free video analytics tool?`,
+      a: `Yes, several. YouTube Analytics is free for videos hosted publicly on YouTube. Google Analytics (GA4) is free and can track coarse video milestone events through Google Tag Manager. VidaPulse has a Free plan that is free forever for one video and shows a real retention curve on a video you host anywhere. The best free tool depends on where your video lives and how much detail you need.`,
+    },
+    {
+      q: `Can Google Analytics track video retention?`,
+      a: `Partly. Through Google Tag Manager, GA4 can record video milestone events such as start, 25, 50, 75 percent, and complete, which gives a coarse sense of how far viewers get. It is not purpose-built for retention, so you get milestone buckets rather than a smooth second-by-second curve or a heatmap, and it needs manual Tag Manager setup. For precise drop-off detail, use a dedicated tool like VidaPulse.`,
+    },
+    {
+      q: `What is the catch with the free VidaPulse plan?`,
+      a: `There is no card required and it is free forever, but it is scoped: the Free plan covers one video, and the second-by-second heatmap, viewer-level history, and conversion tracking are Pro features. It is meant to let you analyze your most important video for free, then upgrade only if you need more videos or deeper analysis. Starter is 10 dollars per month for ten videos and Pro is 19 dollars per month for unlimited videos plus the deeper features.`,
+    },
+  ],
+};

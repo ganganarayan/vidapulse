@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>How is viewer retention calculated? | VidaPulse</title>
+  <meta name="description" content="Viewer retention is the percentage of viewers still watching at each timestamp relative to those who started, measured per second and based on unique viewers." />
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+  <link rel="canonical" href="https://app.vidapulse.io/video-analytics-guide/video-analytics/how-is-viewer-retention-calculated" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="VidaPulse" />
+  <meta property="og:title" content="How is viewer retention calculated? | VidaPulse" />
+  <meta property="og:description" content="Viewer retention is the percentage of viewers still watching at each timestamp relative to those who started, measured per second and based on unique viewers." />
+  <meta property="og:url" content="https://app.vidapulse.io/video-analytics-guide/video-analytics/how-is-viewer-retention-calculated" />
+  <meta property="og:image" content="https://vidapulse.io/og-image.png" />
+  <meta property="og:locale" content="en_US" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="How is viewer retention calculated? | VidaPulse" />
+  <meta name="twitter:description" content="Viewer retention is the percentage of viewers still watching at each timestamp relative to those who started, measured per second and based on unique viewers." />
+  <meta name="twitter:image" content="https://vidapulse.io/og-image.png" />
+  <link rel="stylesheet" href="/kb-assets/kb.css" />
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Article",
+      "headline": "How is viewer retention calculated?",
+      "description": "Viewer retention is the percentage of viewers still watching at each timestamp relative to those who started, measured per second and based on unique viewers.",
+      "inLanguage": "en",
+      "datePublished": "2026-06-22",
+      "dateModified": "2026-06-22",
+      "author": {
+        "@type": "Organization",
+        "name": "VidaPulse",
+        "url": "https://vidapulse.io/"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "VidaPulse",
+        "url": "https://vidapulse.io/"
+      },
+      "image": "https://vidapulse.io/og-image.png",
+      "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://app.vidapulse.io/video-analytics-guide/video-analytics/how-is-viewer-retention-calculated"
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "How is viewer retention calculated?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Viewer retention is calculated as the percentage of viewers still watching at each point in a video, relative to everyone who started it. If 100 people press play and 60 are still watching at the one-minute mark, retention at that point is 60 percent. It is measured continuously along the timeline, usually second by second, so you get a curve rather than a single number, and it is based on unique viewers so replays do not inflate it."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What does 60 percent retention at one minute mean?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "It means that of everyone who started the video, 60 percent were still watching at the one-minute mark. Retention is always measured relative to the people who pressed play, so it starts near 100 percent and falls as viewers leave."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does rewatching a video count twice in retention?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Retention in VidaPulse is based on unique viewers, each counted once by a first-party ID, so replays and rewinds by the same person do not inflate the percentages. Replay intensity shows up in the heatmap instead, which can rise again later in the video."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why does my retention curve look erratic?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Usually small sample size. With few viewers, one person leaving swings the percentage a lot, so early curves can look jagged. Autoplay traffic and blending very different sources can also distort it. Wait for enough viewers and segment by source before drawing conclusions."
+          }
+        }
+      ]
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Guide",
+          "item": "https://app.vidapulse.io/video-analytics-guide"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Video analytics",
+          "item": "https://app.vidapulse.io/video-analytics-guide/video-analytics"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "How is viewer retention calculated?",
+          "item": "https://app.vidapulse.io/video-analytics-guide/video-analytics/how-is-viewer-retention-calculated"
+        }
+      ]
+    }
+  ]
+}
+  </script>
+</head>
+<body class="kb-article">
+  <header class="kb-header">
+    <div class="kb-header-in">
+      <a class="kb-brand" href="/video-analytics-guide">VidaPulse<span>Guide</span></a>
+      <a class="kb-cta" href="https://app.vidapulse.io/register">Start free</a>
+    </div>
+  </header>
+  <main>
+    <div class="kb-wrap">
+<nav class="kb-crumb" aria-label="Breadcrumb"><a href="/video-analytics-guide">Guide</a> &nbsp;›&nbsp; <a href="/video-analytics-guide/video-analytics">Video analytics</a> &nbsp;›&nbsp; <span>How is viewer retention calculated?</span></nav>
+      <p class="kb-eyebrow">Video analytics</p>
+      <h1>How is viewer retention calculated?</h1>
+      <p class="kb-lead">Viewer retention is calculated as the percentage of viewers still watching at each point in a video, relative to everyone who started it. If 100 people press play and 60 are still watching at the one-minute mark, retention at that point is 60 percent. It is measured continuously along the timeline, usually second by second, so you get a curve rather than a single number, and it is based on unique viewers so replays do not inflate it.</p>
+<figure class="kb-fig"><svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="rc-t rc-d">
+  <title id="rc-t">Audience retention curve</title>
+  <desc id="rc-d">A line falling from 100 percent at the start to about 18 percent by the offer, with the sharpest drops in the first few seconds and just before the offer.</desc>
+  <line x1="70" y1="30" x2="70" y2="240" stroke="#E4D8C2"/>
+  <line x1="70" y1="240" x2="690" y2="240" stroke="#E4D8C2"/>
+  <line x1="70" y1="135" x2="690" y2="135" stroke="#E4D8C2" stroke-dasharray="3 5"/>
+  <text x="62" y="34" text-anchor="end" font-size="12" fill="#7A6A59">100%</text>
+  <text x="62" y="139" text-anchor="end" font-size="12" fill="#7A6A59">50%</text>
+  <text x="62" y="243" text-anchor="end" font-size="12" fill="#7A6A59">0%</text>
+  <polygon points="70,240 70,30 89,76 132,110 225,139 318,160 411,177 504,188 597,196 690,202 690,240" fill="#F3E2CF"/>
+  <polyline points="70,30 89,76 132,110 225,139 318,160 411,177 504,188 597,196 690,202" fill="none" stroke="#E0822E" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <line x1="89" y1="30" x2="89" y2="240" stroke="#E0822E" stroke-width="1" stroke-dasharray="2 4"/>
+  <text x="95" y="48" font-size="12" fill="#33271A">First seconds</text>
+  <line x1="504" y1="30" x2="504" y2="240" stroke="#E0822E" stroke-width="1" stroke-dasharray="2 4"/>
+  <text x="498" y="48" text-anchor="end" font-size="12" fill="#33271A">Offer appears</text>
+  <text x="380" y="248" text-anchor="middle" font-size="12" fill="#7A6A59" dy="14">Video timeline →</text>
+</svg><figcaption>A typical VSL retention curve — the steepest losses come early and right before the offer.</figcaption></figure>
+
+      <h2>The basic formula</h2>
+<p>Retention at any moment is a ratio: the number of viewers still watching at that timestamp, divided by the number who started the video, expressed as a percentage. The denominator is fixed at the start, the count of people who pressed play, and the numerator shrinks as people leave.</p><p>Because the starting group is the baseline, retention almost always begins at or near 100 percent and only goes down or holds flat from there. Once a viewer leaves at a given second, they no longer count toward the numerator at any later second, which is why the line never recovers the way a heatmap can.</p><p class="kb-example">Example: suppose 200 people start your video. At the 30-second mark, 150 are still watching, so retention is 75 percent. At 90 seconds, 80 remain, so retention is 40 percent. At the point where you make your offer, 50 remain, so 25 percent of your original audience is there to hear it. Each of those is the same calculation applied at a different timestamp.</p>
+      <h2>Why it is measured per second</h2>
+<p>A single average, like "average watch time: 47 seconds," hides where the leaving actually happens. Two videos can share the same average while one loses half its viewers in a sudden cliff and the other sheds them in a slow, even drift. Those are different problems with different fixes, and only per-second measurement tells them apart.</p><p>Measuring retention at each second produces a curve across the whole runtime instead of one figure. Read left to right, that curve shows the exact moments where attention falls off: a steep vertical drop marks a moment many people quit at once, while a gentle downward slope marks steady, gradual loss. The finer the resolution, the more precisely you can tie a drop to a specific sentence or section rather than a vague "somewhere in the middle."</p>
+      <h2>Unique viewers, not replays</h2>
+<p>Retention should describe people, not playbacks. If it counted every play event, a single enthusiastic viewer who rewinds the same section five times could make that section look far more popular than it is, and the percentages would stop meaning "share of your audience."</p><p>To avoid that, retention is calculated on <strong>unique viewers</strong>. Each distinct person is counted once toward the baseline, typically identified by a first-party cookie or a localStorage ID rather than by personal data. Replays and rewinds by someone already counted do not add new people to the calculation. This is also why retention and a heatmap differ: the retention curve only ever falls as unique viewers leave, while a heatmap can rise again later because it captures replay intensity. The retention curve answers "how many distinct people are still here?", which is the honest measure of how far your audience travels.</p>
+      <h2>What can skew a retention reading</h2>
+<p>The calculation is simple, but a few real-world factors can distort what the curve seems to say, and it is worth knowing them before you act on a number:</p><ul class="kb-list"><li><strong>Small sample sizes</strong> — with only a handful of viewers, one person leaving moves the percentage sharply, so early curves can look dramatic for no real reason. Wait for enough viewers before drawing conclusions.</li><li><strong>Autoplay and mixed traffic</strong> — if a video starts automatically, many "starts" are people who never intended to watch, which can depress early retention compared with a video people deliberately click to play.</li><li><strong>Source differences</strong> — viewers from a cold ad and viewers from your own email list behave very differently. Blending them into one curve can hide the fact that one source retains well and another bleeds out instantly.</li><li><strong>Seeking and skipping</strong> — viewers who jump ahead or scrub around can complicate a naive count, which is why measurement focuses on whether each second was actually watched rather than simply where the playhead landed.</li></ul><p>None of these break the method; they just mean you should read retention alongside viewer counts and source data rather than treating a single curve as the whole story.</p>
+
+      <h2>How VidaPulse solves this</h2>
+<p>VidaPulse calculates viewer retention on a video you already host, with no re-hosting. You paste any video URL, from YouTube, Amazon S3, Google Drive, Dropbox, OneDrive, Azure Blob, Loom, a Zoom recording, Vimeo, or a direct MP4 or HLS file, and VidaPulse wraps it in an analytics player you embed with one line of script or a script-free iframe.</p><p>It does the calculation the way it should be done:</p><ul class="kb-list"><li>Retention is plotted as a <strong>per-second curve</strong>, so you see the exact timestamps where viewers leave, not just an average.</li><li>It is based on <strong>unique viewers</strong>, identified by a first-party cookie or localStorage ID, so replays do not inflate the percentages and no personal data is collected.</li><li>The <strong>second-by-second heatmap</strong> (Pro) sits alongside the curve and distinguishes first watches from replays, so you can see both how many people remain and how intensely each second is watched.</li><li><strong>Source attribution</strong> lets you separate retention by UTM or channel, so a strong segment is not masked by a weak one.</li></ul><p>You can start free: the Free plan covers one video forever with no card. Create a free account, analyze one of your own videos, and read its real retention curve, including the percentage of viewers who reach your offer.</p>
+
+      <h2>People also ask</h2>
+      <h3>What does 60 percent retention at one minute mean?</h3>
+      <p>It means that of everyone who started the video, 60 percent were still watching at the one-minute mark. Retention is always measured relative to the people who pressed play, so it starts near 100 percent and falls as viewers leave.</p>
+      <h3>Does rewatching a video count twice in retention?</h3>
+      <p>No. Retention in VidaPulse is based on unique viewers, each counted once by a first-party ID, so replays and rewinds by the same person do not inflate the percentages. Replay intensity shows up in the heatmap instead, which can rise again later in the video.</p>
+      <h3>Why does my retention curve look erratic?</h3>
+      <p>Usually small sample size. With few viewers, one person leaving swings the percentage a lot, so early curves can look jagged. Autoplay traffic and blending very different sources can also distort it. Wait for enough viewers and segment by source before drawing conclusions.</p>
+
+      <div class="kb-ctablock">
+        <hr />
+        <p class="kb-ctaline">See exactly where your own video loses viewers — create a free VidaPulse account and analyze your first video in minutes.</p>
+        <p><a class="kb-cta" href="https://app.vidapulse.io/register">Start free →</a></p>
+      </div>
+
+      <h2>Related questions</h2>
+      <div class="kb-related">
+        <a href="/video-analytics-guide/video-analytics/what-are-video-analytics">What are video analytics?</a>
+        <a href="/video-analytics-guide/video-analytics/why-is-audience-retention-important">Why is audience retention important?</a>
+        <a href="/video-analytics-guide/video-analytics/what-metrics-matter-most-in-video-marketing">What metrics matter most in video marketing?</a>
+        <a href="/video-analytics-guide/video-analytics/what-does-a-retention-curve-tell-you">What does a retention curve tell you?</a>
+      </div>
+    </div>
+  </main>
+  <nav class="kb-pager" aria-label="Article navigation"><div class="kb-pager-in"><a class="kb-prev" href="/video-analytics-guide/video-analytics/what-are-video-analytics" aria-label="Back: What are video analytics?"><span class="kb-pdir">‹ Back</span><span class="kb-pt">What are video analytics?</span></a><a class="kb-next" href="/video-analytics-guide/video-analytics/why-is-audience-retention-important" aria-label="Forward: Why is audience retention important?"><span class="kb-pt">Why is audience retention important?</span><span class="kb-pdir">Forward ›</span></a></div></nav>
+  <footer class="kb-footer">
+    <div class="kb-footer-in">
+      <div class="kb-footer-links">
+        <a href="https://vidapulse.io/">VidaPulse home</a>
+        <a href="https://vidapulse.io/#pricing">Pricing</a>
+        <a href="https://app.vidapulse.io/register">Start free</a>
+        <a href="https://app.vidapulse.io/login">Log in</a>
+      </div>
+      <div class="kb-footer-tag">VidaPulse — Video analytics for VSLs and product videos · video analytics on any video, no re-hosting.</div>
+    </div>
+  </footer>
+</body>
+</html>

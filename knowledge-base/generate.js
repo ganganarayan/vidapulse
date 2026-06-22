@@ -38,7 +38,7 @@ if (fs.existsSync(ARTICLES_DIR)) {
   }
 }
 
-// Hero diagram per article slug (omitted slugs get no diagram).
+// Curated hero diagram for specific slugs (takes precedence over auto-pick).
 const DIAGRAMS = {
   'why-is-my-vsl-not-converting': D.retentionCurve,
   'why-viewers-leave-in-the-first-3-seconds': D.retentionCurve,
@@ -49,6 +49,18 @@ const DIAGRAMS = {
   'how-much-revenue-can-poor-retention-cost': D.conversionFunnel,
   'leads-but-no-bookings': D.conversionFunnel,
 };
+
+// Auto-pick a fitting hero diagram by topic when no curated one is set.
+// Comparison pages use a table instead, so they get no diagram.
+function diagramFor(r) {
+  if (DIAGRAMS[r.slug]) return DIAGRAMS[r.slug];
+  if (r.cat === 'comparisons') return null;
+  const s = `${r.slug} ${r.q}`.toLowerCase();
+  if (/heatmap|engagement[\s-]?track/.test(s)) return D.heatmapStrip;
+  if (/sales|revenue|convert|conversion|\bbuy\b|price|registration|sign[\s-]?up|booking|clicks but no|funnel/.test(s)) return D.conversionFunnel;
+  if (/retention|drop[\s-]?off|weakest|stop watching|leav|losing|watch time|attention|curve|minute|graph/.test(s)) return D.retentionCurve;
+  return null;
+}
 
 // ── Resolve every question to a slug / path / status, grouped by category ──
 
@@ -241,7 +253,8 @@ function buildArticle(r) {
     { name: r.q, path: r.path },
   ];
 
-  const diagram = DIAGRAMS[r.slug] ? '\n' + DIAGRAMS[r.slug]() : '';
+  const dfn = diagramFor(r);
+  const diagram = dfn ? '\n' + dfn() : '';
   const sections = (art.sections || [])
     .map((s) => `      <h2>${T.escapeHtml(s.h2)}</h2>\n${s.html}`).join('\n');
 
@@ -250,10 +263,17 @@ function buildArticle(r) {
         .map((f) => `      <h3>${T.escapeHtml(f.q)}</h3>\n      <p>${T.escapeHtml(f.a)}</p>`).join('\n')
     : '';
 
-  // Related = article-supplied slugs, kept only if that article is published.
-  const related = (art.related || [])
+  // Related = article-supplied slugs (kept only if published), topped up with
+  // same-category published siblings so every article links somewhere valid.
+  let related = (art.related || [])
     .map((s) => resBySlug.get(s))
     .filter((x) => x && x.status === 'published' && x.slug !== r.slug);
+  if (related.length < 4) {
+    const sibs = byCat.get(r.cat).filter(
+      (x) => x.status === 'published' && x.slug !== r.slug && !related.some((y) => y.slug === x.slug));
+    related = related.concat(sibs);
+  }
+  related = related.slice(0, 4);
   const relatedHtml = related.length
     ? `\n      <h2>Related questions</h2>\n      <div class="kb-related">\n` +
       related.map((x) => `        <a href="${x.path}">${T.escapeHtml(x.q)}</a>`).join('\n') +

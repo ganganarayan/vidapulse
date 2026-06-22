@@ -1,0 +1,38 @@
+module.exports = {
+  metaTitle: `How do coaches improve VSL conversion rates? | VidaPulse`,
+  metaDescription: `Coaches improve VSL conversion rates by finding where the video loses prospects before the booking ask and fixing the run-up to the call CTA.`,
+  answer: `Coaches improve VSL conversion rates by treating the video as the place the funnel actually breaks, not the offer or the leads. You diagnose where prospects leave before the booking ask, fix the run-up to that call to action, and measure the whole ad to VSL to booked-call path so you know which step is leaking. Most coaches lose prospects long before the ask appears, which means the ask was never the problem. Read the retention curve first, then change one thing and re-measure.`,
+  sections: [
+    {
+      h2: `Find where the VSL loses prospects before the booking ask`,
+      html: `<p>A coaching VSL has one job: carry the right prospect from "I clicked" to "I will book a call." It fails when prospects leave before that ask ever appears. So the first move is not rewriting the script, it is finding the exact moment people quit, because that moment is where your persuasion stops working.</p><p>The audience-retention curve is your map. The y-axis is the share of viewers still watching; the x-axis is time. Flat stretches mean the message is holding; steep cliffs mean prospects are walking out. Note the two or three steepest drops and their timestamps. Then check the single number that matters most for booking: what percentage of viewers are still watching at the moment your booking CTA appears. If that number is low, the ask is being heard by almost nobody, and no amount of polishing the offer will fix that.</p>`,
+    },
+    {
+      h2: `Fix the run-up to the call CTA, not just the CTA itself`,
+      html: `<p>Coaches tend to obsess over the wording of the ask. But the ask only converts the prospects who are still there and still convinced when it lands. The real leverage is in the run-up: the section right before the booking CTA, where you build the case for why a call is worth their time.</p><ul class="kb-list"><li><strong>Make the open earn the rest.</strong> If the curve drops sharply in the first 10 to 15 seconds, prospects quit before you said anything worth staying for. Cut the intro, state who it is for, and pay off the hook that brought them.</li><li><strong>Tighten the mid-video sag.</strong> The steepest mid-video drop is usually a long backstory or a vague promise. Rewrite only that segment to keep a forward pull toward the call.</li><li><strong>Set up the ask before you make it.</strong> The seconds before the CTA should make booking feel like the obvious next step, not a sudden pivot. If retention drops right as the ask begins, the transition is too abrupt or the value is not yet clear.</li><li><strong>Place the ask where prospects still are.</strong> If most viewers leave before the CTA, move the ask earlier so convinced prospects can act when they are ready.</li></ul>`,
+    },
+    {
+      h2: `Measure the full ad to VSL to booked-call path`,
+      html: `<p>Conversion is a path, not a single event, and each step hides a different leak. You want to see the whole sequence so you can tell a traffic problem from a video problem from a booking-step problem.</p><ol><li><strong>Did they start the video?</strong> Play rate tells you what share of people who saw the VSL actually pressed play. Low play rate is a page or thumbnail problem, not a script problem.</li><li><strong>How far did they get?</strong> The retention curve shows where they leave and what share reach the ask.</li><li><strong>Did they click to book?</strong> Conversion and CTA tracking tells you whether prospects who reached the ask actually clicked through to the booking step.</li></ol><p class="kb-example">Hypothetical illustration, not real data: suppose 600 prospects land on the page from an ad. If 480 press play but only 90 reach the booking CTA, your VSL is leaking in the middle. If 90 reach the CTA but only 6 click, the ask or the booking step is the break. Each pattern points to a different fix, and you can only see which one is yours by reading the path, not guessing.</p>`,
+    },
+    {
+      h2: `Compare sources so you fix the video, not the wrong thing`,
+      html: `<p>Coaches often run prospects to the same VSL from several ads or links. If one source converts and another does not, the difference may be the source, not the video. UTM and source attribution lets you split your retention and CTA data by where the prospect came from, so you can tell whether a low booking rate is a message problem or a mismatch between the ad and the VSL.</p><p>This matters because the open of your VSL has to pay off the specific promise the prospect clicked. When a campaign sends colder or differently-primed prospects, the same opening can fall flat. Reading retention by source shows you whether to fix the video for everyone or to align one campaign's promise with what the VSL actually delivers.</p>`,
+    },
+  ],
+  solve: `<p>VidaPulse shows you exactly where your coaching VSL loses prospects and whether they reach the booking ask, on the video you already use, with no re-hosting. You paste your existing video URL from wherever it lives (YouTube, Amazon S3, Google Drive, Dropbox, OneDrive, Vimeo, a direct MP4 or HLS link, and more), VidaPulse wraps it in an analytics player, and you embed one line of script or a script-free iframe on your page. Your video keeps its URL.</p><p>From there you diagnose the funnel directly:</p><ul class="kb-list"><li>Read the <strong>audience-retention curve</strong> to find the exact moment prospects leave and the percentage who reach the booking CTA.</li><li>Use the <strong>second-by-second engagement heatmap</strong> (Pro) to tie a drop to a specific line in the run-up to the ask.</li><li>Turn on <strong>conversion and CTA tracking</strong> to see whether prospects who reach the ask actually click to book.</li><li>Check <strong>play rate</strong> and <strong>average watch time</strong> to separate an attention problem from a persuasion problem.</li><li>Filter by <strong>UTM and source attribution</strong> to compare how prospects from different ads watch and convert.</li></ul><p>If you need it, viewer-level history (Pro) lets you follow how individual prospects moved through the VSL. No PII is collected. To start, create a free VidaPulse account, wrap your own VSL, and pull the retention curve before you change a single line of the run-up to your call.</p>`,
+  faq: [
+    {
+      q: `What is the fastest way for a coach to lift VSL conversions?`,
+      a: `Find the steepest drop before your booking ask and fix that one section, then re-measure. Most coaching VSLs lose prospects long before the ask appears, so raising the percentage of viewers who reach the CTA is usually the single highest-leverage move you can make.`,
+    },
+    {
+      q: `Should I shorten my coaching VSL to get more bookings?`,
+      a: `Not blindly. Length only hurts where the curve shows a drop. Read your retention curve, find the section where prospects actually leave, and tighten that. A long VSL that holds attention converts better than a short one that loses people before the ask.`,
+    },
+    {
+      q: `How do I know if it is my leads or my VSL?`,
+      a: `Read the path, not just the result. If prospects press play but leave before the booking CTA, the VSL is the leak. If a specific ad source converts far worse than others at the same point in the video, split your retention by UTM and source to see whether it is a campaign mismatch rather than the video itself.`,
+    },
+  ],
+};
