@@ -102,6 +102,20 @@ app.use((req, res, next) => {
   next();
 });
 
+// ─────────────────────────────────────────────────────────────
+// Google Search Console — HTML-file site verification.
+// Returns the verification token for the verification filename at the
+// site root (and under any path prefix, e.g. /sitemap.xml/...), so
+// ownership of app.vidapulse.io verifies regardless of how the property
+// URL was entered in Search Console. Keep this in place to stay verified.
+// ─────────────────────────────────────────────────────────────
+app.use((req, res, next) => {
+  if (req.path.endsWith('/googleafbc734ffaa1db2d.html')) {
+    return res.type('text/html').send('google-site-verification: googleafbc734ffaa1db2d.html');
+  }
+  next();
+});
+
 // ── HTTP request logging ──────────────────────────────────────
 // 'combined' = Apache-style log (good for production log aggregation)
 // 'dev'      = colorized short log (good for local development)
