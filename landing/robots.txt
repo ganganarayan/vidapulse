@@ -1,4 +1,4 @@
-# robots.txt — vidapulse.in
+# robots.txt — vidapulse.io
 # All pages are public and indexable.
 
 User-agent: *
@@ -55,4 +55,4 @@ User-agent: YouBot
 Allow: /
 
 # ── Sitemap ──────────────────────────────────────────────────────
-Sitemap: https://vidapulse.in/sitemap.xml
+Sitemap: https://vidapulse.io/sitemap.xml

@@ -168,7 +168,7 @@ The free plan is permanent — not a trial. No credit card required to start.
 
 ## Getting Started
 
-1. Sign up free at **app.vidapulse.in**
+1. Sign up free at **app.vidapulse.io**
 2. Paste any video URL
 3. Copy the embed snippet onto your page
 4. Watch your analytics populate in real time

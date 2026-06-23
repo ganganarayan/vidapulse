@@ -51,11 +51,11 @@ No video migration, no storage costs, no platform lock-in.
 
 ## Key pages
 
-- Landing page: https://vidapulse.in/
-- App login: https://app.vidapulse.in/login
-- Pricing: https://vidapulse.in/#pricing
-- Features: https://vidapulse.in/#features
-- Support: support@vidapulse.in
+- Landing page: https://vidapulse.io/
+- App login: https://app.vidapulse.io/login
+- Pricing: https://vidapulse.io/#pricing
+- Features: https://vidapulse.io/#features
+- Support: support@vidapulse.io
 
 ## Frequently asked questions
 

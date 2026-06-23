@@ -83,6 +83,25 @@ app.use(cors({
 // Required so req.ip returns the real client IP (not Railway's proxy IP).
 app.set('trust proxy', 1);
 
+// ─────────────────────────────────────────────────────────────
+// Legacy domain redirect — vidapulse.in → vidapulse.io (301 permanent)
+//
+// The .in domain is being retired in favour of .io. Every request on any
+// .in host (apex, www., app., orbitq.) is permanently redirected to the
+// SAME subdomain + path + query on .io, so links and SEO consolidate onto
+// the live domain. Runs before all routes/static so nothing on .in is
+// served directly. (Requires the .in domains to point at this Railway
+// service via custom domain + DNS; otherwise the request never arrives.)
+// ─────────────────────────────────────────────────────────────
+app.use((req, res, next) => {
+  const host = req.hostname || '';
+  if (host === 'vidapulse.in' || host.endsWith('.vidapulse.in')) {
+    const sub = host.slice(0, host.length - 'vidapulse.in'.length); // '' | 'app.' | 'www.' | 'orbitq.'
+    return res.redirect(301, `https://${sub}vidapulse.io${req.originalUrl}`);
+  }
+  next();
+});
+
 // ── HTTP request logging ──────────────────────────────────────
 // 'combined' = Apache-style log (good for production log aggregation)
 // 'dev'      = colorized short log (good for local development)
