@@ -1,0 +1,65 @@
+'use strict';
+
+module.exports = {
+  metaTitle: `How do I optimize a video sales funnel? | VidaPulse`,
+  metaDescription: `Optimize a video sales funnel by measuring the video step's retention and reach-to-offer, fixing the biggest leak, tightening the CTA hand-off, then re-testing.`,
+  answer: `You optimize a video sales funnel by treating the video as a step you can measure, not a black box. Pull the retention curve and the percentage of viewers who reach your offer, fix the single biggest leak, tighten the hand-off from the video to the next action, and re-test before you touch anything else. Most funnels leak hardest at the video, so once that step holds, you move on to the next part of the funnel with confidence instead of guessing.`,
+  sections: [
+    {
+      h2: `Start with the video step, because that is where most funnels leak`,
+      html: `<p>A video sales funnel has several stages — traffic arrives, the video plays, the offer appears, and the next action happens (a checkout, a booked call, a sign-up). When the funnel underperforms, the instinct is to blame the page or the traffic. But the video sits in the middle, carries the entire argument, and is the one step that usually goes unmeasured. That makes it the most common place for a funnel to quietly leak.</p>
+<p>VidaPulse measures the video step specifically: how far people watch, what share reach the offer, and how many click through. It is not a full page-by-page funnel suite, but the video is precisely where most of the loss happens, so measuring it first gives you the highest-leverage fixes before you spend time anywhere else.</p>`,
+    },
+    {
+      h2: `Step 1: measure retention and reach-to-offer`,
+      html: `<p>Before changing anything, establish a baseline so you can tell whether an edit helped or hurt.</p>
+<ol><li><strong>Read the audience-retention curve.</strong> It shows the share of viewers still watching at every second. Flat stretches are healthy; steep cliffs are where you lose people.</li>
+<li><strong>Find the timestamp where your offer or CTA appears,</strong> and read the percentage of viewers who reach that point. That single number tells you how many people even hear the pitch.</li>
+<li><strong>Note the steepest drops</strong> and rank them by how much damage they do. These are your targets, in order.</li></ol>
+<p>Reach-to-offer is the metric that connects the video to the rest of the funnel. If only a small share survive to the offer, no downstream change will rescue the funnel — the leak is upstream, in the video.</p>`,
+    },
+    {
+      h2: `Step 2: fix the single biggest leak`,
+      html: `<p>Resist the urge to rework the whole video. Take the steepest drop on the curve and treat the seconds right before it as the suspect. Read what is happening there — a slow open, a long backstory, a tangent, a stretch that asks for patience without giving a reason to stay — and rewrite only that segment.</p>
+<p>A second-by-second engagement heatmap (a Pro feature) helps you pin the exact line where viewers bail, so the edit lands on the real culprit instead of a guess. Change one section, leave the rest alone, and you will be able to attribute the result.</p>
+<p class="kb-example">Hypothetical: if the curve shows a sharp cliff between roughly 0:05 and 0:20, the open is your biggest leak. Fixing it first matters most, because every later improvement only helps the viewers who survive the opening.</p>`,
+    },
+    {
+      h2: `Step 3: tighten the CTA hand-off`,
+      html: `<p>A funnel can have strong retention and still stall at the moment of transition — when the video asks the viewer to do the next thing. This hand-off is where the video step connects to the checkout, the booking page, or the sign-up form, and it is easy to lose people right there.</p>
+<ul class="kb-list"><li><strong>Make the next step explicit and singular.</strong> One action, stated plainly, with no competing choices.</li>
+<li><strong>Restate what they get</strong> at the moment of the ask, so the value is fresh when the decision happens.</li>
+<li><strong>Use conversion or CTA tracking</strong> to see how many viewers who reach the CTA actually click through. Reaching the offer and acting on it are two different numbers, and you need both.</li></ul>
+<p>If a healthy share reach the offer but few click, the leak is the hand-off itself, not the run-up. That is a different fix from a retention problem, and the data tells you which one you have.</p>`,
+    },
+    {
+      h2: `Step 4: re-test, then look at the next step`,
+      html: `<p>Optimization is a loop, not a single pass. After each change, run real traffic through the new version until the curve stabilizes, then compare it against the baseline you saved.</p>
+<ol><li><strong>Did the targeted drop get shallower?</strong> If yes, more viewers now survive that point.</li>
+<li><strong>Did reach-to-offer rise?</strong> This is the number that feeds the rest of the funnel.</li>
+<li><strong>Did CTA clicks hold or improve?</strong> Watch time without action is not a win.</li></ol>
+<p>If the change helped, keep it and move to the next biggest drop. If it hurt, revert and try a different fix for the same spot. Only once the video step holds — strong retention, a healthy share reaching the offer, and clicks at the CTA — does it make sense to look downstream at the next step of the funnel. Fixing the page before the video is fixed just hides the real leak.</p>`,
+    },
+  ],
+  solve: `<p>Every step in this playbook depends on measuring the video, and that is exactly what VidaPulse does without re-hosting anything. You paste your existing video URL from wherever it already lives (YouTube, Amazon S3, Google Drive, Dropbox, OneDrive, Azure Blob, Loom, a Zoom recording, Vimeo, or a direct MP4/HLS link), VidaPulse wraps it in an analytics player, and you embed it with one line of script or a script-free iframe on any page — WordPress, Webflow, ClickFunnels, or custom HTML. Your video keeps its URL and there is no coding involved.</p>
+<p>From there the loop is measured instead of guessed:</p>
+<ul class="kb-list"><li>The <strong>audience-retention curve</strong> sets your baseline and ranks the steepest drops (Steps 1 and 2).</li>
+<li>The <strong>percentage of viewers who reach any point</strong> gives you reach-to-offer — the number that connects the video to the rest of the funnel (Steps 1 and 4).</li>
+<li>The <strong>second-by-second engagement heatmap</strong> (Pro) pins the exact line behind a drop (Step 2).</li>
+<li><strong>Conversion and CTA tracking</strong> (Pro) confirms whether the hand-off actually produces clicks (Steps 3 and 4).</li></ul>
+<p>Because the analytics live on the same embedded video, you can republish an edit and compare the new curve directly against the old one. No personal data is collected. To start, create a free VidaPulse account, wrap your funnel's video, and find your funnel's video leak before you change anything else.</p>`,
+  faq: [
+    {
+      q: `Does VidaPulse track my whole funnel, page by page?`,
+      a: `No, and it does not claim to. VidaPulse measures the video step — retention, the percentage who reach your offer, and CTA clicks. It is not a full multi-page funnel suite. But the video is where most funnels leak, so measuring it first usually surfaces the biggest fix before you look anywhere else.`,
+    },
+    {
+      q: `Where should I start if I do not know which step is the problem?`,
+      a: `Start at the video. Read the retention curve to find the steepest drop and check what share of viewers reach your offer. If a small share survive to the offer, the leak is in the video and no downstream change will fix it. Once the video step holds, look at the next part of the funnel.`,
+    },
+    {
+      q: `How do I know an edit actually improved the funnel?`,
+      a: `Compare against a saved baseline. After one change, run real traffic until the curve stabilizes, then check whether the targeted drop got shallower, reach-to-offer rose, and CTA clicks held or improved. Change one thing per round so you can attribute the result instead of guessing which edit moved the numbers.`,
+    },
+  ],
+};

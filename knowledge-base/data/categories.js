@@ -41,6 +41,28 @@ module.exports = [
       'Video analytics tells you not just how many people pressed play, but how far they watched, where they lost interest, and which moments held attention. This section explains the core metrics and how to read them so they guide real decisions.',
   },
   {
+    slug: 'revenue-analytics',
+    title: 'Revenue analytics',
+    eyebrow: 'Revenue leak detection',
+    metaTitle: 'Revenue Leak Detection — What Video Drop-off Costs You | VidaPulse',
+    metaDescription:
+      'Find and quantify the revenue you lose to video drop-off: calculate what VSL drop-offs cost, spot revenue leaks in your funnel, and turn retention into sales.',
+    blurb: 'Find and quantify the revenue your video drop-off is costing you.',
+    intro:
+      'Every viewer who leaves before your offer is revenue you already paid to acquire and then lost in silence. This section shows how to find the revenue leaks in your video funnel, put a real number on what drop-off costs you, and turn retention into booked calls and sales.',
+  },
+  {
+    slug: 'funnel-analytics',
+    title: 'Funnel analytics',
+    eyebrow: 'Funnel optimization',
+    metaTitle: 'Funnel Analytics — Find Video Funnel Drop-offs & Fix Them | VidaPulse',
+    metaDescription:
+      'Analyze your video sales funnel end to end: find the biggest drop-off, measure engagement at each step, and fix the leaks that stop leads from booking or buying.',
+    blurb: 'Analyze your video sales funnel and find the biggest leak.',
+    intro:
+      'A funnel is only as strong as its weakest step. These guides show how to analyze a video sales funnel end to end — where attention drops, why leads stall before booking or checkout, and how to fix the one step that is costing you the most.',
+  },
+  {
     slug: 'guides',
     title: 'Guides',
     eyebrow: 'Step-by-step guides',

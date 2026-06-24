@@ -110,4 +110,32 @@ module.exports = [
   { q: 'Does VidaPulse work with Wistia?',                    cat: 'questions', group: 'Platforms & setup' },
   { q: 'Does VidaPulse work with Vidyard?',                   cat: 'questions', group: 'Platforms & setup' },
   { q: 'Can I track videos on landing pages?',               cat: 'questions', group: 'Platforms & setup' },
+
+  // ── Revenue analytics (high buying intent) ──────────────────────
+  { q: 'What is revenue leak detection?',                       cat: 'revenue-analytics', slug: 'what-is-revenue-leak-detection' },
+  { q: 'How much revenue am I losing from video drop-offs?',    cat: 'revenue-analytics', slug: 'how-much-revenue-am-i-losing-from-video-drop-offs' },
+  { q: 'How do I find revenue leaks in my funnel?',             cat: 'revenue-analytics', slug: 'how-do-i-find-revenue-leaks-in-my-funnel' },
+  { q: 'How do I calculate the cost of video drop-off?',        cat: 'revenue-analytics', slug: 'how-do-i-calculate-the-cost-of-video-drop-off' },
+  { q: 'Can video retention predict sales?',                    cat: 'revenue-analytics', slug: 'can-video-retention-predict-sales' },
+  { q: 'Does watch time correlate with revenue?',               cat: 'revenue-analytics', slug: 'does-watch-time-correlate-with-revenue' },
+  { q: 'How do I increase VSL revenue?',                        cat: 'revenue-analytics', slug: 'how-do-i-increase-vsl-revenue' },
+  { q: 'Why are my leads not buying?',                          cat: 'revenue-analytics', slug: 'why-are-my-leads-not-buying' },
+  { q: 'Which part of my VSL loses the most revenue?',          cat: 'revenue-analytics', slug: 'which-part-of-my-vsl-loses-the-most-revenue' },
+  { q: 'How do I turn video views into revenue?',               cat: 'revenue-analytics', slug: 'how-do-i-turn-video-views-into-revenue' },
+  { q: 'What is video marketing ROI?',                          cat: 'revenue-analytics', slug: 'what-is-video-marketing-roi' },
+  { q: 'How do I plug revenue leaks in a VSL?',                 cat: 'revenue-analytics', slug: 'how-do-i-plug-revenue-leaks-in-a-vsl' },
+
+  // ── Funnel analytics (high buying intent) ───────────────────────
+  { q: 'What is funnel analytics?',                             cat: 'funnel-analytics', slug: 'what-is-funnel-analytics' },
+  { q: 'How do I analyze a sales funnel?',                      cat: 'funnel-analytics', slug: 'how-do-i-analyze-a-sales-funnel' },
+  { q: 'How do I find funnel drop-offs?',                       cat: 'funnel-analytics', slug: 'how-do-i-find-funnel-drop-offs' },
+  { q: 'What is a funnel drop-off rate?',                       cat: 'funnel-analytics', slug: 'what-is-a-funnel-drop-off-rate' },
+  { q: 'How do I measure funnel engagement?',                   cat: 'funnel-analytics', slug: 'how-do-i-measure-funnel-engagement' },
+  { q: 'What is video funnel optimization?',                    cat: 'funnel-analytics', slug: 'what-is-video-funnel-optimization' },
+  { q: 'How do I optimize a video sales funnel?',              cat: 'funnel-analytics', slug: 'how-do-i-optimize-a-video-sales-funnel' },
+  { q: 'Why do people leave before checkout?',                  cat: 'funnel-analytics', slug: 'why-do-people-leave-before-checkout' },
+  { q: 'How do I improve my call booking rate?',               cat: 'funnel-analytics', slug: 'how-do-i-improve-call-booking-rate' },
+  { q: 'How do I track a video sales funnel?',                 cat: 'funnel-analytics', slug: 'how-do-i-track-a-video-sales-funnel' },
+  { q: 'What is landing page video analytics?',                 cat: 'funnel-analytics', slug: 'landing-page-video-analytics' },
+  { q: 'What is product video launch analytics?',              cat: 'funnel-analytics', slug: 'product-video-launch-analytics' },
 ];
