@@ -91,6 +91,19 @@ resolved.forEach((r) => byCat.get(r.cat).push(r));
 
 const resBySlug       = new Map(resolved.map((r) => [r.slug, r]));
 const publishedOrdered = resolved.filter((r) => r.status === 'published');
+const catSlugs        = new Set(categories.map((c) => c.slug));
+
+// Normalize in-body links: a single-segment /video-analytics-guide/<articleSlug>
+// (a common authoring mistake — missing the category) is rewritten to the
+// article's real nested path. Category links and correct nested links are left
+// untouched. Keeps internal links valid regardless of how an article was drafted.
+function fixInternalLinks(html) {
+  return String(html).replace(/href="\/video-analytics-guide\/([a-z0-9-]+)"/g, (m, seg) => {
+    if (catSlugs.has(seg)) return m;
+    const t = resBySlug.get(seg);
+    return t && t.status === 'published' ? `href="${t.path}"` : m;
+  });
+}
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -256,7 +269,7 @@ function buildArticle(r) {
   const dfn = diagramFor(r);
   const diagram = dfn ? '\n' + dfn() : '';
   const sections = (art.sections || [])
-    .map((s) => `      <h2>${T.escapeHtml(s.h2)}</h2>\n${s.html}`).join('\n');
+    .map((s) => `      <h2>${T.escapeHtml(s.h2)}</h2>\n${fixInternalLinks(s.html)}`).join('\n');
 
   const faqHtml = (art.faq && art.faq.length)
     ? `\n      <h2>People also ask</h2>\n` + art.faq
@@ -271,7 +284,10 @@ function buildArticle(r) {
   if (related.length < 4) {
     const sibs = byCat.get(r.cat).filter(
       (x) => x.status === 'published' && x.slug !== r.slug && !related.some((y) => y.slug === x.slug));
-    related = related.concat(sibs);
+    // Prefer siblings in the same sub-group (e.g. same industry) before the rest.
+    const sameGroup = sibs.filter((x) => x.group && r.group && x.group === r.group);
+    const others    = sibs.filter((x) => !(x.group && r.group && x.group === r.group));
+    related = related.concat(sameGroup, others);
   }
   related = related.slice(0, 4);
   const relatedHtml = related.length
@@ -288,7 +304,7 @@ function buildArticle(r) {
 ${sections}
 
       <h2>How VidaPulse solves this</h2>
-${art.solve}
+${fixInternalLinks(art.solve)}
 ${faqHtml}
 
 ${ctaBlock(art.ctaLine)}

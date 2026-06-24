@@ -1,0 +1,38 @@
+module.exports = {
+  metaTitle: `How do coaches turn video views into booked calls? | VidaPulse`,
+  metaDescription: `Coaches turn views into booked calls by getting more prospects to the offer, fixing the run-up to the CTA, and measuring reach-to-offer plus CTA clicks.`,
+  answer: `Coaches turn video views into booked calls by closing the gap between watching and the booking ask. A view is not a booking; the booking happens only when a prospect reaches your call to action, is still convinced, and clicks. So you measure two things that page metrics miss: what percentage of viewers reach the offer, and how many of those click the CTA. Raise the first by fixing the run-up to the ask, and raise the second by making the ask the obvious next step.`,
+  sections: [
+    {
+      h2: `A view is not a booking`,
+      html: `<p>It is easy to celebrate views and then wonder why the calendar stays empty. A view only means someone pressed play. Between that play and a booked call sit several seconds of persuasion, a moment where you ask for the call, and a click. Any of those can fail while the view count looks fine.</p><p>The bridge from watching to booking has two measurable halves. The first is getting prospects to the ask at all, which is a retention question. The second is converting the prospects who hear the ask into clicks, which is a CTA question. Most coaches assume their problem is the second when it is almost always the first. Measure both before you decide what to change.</p>`,
+    },
+    {
+      h2: `Measure reach-to-offer first`,
+      html: `<p>The most important number for booking is the percentage of viewers still watching when your booking ask appears. Call it reach-to-offer. The ask can only convert the people who are present to hear it, so if reach-to-offer is low, the ask was never the bottleneck.</p><p class="kb-example">Hypothetical illustration, not real data: suppose two hundred prospects play your VSL and the booking ask lands near the end. If only thirty are still watching when it appears, raising reach-to-offer from thirty to sixty would roughly double the audience for your ask without changing a word of the ask. That is usually the single biggest lever a coach has, and it lives in the run-up, not the CTA.</p><p>You raise reach-to-offer by reading the retention curve, finding the steepest drop before the ask, and tightening that one section so more prospects survive to hear the offer.</p>`,
+    },
+    {
+      h2: `Fix the run-up to the call CTA`,
+      html: `<p>The seconds right before your ask do the real work. They are where you make booking a call feel like the obvious, low-risk next step rather than a sudden pivot. If retention drops the moment the ask begins, the transition was too abrupt or the value was not yet clear.</p><ul class="kb-list"><li><strong>Earn the ask before you make it.</strong> The segment before the CTA should leave the prospect thinking a call is worth their time. Build that case explicitly instead of jumping straight to "book now."</li><li><strong>Place the ask where prospects still are.</strong> If most viewers leave before the CTA, consider introducing the booking opportunity earlier, so convinced prospects can act when they are ready.</li><li><strong>Make the transition smooth.</strong> A drop exactly at the ask often means the pivot felt jarring. Lead into it so it reads as a natural next step.</li></ul>`,
+    },
+    {
+      h2: `Then measure CTA clicks`,
+      html: `<p>Once prospects are reaching the ask, the second half of the bridge is whether they click. Conversion and CTA tracking tells you how many of the viewers who heard the offer actually moved to the booking step. This is the number that finally separates a persuasion problem from a booking-step problem.</p><p>If many reach the ask but few click, the ask itself or the booking experience needs work: the wording, the clarity of the next step, or the friction of the calendar. If few reach the ask in the first place, no CTA tweak will help, and you go back to the run-up. Reading reach-to-offer and CTA clicks together tells you which half of the bridge to rebuild, so you stop fixing the wrong end.</p>`,
+    },
+  ],
+  solve: `<p>VidaPulse lets you measure the whole bridge from view to booked call on the video you already use, with no re-hosting. You paste your existing video URL from wherever it lives (YouTube, Amazon S3, Google Drive, Dropbox, OneDrive, Azure Blob, Loom, a Zoom recording, Vimeo, or a direct MP4 or HLS link), VidaPulse wraps it in an analytics player, and you embed one line of script or a script-free iframe on your page.</p><p>Then you work both halves of the bridge:</p><ul class="kb-list"><li>Read the <strong>audience-retention curve</strong> and <strong>percentage reaching any point</strong> to measure reach-to-offer.</li><li>Use the <strong>second-by-second engagement heatmap</strong> (Pro) to tie a drop in the run-up to a specific line.</li><li>Turn on <strong>conversion and CTA tracking</strong> to see how many prospects who reach the ask click to book.</li><li>Check <strong>average watch time</strong> and <strong>play rate</strong> to separate attention from persuasion.</li><li>Filter by <strong>UTM and source attribution</strong> to see which sources send prospects who watch deep and book.</li></ul><p>The Free plan covers one video forever with no card; Starter (ten dollars a month) adds ten videos; Pro (nineteen dollars a month) unlocks unlimited videos, the second-level heatmap, viewer-level history, segmentation, and conversion tracking. No PII is collected. Create a free VidaPulse account and see where your VSL loses clients before the booking ask.</p>`,
+  faq: [
+    {
+      q: `Why do I get views but no booked calls?`,
+      a: `Because a view is only a play, not a booking. The gap is usually that few viewers reach your booking ask, so it is heard by almost no one. Measure reach-to-offer, the percentage still watching when the ask appears, and CTA clicks; most coaches find the loss is in the run-up to the ask, not the ask itself.`,
+    },
+    {
+      q: `Should I move my booking CTA earlier in the VSL?`,
+      a: `Possibly, if your retention curve shows most viewers leave before the current ask. Placing the booking opportunity where prospects still are lets convinced viewers act when they are ready. Read the curve first; if reach-to-offer is low, an earlier ask can lift bookings without changing the offer.`,
+    },
+    {
+      q: `How do I know if it is my video or my booking page?`,
+      a: `Read both numbers. If few prospects reach the ask, the video is the leak and the run-up needs work. If many reach the ask but few click through, the ask wording or the booking step is the break. CTA and conversion tracking shows which half of the bridge is failing.`,
+    },
+  ],
+};

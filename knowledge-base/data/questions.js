@@ -138,4 +138,36 @@ module.exports = [
   { q: 'How do I track a video sales funnel?',                 cat: 'funnel-analytics', slug: 'how-do-i-track-a-video-sales-funnel' },
   { q: 'What is landing page video analytics?',                 cat: 'funnel-analytics', slug: 'landing-page-video-analytics' },
   { q: 'What is product video launch analytics?',              cat: 'funnel-analytics', slug: 'product-video-launch-analytics' },
+
+  // ── Industries (industry-specific use, high intent) ─────────────
+  // Coaches
+  { q: 'Video analytics for coaches',                          cat: 'industries', slug: 'for-coaches', group: 'For coaches' },
+  { q: 'How do coaches find where their VSL loses clients?',   cat: 'industries', slug: 'how-do-coaches-find-where-vsls-lose-clients', group: 'For coaches' },
+  { q: 'How do coaches turn video views into booked calls?',   cat: 'industries', slug: 'how-do-coaches-turn-views-into-booked-calls', group: 'For coaches' },
+  { q: 'What retention rate should a coaching VSL aim for?',    cat: 'industries', slug: 'what-retention-rate-should-a-coaching-vsl-aim-for', group: 'For coaches' },
+  { q: 'How do coaches test changes to their VSL?',            cat: 'industries', slug: 'how-do-coaches-test-vsl-changes', group: 'For coaches' },
+  // Consultants
+  { q: 'Video analytics for consultants',                      cat: 'industries', slug: 'for-consultants', group: 'For consultants' },
+  { q: 'How do consultants track sales video performance?',    cat: 'industries', slug: 'how-do-consultants-track-sales-video-performance', group: 'For consultants' },
+  { q: 'How do consultants get more discovery calls from video?', cat: 'industries', slug: 'how-do-consultants-get-more-discovery-calls', group: 'For consultants' },
+  { q: 'Why do consulting prospects leave the VSL early?',      cat: 'industries', slug: 'why-do-consulting-prospects-leave-early', group: 'For consultants' },
+  { q: 'How do consultants prove video ROI?',                  cat: 'industries', slug: 'how-do-consultants-prove-video-roi', group: 'For consultants' },
+  // Agencies
+  { q: 'Video analytics for agencies',                         cat: 'industries', slug: 'for-agencies', group: 'For agencies' },
+  { q: 'How do agencies report video performance to clients?', cat: 'industries', slug: 'how-do-agencies-report-video-performance-to-clients', group: 'For agencies' },
+  { q: 'How do agencies track client VSLs at scale?',          cat: 'industries', slug: 'how-do-agencies-track-client-vsls-at-scale', group: 'For agencies' },
+  { q: 'How do agencies find drop-offs in client videos?',     cat: 'industries', slug: 'how-do-agencies-find-drop-offs-in-client-videos', group: 'For agencies' },
+  { q: 'How do agencies prove video results to clients?',      cat: 'industries', slug: 'how-do-agencies-prove-video-results-to-clients', group: 'For agencies' },
+  // SaaS
+  { q: 'Video analytics for SaaS',                             cat: 'industries', slug: 'for-saas', group: 'For SaaS' },
+  { q: 'How do SaaS teams track demo video engagement?',       cat: 'industries', slug: 'how-do-saas-teams-track-demo-video-engagement', group: 'For SaaS' },
+  { q: 'How do SaaS teams find drop-offs in product videos?',  cat: 'industries', slug: 'how-do-saas-teams-find-drop-offs-in-product-videos', group: 'For SaaS' },
+  { q: 'How does video retention affect SaaS sign-ups?',       cat: 'industries', slug: 'how-does-video-retention-affect-saas-signups', group: 'For SaaS' },
+  { q: 'How do SaaS teams measure landing page video engagement?', cat: 'industries', slug: 'how-do-saas-teams-measure-landing-page-video-engagement', group: 'For SaaS' },
+  // B2B sales
+  { q: 'Video analytics for B2B sales teams',                  cat: 'industries', slug: 'for-b2b-sales', group: 'For B2B sales' },
+  { q: 'How do B2B teams track sales video engagement?',       cat: 'industries', slug: 'how-do-b2b-teams-track-sales-video-engagement', group: 'For B2B sales' },
+  { q: 'How do B2B reps know if prospects watch their demos?', cat: 'industries', slug: 'how-do-b2b-reps-know-if-prospects-watch-demos', group: 'For B2B sales' },
+  { q: 'How does video engagement affect B2B pipeline?',       cat: 'industries', slug: 'how-does-video-engagement-affect-b2b-pipeline', group: 'For B2B sales' },
+  { q: 'How do B2B teams find drop-offs in demo videos?',      cat: 'industries', slug: 'how-do-b2b-teams-find-drop-offs-in-demo-videos', group: 'For B2B sales' },
 ];

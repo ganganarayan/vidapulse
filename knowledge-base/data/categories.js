@@ -63,6 +63,17 @@ module.exports = [
       'A funnel is only as strong as its weakest step. These guides show how to analyze a video sales funnel end to end — where attention drops, why leads stall before booking or checkout, and how to fix the one step that is costing you the most.',
   },
   {
+    slug: 'industries',
+    title: 'Industries',
+    eyebrow: 'By industry',
+    metaTitle: 'Video Analytics by Industry — Coaches, Consultants, Agencies, SaaS, B2B | VidaPulse',
+    metaDescription:
+      'How coaches, consultants, agencies, SaaS teams, and B2B sales use video retention analytics to find drop-offs, book more calls, and convert more leads.',
+    blurb: 'How your industry uses video retention to win more business.',
+    intro:
+      'VidaPulse works the same way for everyone, but the questions differ by business. These guides map video retention analytics to specific industries — coaches, consultants, agencies, SaaS, and B2B sales teams — so you can see exactly how to use it for your own funnel.',
+  },
+  {
     slug: 'guides',
     title: 'Guides',
     eyebrow: 'Step-by-step guides',
