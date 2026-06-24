@@ -85,6 +85,17 @@ module.exports = [
   { q: 'What is the best video analytics software?', cat: 'comparisons', group: 'Alternatives & best-of' },
   { q: 'What tools show viewer retention?', cat: 'comparisons', group: 'Alternatives & best-of' },
   { q: 'Free video analytics tools', cat: 'comparisons', slug: 'free-video-analytics-tools', group: 'Alternatives & best-of' },
+  // Competitive alternatives — page/session tools (honest "for video funnels" framing)
+  { q: 'VidaPulse vs Hotjar for video funnels',       cat: 'comparisons', slug: 'vidapulse-vs-hotjar',       group: 'vs page & session tools' },
+  { q: 'VidaPulse vs Lucky Orange for video funnels', cat: 'comparisons', slug: 'vidapulse-vs-lucky-orange', group: 'vs page & session tools' },
+  { q: 'VidaPulse vs Mouseflow for video funnels',    cat: 'comparisons', slug: 'vidapulse-vs-mouseflow',    group: 'vs page & session tools' },
+  { q: 'VidaPulse vs FullStory for video funnels',    cat: 'comparisons', slug: 'vidapulse-vs-fullstory',    group: 'vs page & session tools' },
+  { q: 'Video analytics vs session replay',           cat: 'comparisons', slug: 'video-analytics-vs-session-replay', group: 'vs page & session tools' },
+  { q: 'Do I need a heatmap tool or video analytics?', cat: 'comparisons', slug: 'do-i-need-a-heatmap-tool-or-video-analytics', group: 'vs page & session tools' },
+  { q: 'Best tools to find video drop-offs',          cat: 'comparisons', slug: 'best-tools-to-find-video-drop-offs', group: 'Alternatives & best-of' },
+  { q: 'Best funnel analytics tools',                 cat: 'comparisons', slug: 'best-funnel-analytics-tools', group: 'Alternatives & best-of' },
+  { q: 'Best video analytics for VSLs',               cat: 'comparisons', slug: 'best-video-analytics-for-vsls', group: 'Alternatives & best-of' },
+  { q: 'Best tools to measure VSL performance',       cat: 'comparisons', slug: 'best-tools-to-measure-vsl-performance', group: 'Alternatives & best-of' },
 
   // ── Questions (direct AI-search answers) ────────────────────────
   // Finding drop-off
