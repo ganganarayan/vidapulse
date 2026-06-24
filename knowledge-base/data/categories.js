@@ -118,6 +118,50 @@ module.exports = [
       'Where VidaPulse fits next to the better-known tools. The short version: most analytics platforms make you re-host your video on them first. VidaPulse measures viewer retention on the video you already have, wherever it lives.',
   },
   {
+    slug: 'pricing',
+    title: 'Pricing & value',
+    eyebrow: 'Is it worth it?',
+    metaTitle: 'Is Video Analytics Worth It? Cost & Value | VidaPulse',
+    metaDescription:
+      'Is video analytics worth paying for? What it costs, free vs paid, when you actually need it, and how to tell if VidaPulse pays for itself on your VSL or product video.',
+    blurb: 'Is video analytics worth it — and what it costs.',
+    intro:
+      'Before paying for anything, it helps to know whether it earns its keep. These pages cover what video analytics costs, free vs paid, when you actually need it, and how to judge whether VidaPulse pays for itself on your videos.',
+  },
+  {
+    slug: 'switching',
+    title: 'Switching & alternatives',
+    eyebrow: 'Switching tools',
+    metaTitle: 'Switching Video Analytics Tools — From Wistia, Vidyard & More | VidaPulse',
+    metaDescription:
+      'Thinking of switching video analytics tools? When Wistia or Vidyard is too expensive, how to move, and how to get retention heatmaps without re-hosting your videos.',
+    blurb: 'Outgrowing Wistia or Vidyard? How and when to switch.',
+    intro:
+      'If your current tool is too expensive or makes you re-host everything, you have options. These guides cover when to switch, how to move to VidaPulse without migrating your videos, and how to get the retention data you need for less.',
+  },
+  {
+    slug: 'video-formats',
+    title: 'Video formats',
+    eyebrow: 'By video type',
+    metaTitle: 'Analytics by Video Type — VSL, Demo, Explainer, Sales & More | VidaPulse',
+    metaDescription:
+      'How to measure and improve each type of marketing video: VSLs, demos, explainers, sales videos, product videos, ad landing-page videos, and testimonials.',
+    blurb: 'Analytics tailored to each type of marketing video.',
+    intro:
+      'Different videos do different jobs, so they need different things measured. These guides map retention analytics to each format — VSLs, demos, explainers, sales, product, ad and testimonial videos — and what good looks like for each.',
+  },
+  {
+    slug: 'benchmarks',
+    title: 'Metrics & benchmarks',
+    eyebrow: 'What is good?',
+    metaTitle: 'Video Metrics & Benchmarks — Good Play Rate, Watch Time & More | VidaPulse',
+    metaDescription:
+      'What counts as a good play rate, completion rate, average watch time, drop-off rate, and VSL conversion rate — and how to benchmark your own video performance.',
+    blurb: 'What a "good" number actually looks like.',
+    intro:
+      'Everyone wants to know if their numbers are good. The honest answer is that it depends, but there are useful ranges and, more importantly, a way to benchmark against your own baseline. These pages cover the key video metrics and how to read them.',
+  },
+  {
     slug: 'questions',
     title: 'Questions',
     eyebrow: 'Quick answers',

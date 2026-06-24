@@ -1,0 +1,57 @@
+'use strict';
+
+module.exports = {
+  metaTitle: `What is testimonial video analytics? | VidaPulse`,
+  metaDescription: `Testimonial video analytics measures whether people actually watch your social-proof videos and where they drop — so you know if your proof is landing.`,
+  answer: `Testimonial video analytics is the measurement of a testimonial or social-proof video as evidence: whether people actually play it, how far they watch, and where they drop off. Social proof only works if it is seen, so the numbers that matter are play rate, retention across the testimonial, and the points where viewers leave before the proof lands. Good testimonial video analytics tells you whether your testimonials are doing their job — convincing viewers — or sitting unwatched on the page.`,
+  sections: [
+    {
+      h2: `Why a testimonial needs its own analytics`,
+      html: `<p>A testimonial video has one job: make a skeptical viewer believe the result is real. But testimonials are easy to place and easy to ignore — they sit below the fold, autoplay muted, or run long, and a glowing story does nothing if no one presses play or if everyone leaves before the key line. The proof has to be watched to count.</p>
+<p>A view count cannot tell you whether the proof landed. It confirms a play, not whether the viewer reached the moment that actually persuades. Testimonial video analytics measures the inside of the clip, so you can see whether your social proof is working or just present.</p>`,
+    },
+    {
+      h2: `Do people watch them at all`,
+      html: `<p>The first question is engagement, and two numbers answer it:</p>
+<ul class="kb-list"><li><strong>Play rate</strong> — the share of visitors who see the testimonial and actually start it. A low play rate means the proof is being skipped before it begins, often a placement or thumbnail problem.</li>
+<li><strong>Average watch time and unique viewers</strong> — how much of the testimonial the typical viewer consumes, and how many distinct people give it a chance.</li></ul>
+<p>If play rate is low, no amount of editing the testimonial itself will help — the fix is getting it seen. Testimonial video analytics tells you whether your problem is that people are not watching, or that they are watching and leaving.</p>`,
+    },
+    {
+      h2: `Where they drop`,
+      html: `<p>Once people press play, the <strong>audience-retention curve</strong> shows the share still watching at every second, so you can see exactly where a testimonial loses them.</p>
+<ol><li><strong>Read the opening.</strong> A steep early drop usually means the testimonial buries the result behind throat-clearing instead of leading with the outcome.</li>
+<li><strong>Find the steepest mid-clip drop.</strong> Testimonials often sag when they wander into backstory before the specific, believable result.</li>
+<li><strong>Check how far the curve reaches your strongest line.</strong> If the most persuasive moment sits late and few viewers get there, the proof is technically present but rarely seen.</li></ol>
+<p class="kb-example">Hypothetical: a testimonial that holds attention for the first few seconds and then slides steeply is probably leading with setup instead of the result. Re-cutting it to open on the outcome may lift how many viewers reach the line that actually convinces.</p>
+<p>With Pro, the second-by-second engagement heatmap pins the exact moment a testimonial loses people, down to the sentence.</p>`,
+    },
+    {
+      h2: `From the curve to proof that lands`,
+      html: `<p>Once you can see play rate and where viewers drop, improving a testimonial is a loop: lift play rate first if it is low, then re-cut the steepest drop so more viewers reach the persuasive line, then re-measure against your baseline.</p>
+<p>VidaPulse measures the video step specifically — it is not a full page analytics suite — but on a page that leans on social proof, whether the testimonial is watched is the question that matters, and that is exactly what the player measures. With Pro, viewer-level history shows how individual sessions move through the clip.</p>`,
+    },
+  ],
+  solve: `<p>VidaPulse gives you testimonial video analytics without re-hosting and without code. You paste your testimonial's existing URL (YouTube, Amazon S3, Google Drive, Dropbox, OneDrive, Azure Blob, Loom, a Zoom recording, Vimeo, or a direct MP4/HLS), VidaPulse wraps it in an analytics player, and you embed it with one line of script or a script-free iframe on any page — WordPress, Webflow, ClickFunnels, or custom HTML. The video stays where it lives and keeps its URL.</p>
+<p>On your testimonial videos you can read:</p>
+<ul class="kb-list"><li><strong>Play rate and unique viewers</strong> — whether people actually watch the proof.</li>
+<li>The <strong>audience-retention curve and average watch time</strong> — how far they get and where they drop.</li>
+<li>The <strong>percentage of viewers who reach any point</strong> — how many reach your most persuasive line.</li>
+<li>The <strong>second-by-second heatmap and viewer-level history</strong> (Pro) — the exact moment a testimonial loses people.</li>
+<li><strong>UTM and source attribution</strong> — how each traffic source engages with your proof.</li></ul>
+<p>No personal data is collected, and you can restrict the player to your own domains. Start free and measure your testimonial video: wrap it, read the play rate and curve, and find out whether your social proof is actually landing.</p>`,
+  faq: [
+    {
+      q: `What does testimonial video analytics measure?`,
+      a: `It measures whether your social proof is seen and believed: play rate and unique viewers (do people watch it), the retention curve and average watch time (how far they get), and the percentage who reach your most persuasive line — plus, with Pro, a second-by-second heatmap and viewer-level history. Together these show whether the testimonial is working or being skipped.`,
+    },
+    {
+      q: `How do I know if my testimonials are being skipped?`,
+      a: `Look at play rate first. If a small share of visitors who see the testimonial actually start it, the proof is being skipped before it begins — usually a placement, length, or thumbnail problem, not a content one. If play rate is healthy but the retention curve falls early, the issue is inside the clip instead. The two numbers point to different fixes.`,
+    },
+    {
+      q: `Do I have to move my testimonial videos to track them?`,
+      a: `No. You paste each testimonial's existing URL — from YouTube, S3, Drive, Dropbox, OneDrive, Azure Blob, Loom, Zoom, Vimeo, or a direct MP4/HLS link — and VidaPulse wraps it in an analytics player you embed with one line of script or a script-free iframe. Nothing is re-hosted and the videos keep their URLs.`,
+    },
+  ],
+};

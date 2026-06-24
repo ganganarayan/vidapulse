@@ -245,4 +245,43 @@ module.exports = [
   { q: 'How do B2B teams know which demo resonates?',         cat: 'industries', slug: 'how-do-b2b-teams-know-which-demo-resonates', group: 'For B2B sales' },
   { q: 'How do B2B teams use video in outbound?',            cat: 'industries', slug: 'how-do-b2b-teams-use-video-in-outbound', group: 'For B2B sales' },
   { q: 'How do B2B teams prove video ROI to leadership?',     cat: 'industries', slug: 'how-do-b2b-teams-prove-video-roi-to-leadership', group: 'For B2B sales' },
+
+  // ── Pricing & value (bottom-funnel decision intent) ────────────
+  { q: 'Is video analytics worth it?',                cat: 'pricing', slug: 'is-video-analytics-worth-it' },
+  { q: 'How much does video analytics cost?',          cat: 'pricing', slug: 'how-much-does-video-analytics-cost' },
+  { q: 'Free vs paid video analytics',                 cat: 'pricing', slug: 'free-vs-paid-video-analytics' },
+  { q: 'Do I need video analytics?',                   cat: 'pricing', slug: 'do-i-need-video-analytics' },
+  { q: 'Is VidaPulse worth it?',                       cat: 'pricing', slug: 'is-vidapulse-worth-it' },
+  { q: 'What does VidaPulse cost?',                    cat: 'pricing', slug: 'what-does-vidapulse-cost' },
+  { q: 'When is video analytics worth it?',            cat: 'pricing', slug: 'when-is-video-analytics-worth-it' },
+  { q: 'Is cheap video analytics good enough?',        cat: 'pricing', slug: 'is-cheap-video-analytics-good-enough' },
+
+  // ── Switching & alternatives (competitor-conquest intent) ──────
+  { q: 'Is Wistia too expensive?',                     cat: 'switching', slug: 'is-wistia-too-expensive' },
+  { q: 'Is Vidyard too expensive?',                    cat: 'switching', slug: 'is-vidyard-too-expensive' },
+  { q: 'How to switch from Wistia to VidaPulse',       cat: 'switching', slug: 'how-to-switch-from-wistia-to-vidapulse' },
+  { q: 'How to switch from Vidyard to VidaPulse',      cat: 'switching', slug: 'how-to-switch-from-vidyard-to-vidapulse' },
+  { q: 'Do I have to re-host videos to switch analytics?', cat: 'switching', slug: 'do-i-have-to-re-host-videos-to-switch-analytics' },
+  { q: 'How to get video heatmaps without Wistia',     cat: 'switching', slug: 'how-to-get-video-heatmaps-without-wistia' },
+  { q: 'A cheaper way to track video retention',       cat: 'switching', slug: 'cheaper-way-to-track-video-retention' },
+
+  // ── Video formats (format-specific intent) ─────────────────────
+  { q: 'What is VSL analytics?',                       cat: 'video-formats', slug: 'vsl-analytics' },
+  { q: 'What is demo video analytics?',                cat: 'video-formats', slug: 'demo-video-analytics' },
+  { q: 'What is explainer video analytics?',           cat: 'video-formats', slug: 'explainer-video-analytics' },
+  { q: 'What is sales video analytics?',               cat: 'video-formats', slug: 'sales-video-analytics' },
+  { q: 'What is product video analytics?',             cat: 'video-formats', slug: 'product-video-analytics' },
+  { q: 'What is ad landing-page video analytics?',     cat: 'video-formats', slug: 'ad-landing-page-video-analytics' },
+  { q: 'What is testimonial video analytics?',         cat: 'video-formats', slug: 'testimonial-video-analytics' },
+  { q: 'What is pitch video analytics?',               cat: 'video-formats', slug: 'pitch-video-analytics' },
+
+  // ── Metrics & benchmarks (AI-citation intent) ──────────────────
+  { q: 'What is a good play rate?',                    cat: 'benchmarks', slug: 'what-is-a-good-play-rate' },
+  { q: 'What is a good video completion rate?',        cat: 'benchmarks', slug: 'what-is-a-good-video-completion-rate' },
+  { q: 'What is a good average watch time?',           cat: 'benchmarks', slug: 'what-is-a-good-average-watch-time' },
+  { q: 'What is a good video drop-off rate?',          cat: 'benchmarks', slug: 'what-is-a-good-video-drop-off-rate' },
+  { q: 'What is a good engagement rate for video?',    cat: 'benchmarks', slug: 'what-is-a-good-engagement-rate-for-video' },
+  { q: 'What percentage of a video do people watch?',  cat: 'benchmarks', slug: 'what-percentage-of-a-video-do-people-watch' },
+  { q: 'How do I benchmark video performance?',        cat: 'benchmarks', slug: 'how-do-i-benchmark-video-performance' },
+  { q: 'What is a good conversion rate for a VSL?',     cat: 'benchmarks', slug: 'what-is-a-good-conversion-rate-for-a-vsl' },
 ];
