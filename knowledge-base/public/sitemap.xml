@@ -85,6 +85,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://app.vidapulse.io/video-analytics-guide/tools</loc>
+    <lastmod>2026-06-24</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions</loc>
     <lastmod>2026-06-24</lastmod>
     <changefreq>weekly</changefreq>
@@ -1340,6 +1346,24 @@
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/benchmarks/what-is-a-good-conversion-rate-for-a-vsl</loc>
+    <lastmod>2026-06-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://app.vidapulse.io/video-analytics-guide/tools/revenue-leak-calculator</loc>
+    <lastmod>2026-06-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://app.vidapulse.io/video-analytics-guide/tools/offer-reach-calculator</loc>
+    <lastmod>2026-06-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://app.vidapulse.io/video-analytics-guide/tools/watch-time-loss-calculator</loc>
     <lastmod>2026-06-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>

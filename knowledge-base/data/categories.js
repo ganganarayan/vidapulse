@@ -162,6 +162,17 @@ module.exports = [
       'Everyone wants to know if their numbers are good. The honest answer is that it depends, but there are useful ranges and, more importantly, a way to benchmark against your own baseline. These pages cover the key video metrics and how to read them.',
   },
   {
+    slug: 'tools',
+    title: 'Free tools',
+    eyebrow: 'Calculators',
+    metaTitle: 'Free Video & VSL Calculators — Revenue Leak, Offer Reach & More | VidaPulse',
+    metaDescription:
+      'Free calculators for video marketers: estimate revenue lost to drop-off, how many viewers reach your offer, and what poor watch time costs you. No signup.',
+    blurb: 'Free calculators — see what video drop-off costs you.',
+    intro:
+      'Quick, free calculators that turn your video numbers into dollars. Enter your figures and see the revenue you are losing to drop-off, how many viewers reach your offer, and what improving retention is worth. Everything runs in your browser — nothing is stored.',
+  },
+  {
     slug: 'questions',
     title: 'Questions',
     eyebrow: 'Quick answers',

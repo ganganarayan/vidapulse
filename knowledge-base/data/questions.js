@@ -284,4 +284,9 @@ module.exports = [
   { q: 'What percentage of a video do people watch?',  cat: 'benchmarks', slug: 'what-percentage-of-a-video-do-people-watch' },
   { q: 'How do I benchmark video performance?',        cat: 'benchmarks', slug: 'how-do-i-benchmark-video-performance' },
   { q: 'What is a good conversion rate for a VSL?',     cat: 'benchmarks', slug: 'what-is-a-good-conversion-rate-for-a-vsl' },
+
+  // ── Free tools (calculators — cite-worthy interactive assets) ──
+  { q: 'Revenue leak calculator',     cat: 'tools', slug: 'revenue-leak-calculator' },
+  { q: 'Offer reach calculator',      cat: 'tools', slug: 'offer-reach-calculator' },
+  { q: 'Watch-time loss calculator',  cat: 'tools', slug: 'watch-time-loss-calculator' },
 ];

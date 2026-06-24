@@ -266,8 +266,18 @@ function buildArticle(r) {
     { name: r.q, path: r.path },
   ];
 
-  const dfn = diagramFor(r);
-  const diagram = dfn ? '\n' + dfn() : '';
+  // Tool pages (calculators): the interactive widget is the hero, its JS is
+  // emitted as a self-hosted asset (CSP-safe), and we add WebApplication LD.
+  let heroBlock = '';
+  let toolBodyScript;
+  if (art.tool) {
+    write(`kb-assets/${art.tool.script}`, art.tool.scriptSource);
+    heroBlock = '\n' + art.tool.html;
+    toolBodyScript = `<script src="/kb-assets/${art.tool.script}" defer></script>`;
+  } else {
+    const dfn = diagramFor(r);
+    heroBlock = dfn ? '\n' + dfn() : '';
+  }
   const sections = (art.sections || [])
     .map((s) => `      <h2>${T.escapeHtml(s.h2)}</h2>\n${fixInternalLinks(s.html)}`).join('\n');
 
@@ -299,7 +309,7 @@ function buildArticle(r) {
   const body = `${T.renderCrumb(crumb)}
       <p class="kb-eyebrow">${T.escapeHtml(cat.title)}</p>
       <h1>${T.escapeHtml(r.q)}</h1>
-      <p class="kb-lead">${T.escapeHtml(art.answer)}</p>${diagram}
+      <p class="kb-lead">${T.escapeHtml(art.answer)}</p>${heroBlock}
 
 ${sections}
 
@@ -341,6 +351,17 @@ ${relatedHtml}`;
     { '@type': 'FAQPage', mainEntity: faqEntities },
     T.breadcrumbLd(crumb),
   ];
+  if (art.tool) {
+    graph.push({
+      '@type': 'WebApplication',
+      name: art.tool.name || r.q,
+      url: T.absUrl(r.path),
+      applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Web',
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      description: art.metaDescription,
+    });
+  }
 
   write(`video-analytics-guide/${cat.slug}/${r.slug}.html`, T.renderPage({
     title: art.metaTitle,
@@ -350,6 +371,7 @@ ${relatedHtml}`;
     body,
     bodyClass: 'kb-article',
     pager,
+    bodyScript: toolBodyScript,
   }));
 }
 
