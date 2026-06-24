@@ -181,4 +181,36 @@ module.exports = [
   { q: 'How do B2B reps know if prospects watch their demos?', cat: 'industries', slug: 'how-do-b2b-reps-know-if-prospects-watch-demos', group: 'For B2B sales' },
   { q: 'How does video engagement affect B2B pipeline?',       cat: 'industries', slug: 'how-does-video-engagement-affect-b2b-pipeline', group: 'For B2B sales' },
   { q: 'How do B2B teams find drop-offs in demo videos?',      cat: 'industries', slug: 'how-do-b2b-teams-find-drop-offs-in-demo-videos', group: 'For B2B sales' },
+
+  // ── Industries — deepening wave (more supporting per industry) ──
+  // Coaches
+  { q: 'What makes a coaching VSL convert?',                   cat: 'industries', slug: 'what-makes-a-coaching-vsl-convert', group: 'For coaches' },
+  { q: 'How long should a coaching VSL be?',                   cat: 'industries', slug: 'how-long-should-a-coaching-vsl-be', group: 'For coaches' },
+  { q: 'How do coaches improve their VSL hook?',              cat: 'industries', slug: 'how-do-coaches-improve-their-vsl-hook', group: 'For coaches' },
+  { q: 'How do coaches track which ads bring buyers?',         cat: 'industries', slug: 'how-do-coaches-track-which-ads-bring-buyers', group: 'For coaches' },
+  { q: 'How do coaches measure VSL ROI?',                      cat: 'industries', slug: 'how-do-coaches-measure-vsl-roi', group: 'For coaches' },
+  // Consultants
+  { q: 'What makes a consulting sales video convert?',         cat: 'industries', slug: 'what-makes-a-consulting-sales-video-convert', group: 'For consultants' },
+  { q: 'How long should a consulting sales video be?',         cat: 'industries', slug: 'how-long-should-a-consulting-sales-video-be', group: 'For consultants' },
+  { q: 'How do consultants qualify leads with video?',         cat: 'industries', slug: 'how-do-consultants-qualify-leads-with-video', group: 'For consultants' },
+  { q: 'How do consultants reduce call no-shows with video?',  cat: 'industries', slug: 'how-do-consultants-reduce-call-no-shows-with-video', group: 'For consultants' },
+  { q: 'How do consultants track which content books calls?',  cat: 'industries', slug: 'how-do-consultants-track-which-content-books-calls', group: 'For consultants' },
+  // Agencies
+  { q: 'How do agencies audit a client VSL?',                  cat: 'industries', slug: 'how-do-agencies-audit-a-client-vsl', group: 'For agencies' },
+  { q: 'How do agencies benchmark client video performance?', cat: 'industries', slug: 'how-do-agencies-benchmark-client-video-performance', group: 'For agencies' },
+  { q: 'How do agencies improve client VSL conversion?',       cat: 'industries', slug: 'how-do-agencies-improve-client-vsl-conversion', group: 'For agencies' },
+  { q: 'How do agencies set up video tracking for clients?',   cat: 'industries', slug: 'how-do-agencies-set-up-video-tracking-for-clients', group: 'For agencies' },
+  { q: 'How do agencies justify video retainers?',             cat: 'industries', slug: 'how-do-agencies-justify-video-retainers', group: 'For agencies' },
+  // SaaS
+  { q: 'What makes a SaaS demo video convert?',                cat: 'industries', slug: 'what-makes-a-saas-demo-video-convert', group: 'For SaaS' },
+  { q: 'How do SaaS teams improve demo completion rate?',      cat: 'industries', slug: 'how-do-saas-teams-improve-demo-completion-rate', group: 'For SaaS' },
+  { q: 'How do SaaS teams A/B test product videos?',           cat: 'industries', slug: 'how-do-saas-teams-ab-test-product-videos', group: 'For SaaS' },
+  { q: 'How do SaaS teams track video on pricing pages?',      cat: 'industries', slug: 'how-do-saas-teams-track-video-on-pricing-pages', group: 'For SaaS' },
+  { q: 'How do SaaS teams tie video engagement to trials?',    cat: 'industries', slug: 'how-do-saas-teams-tie-video-engagement-to-trials', group: 'For SaaS' },
+  // B2B sales
+  { q: 'What makes a B2B demo video effective?',               cat: 'industries', slug: 'what-makes-a-b2b-demo-video-effective', group: 'For B2B sales' },
+  { q: 'How do B2B teams shorten demo videos using data?',     cat: 'industries', slug: 'how-do-b2b-teams-shorten-demo-videos-using-data', group: 'For B2B sales' },
+  { q: 'How do B2B teams use video engagement as a signal?',   cat: 'industries', slug: 'how-do-b2b-teams-use-video-engagement-as-a-signal', group: 'For B2B sales' },
+  { q: 'How do B2B teams improve demo completion?',            cat: 'industries', slug: 'how-do-b2b-teams-improve-demo-completion', group: 'For B2B sales' },
+  { q: 'How do B2B teams track video across the sales cycle?', cat: 'industries', slug: 'how-do-b2b-teams-track-video-across-the-sales-cycle', group: 'For B2B sales' },
 ];

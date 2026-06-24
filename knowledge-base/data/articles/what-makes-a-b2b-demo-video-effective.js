@@ -1,0 +1,38 @@
+module.exports = {
+  metaTitle: `What makes a B2B demo video effective? | VidaPulse`,
+  metaDescription: `An effective B2B demo video leads with the buyer's outcome, keeps a tight middle, and earns the next-step ask. Retention shows which parts truly resonate.`,
+  answer: `An effective B2B demo video opens with the prospect's outcome rather than your agenda, keeps a tight middle that shows proof instead of features, and ends with a clear next-step ask that most viewers actually reach. You cannot judge any of that by watching your own video, because you already know what is coming. The audience-retention curve shows what truly resonates: where attention holds, where it drops, and what share survive to the ask. VidaPulse measures aggregate and anonymous engagement, not which named person watched.`,
+  sections: [
+    {
+      h2: `The elements of an effective demo video`,
+      html: `<p>A demo video earns its place in a deal when it does a few things well, and most of them are about respecting the buyer's time. The strongest B2B demos share a recognisable shape.</p><ul class="kb-list"><li><strong>An outcome-led opening.</strong> The first fifteen seconds say what the prospect gets, not who you are or how the agenda will run. Buyers decide quickly whether to keep watching, and a slow open loses them before any value lands.</li><li><strong>A tight, proof-heavy middle.</strong> Show the product solving the specific problem the prospect has, with real screens rather than a tour of every feature. Detail that nobody asked for is where attention leaks.</li><li><strong>One clear next-step ask.</strong> A single, obvious action such as "book a call" or "reply to pick a time," placed where viewers who are still watching will see it.</li><li><strong>Appropriate length.</strong> Long enough to make the case, short enough that the ask arrives before fatigue. The right length is the one your prospects actually finish, not a round number.</li></ul><p>These are principles, not guarantees. Whether a given demo achieves them is an empirical question, and that is exactly what engagement data answers.</p>`,
+    },
+    {
+      h2: `Why you cannot judge your own demo`,
+      html: `<p>The hardest part of making a demo effective is that you are the worst judge of it. You wrote the script, you know which section is strong, and you mentally skip the slow parts because you already understand them. A prospect does none of that. They meet the video cold, and they leave the moment it stops being worth their time.</p><p>This is why polished demos still underperform. The opening that feels punchy to you may read as throat-clearing to a buyer; the section you are proud of may be the one that drains the room. Without measurement, you keep shipping the same flaws because nothing tells you they are flaws. The reply rate stays flat, and you guess at why.</p>`,
+    },
+    {
+      h2: `How retention shows what resonates`,
+      html: `<p>The audience-retention curve plots the share of viewers still watching at each second, so your whole demo becomes a single shape you can read. Flat stretches are sections that hold attention; steep cliffs are moments that push people out. The timestamp of each cliff tells you which part of your demo is failing, and the gentle slope between cliffs tells you what is quietly working.</p><p>A few other signals sharpen the picture. The percentage reaching any point shows what share survive to your ask, which is the difference between a demo that persuades and one nobody finishes. Replays vs first watches reveal segments that get rewound, often a sign of a sticky or important point. On Pro, the second-by-second engagement heatmap pins a drop or a heavy replay to a specific line, and viewer-level session history lets you follow how anonymous sessions moved through the video. None of this collects personal data.</p>`,
+    },
+    {
+      h2: `Reading resonance, not identity`,
+      html: `<p>It is worth being precise about what "resonates" means here. The data tells you that a section held or lost attention across the people who watched. It does not tell you who those people were. VidaPulse uses anonymous first-party identifiers and reports aggregate and session-level engagement, not named-person or named-account identity.</p><p class="kb-example">Hypothetical illustration, not real data: suppose your retention curve stays flat through the problem framing, then drops sharply when the demo switches to a long integrations walkthrough, and only a small share reach the "book a call" ask. That pattern says the opening resonates, the integrations section is buried too deep or runs too long, and the ask is reaching almost nobody. You would move proof earlier and cut the walkthrough, then re-measure. What the data will not say is that a particular buyer at a particular company watched, and you should not pitch it internally as if it could.</p>`,
+    },
+  ],
+  solve: `<p>VidaPulse lets you measure whether your demo actually does the things an effective demo should, using the video you already have. You paste the video URL (YouTube, Amazon S3, Google Drive, Dropbox, OneDrive, Azure Blob, Loom, a Zoom recording, Vimeo, or a direct MP4 or HLS link), VidaPulse wraps it in an analytics player, and you embed one line of script or a script-free iframe wherever the demo lives. There is no re-hosting, and the video keeps its URL.</p><p>From there you can read what resonates and act on it:</p><ul class="kb-list"><li>Read the <strong>audience-retention curve</strong> to see which sections hold attention and which lose it.</li><li>Check the <strong>percentage reaching any point</strong> to see what share survive to your next-step ask.</li><li>Open the <strong>second-by-second engagement heatmap</strong> (Pro) to tie a drop or a heavy replay to a specific line.</li><li>Use <strong>conversion and CTA tracking</strong> (Pro) to confirm whether a tighter demo lifts clicks on the ask.</li></ul><p>All of it is aggregate, anonymous session data, not named-person tracking, so it complements your CRM rather than replacing it. The Free plan covers one video forever with no card, enough to analyse your main demo; Starter is 10 dollars a month for 10 videos; Pro is 19 dollars a month for unlimited videos plus heatmaps, viewer-level history, and conversion tracking. Create a free account and see how far prospects watch your sales videos.</p>`,
+  faq: [
+    {
+      q: `How long should a B2B demo video be?`,
+      a: `Long enough to make the case and short enough that the ask arrives before fatigue. Rather than aiming for a fixed number, read the retention curve: the right length is the one most of your prospects actually reach. If a large share drop before the ask, the demo is too long for its content, and tightening the middle usually helps more than padding it.`,
+    },
+    {
+      q: `Can retention data tell me which part of my demo is best?`,
+      a: `It tells you which parts hold attention and which lose it across everyone who watched. Flat stretches in the curve are sections that resonate; steep cliffs mark moments that push people out. On Pro, the heatmap pins those moments to a specific line. It reads collective behaviour, not the opinion of any one named viewer.`,
+    },
+    {
+      q: `Does VidaPulse tell me who watched the demo?`,
+      a: `No. VidaPulse reports aggregate and anonymous session engagement, not named-person or named-account identity. You learn how far people watch, where they drop, and what they replay, which is what you need to make the demo more effective, but not who the individual viewers were.`,
+    },
+  ],
+};
