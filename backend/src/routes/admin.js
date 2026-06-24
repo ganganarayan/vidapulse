@@ -1187,6 +1187,94 @@ router.get('/impersonation-log', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/benchmarks
+//
+// Anonymized, AGGREGATE-ONLY video benchmarks for the public Benchmark
+// Report. Read-only. Privacy guardrails: only videos with enough plays
+// qualify; nothing is returned unless enough DISTINCT accounts contribute;
+// no account or video identifiers ever leave this endpoint. Run it on
+// production, review the JSON, and only then publish the numbers into the KB.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/benchmarks', async (req, res, next) => {
+  try {
+    const MIN_PLAYS    = 30; // a video needs this many plays to qualify
+    const MIN_ACCOUNTS = 5;  // hard floor — return no numbers below this
+    const PUBLISH_MIN  = 25; // recommended minimum distinct accounts before publishing
+
+    // One row per qualifying video: account (for counting only), duration,
+    // average watch %, and the per-second first_watches at 0/25/50/75/100% of
+    // runtime (from the heatmap aggregate) to derive the retention curve.
+    const { rows } = await pool.query(
+      `SELECT v.user_id,
+              v.duration_seconds::float AS dur,
+              v.avg_watch_pct::float    AS awp,
+              (SELECT first_watches FROM analytics_heatmap_aggregate h
+                 WHERE h.video_id = v.id AND h.second_bucket = 0 LIMIT 1) AS base,
+              (SELECT first_watches FROM analytics_heatmap_aggregate h
+                 WHERE h.video_id = v.id AND h.second_bucket = GREATEST(0, FLOOR(v.duration_seconds*0.25)::int) LIMIT 1) AS w25,
+              (SELECT first_watches FROM analytics_heatmap_aggregate h
+                 WHERE h.video_id = v.id AND h.second_bucket = GREATEST(0, FLOOR(v.duration_seconds*0.50)::int) LIMIT 1) AS w50,
+              (SELECT first_watches FROM analytics_heatmap_aggregate h
+                 WHERE h.video_id = v.id AND h.second_bucket = GREATEST(0, FLOOR(v.duration_seconds*0.75)::int) LIMIT 1) AS w75,
+              (SELECT first_watches FROM analytics_heatmap_aggregate h
+                 WHERE h.video_id = v.id AND h.second_bucket = GREATEST(0, FLOOR(v.duration_seconds)::int - 1) LIMIT 1) AS w100
+       FROM   videos v
+       WHERE  v.is_active = TRUE
+         AND  COALESCE(v.total_plays, 0)      >= $1
+         AND  COALESCE(v.duration_seconds, 0) >= 10`,
+      [MIN_PLAYS]
+    );
+
+    const accounts = new Set(rows.map((r) => r.user_id)).size;
+    if (accounts < MIN_ACCOUNTS) {
+      return res.json({
+        sufficient: false,
+        accounts,
+        qualifyingVideos: rows.length,
+        message: `Need at least ${MIN_ACCOUNTS} distinct accounts with qualifying videos (>= ${MIN_PLAYS} plays) to compute benchmarks. Have ${accounts}.`,
+      });
+    }
+
+    // Percentile over a numeric array (linear interpolation); ignores nulls.
+    const pctile = (arr, p) => {
+      const a = arr.filter((x) => x != null && !Number.isNaN(x)).sort((x, y) => x - y);
+      if (!a.length) return null;
+      const idx = (a.length - 1) * p, lo = Math.floor(idx), hi = Math.ceil(idx);
+      return a[lo] + (a[hi] - a[lo]) * (idx - lo);
+    };
+    const round = (x) => (x == null ? null : Math.round(x * 10) / 10);
+
+    const awp = rows.map((r) => r.awp).filter((x) => x != null);
+    // retention at a runtime fraction = first_watches there / first_watches at second 0
+    const retAt = (key) => rows
+      .filter((r) => r.base && Number(r.base) > 0)
+      .map((r) => Math.min(100, (Number(r[key]) || 0) / Number(r.base) * 100));
+    const r25 = retAt('w25'), r50 = retAt('w50'), r75 = retAt('w75'), r100 = retAt('w100');
+
+    res.json({
+      sufficient: true,
+      generatedAt: new Date().toISOString(),
+      sample: {
+        qualifyingVideos: rows.length,
+        accounts,
+        minPlaysPerVideo: MIN_PLAYS,
+        publishReady: accounts >= PUBLISH_MIN,
+        publishMinAccounts: PUBLISH_MIN,
+      },
+      avgWatchPct: { median: round(pctile(awp, 0.5)), p25: round(pctile(awp, 0.25)), p75: round(pctile(awp, 0.75)) },
+      retentionByRuntime: {
+        at25pct: round(pctile(r25, 0.5)),
+        at50pct: round(pctile(r50, 0.5)),
+        at75pct: round(pctile(r75, 0.5)),
+        at100pct: round(pctile(r100, 0.5)),
+      },
+      note: `Anonymized, aggregate-only — no account or video identifiers. Review before publishing; publishReady requires >= ${PUBLISH_MIN} accounts.`,
+    });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/analytics-diag
 //
 // Raw analytics counts — admin only, used to diagnose pipeline issues.
