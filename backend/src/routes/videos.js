@@ -996,6 +996,20 @@ router.get('/:id/heatmap', requireAuth, planGate('heatmap'), async (req, res, ne
       [req.params.id]
     );
 
+    // Audience-retention (survival) histogram: how many players reached each
+    // whole-percent of the runtime, bucketed by each session's furthest point
+    // (max_watch_pct). This is the basis for the monotonic retention curve —
+    // immune to the per-second re-count / seek-fill inflation that made the old
+    // first_watches curve spike upward (a survival curve can only fall).
+    const { rows: pctRows } = await pool.query(
+      `SELECT FLOOR(LEAST(GREATEST(max_watch_pct, 0), 100))::int AS bucket,
+              COUNT(*)::int                                       AS cnt
+       FROM   analytics_sessions
+       WHERE  video_id = $1 AND play_count > 0
+       GROUP  BY 1`,
+      [req.params.id]
+    );
+
     // If duration_seconds isn't stored yet, derive it from the highest observed
     // second bucket so the heatmap can still render for existing videos.
     let durationSeconds = video.duration_seconds ? parseFloat(video.duration_seconds) : null;
@@ -1004,12 +1018,33 @@ router.get('/:id/heatmap', requireAuth, planGate('heatmap'), async (req, res, ne
       durationSeconds = maxBucket + 10; // 10-second tail buffer
     }
 
+    // Build the monotonic retention curve as [{ second, pct }] points across
+    // the runtime (101 points = 0–100% of duration). retention[i] = % of players
+    // whose furthest point reached at least i% of the video — non-increasing by
+    // construction, so it never rises or sawtooths.
+    const totalPlayers = Number(video.total_players) || 0;
+    const counts = new Array(101).fill(0);
+    for (const r of pctRows) {
+      const b = Math.max(0, Math.min(100, Number(r.bucket) || 0));
+      counts[b] += Number(r.cnt) || 0;
+    }
+    const retention_curve = [];
+    let cum = 0;
+    for (let i = 100; i >= 0; i--) {
+      cum += counts[i];
+      retention_curve[i] = {
+        second: durationSeconds ? (i / 100) * durationSeconds : i,
+        pct   : totalPlayers > 0 ? Math.round((cum / totalPlayers) * 1000) / 10 : 0,
+      };
+    }
+
     return res.json({
       heatmap,
+      retention_curve,
       drop_off_second : video.primary_drop_off_second,
       drop_off_pct    : video.primary_drop_off_pct,
       duration_seconds: durationSeconds,
-      total_viewers   : Number(video.total_players) || 0,
+      total_viewers   : totalPlayers,
     });
   } catch (err) {
     next(err);

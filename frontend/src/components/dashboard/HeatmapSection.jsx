@@ -53,41 +53,13 @@ function formatTime(s) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Bucket / downsample helpers
+// Fake-curve helper (non-Pro preview behind the FeatureWall)
 // ─────────────────────────────────────────────────────────────────────────
-
-function bucketRetention(heatmap, durationSeconds, totalViewers, targetBuckets = 200) {
-  if (!heatmap || heatmap.length === 0 || !durationSeconds) return [];
-  const bucketSize = Math.max(1, durationSeconds / targetBuckets);
-  const numBuckets = Math.ceil(durationSeconds / bucketSize);
-  const acc    = new Array(numBuckets).fill(0);
-  const counts = new Array(numBuckets).fill(0);
-
-  heatmap.forEach(({ second_bucket, first_watches }) => {
-    const idx = Math.min(Math.floor(second_bucket / bucketSize), numBuckets - 1);
-    // Use only first_watches (not replays) — replays inflate rewatched sections
-    // and would make the spike at a rewatched timestamp look like > 100% retention.
-    acc[idx]    += Number(first_watches) || 0;
-    counts[idx] += 1;
-  });
-
-  // Average the raw watch counts within each time bucket
-  const bucketed = acc.map((v, i) => counts[i] > 0 ? v / counts[i] : 0);
-
-  // Normalise against totalViewers (players who pressed play = 100%).
-  // This gives true retention: "what % of viewers who pressed play watched this second?"
-  // Previously we normalised against the peak bucket, which collapsed the entire chart
-  // to near-0 whenever one section had an anomalously high watch count.
-  const denominator = totalViewers > 0
-    ? totalViewers
-    : Math.max(...bucketed, 1);   // fallback if server omits total_viewers
-
-  return bucketed.map((v, i) => ({
-    second: i * bucketSize,
-    pct   : Math.min(100, (v / denominator) * 100),
-    total : v,
-  }));
-}
+//
+// The REAL retention curve is computed server-side as a monotonic survival
+// curve from each session's furthest point (max_watch_pct) — see
+// GET /videos/:id/heatmap → retention_curve. We no longer bucket per-second
+// first_watches on the client (that produced the upward spikes / sawtooth).
 
 function generateFakeRetention(n = 200) {
   return Array.from({ length: n }, (_, i) => {
@@ -146,9 +118,9 @@ export default function HeatmapSection({ videoId, video, userPlan }) {
     api.get(`/videos/${videoId}/heatmap`)
       .then(res => {
         if (cancelled) return;
-        const { heatmap, drop_off_second, duration_seconds, total_viewers } = res.data;
-        if (!heatmap || heatmap.length === 0) { setStatus('empty'); return; }
-        setHeatData({ heatmap, drop_off_second, duration_seconds, total_viewers });
+        const { retention_curve, drop_off_second, duration_seconds, total_viewers } = res.data;
+        if (!total_viewers || !retention_curve || retention_curve.length === 0) { setStatus('empty'); return; }
+        setHeatData({ retention_curve, drop_off_second, duration_seconds, total_viewers });
         setStatus('loaded');
       })
       .catch(() => { if (!cancelled) setStatus('error'); });
@@ -186,8 +158,11 @@ export default function HeatmapSection({ videoId, video, userPlan }) {
     );
   }
 
-  const { heatmap, drop_off_second, duration_seconds, total_viewers } = heatData;
-  const buckets = bucketRetention(heatmap, duration_seconds, total_viewers, 200);
+  const { retention_curve, drop_off_second, duration_seconds, total_viewers } = heatData;
+  // retention_curve is the server-computed monotonic survival curve
+  // ([{ second, pct }], 0–100% of runtime). No client-side bucketing — the
+  // curve is already clean and non-increasing, so the line cannot sawtooth.
+  const buckets = retention_curve;
 
   return (
     <div>

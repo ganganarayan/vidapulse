@@ -252,13 +252,13 @@ export default function VideoAnalyticsView({
         {/* ── Engagement sub-views ─────────────────────────────────── */}
         {activeView === 'heatmap' && (
           <div className="px-6 py-6 flex flex-col gap-10">
-            {/* Viewer Retention Curve */}
+            {/* Engagement Heatmap — audience-retention survival curve */}
             <div>
               <div className="mb-5">
                 <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
-                  Engagement
+                  Audience Retention
                 </p>
-                <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Viewer Retention <PlanTierBadge plan="pro" userPlan={user?.plan} /></h2>
+                <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Engagement Heatmap <PlanTierBadge plan="pro" userPlan={user?.plan} /></h2>
                 <p className="text-xs text-gray-400 mt-1">
                   Percentage of viewers still watching at each point in the video.
                 </p>
