@@ -308,8 +308,13 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
                   stroke="#374151" strokeWidth="0.4" strokeDasharray="3 3" />;
               })}
 
-              {/* Thin amber line — single colour, no area fill */}
-              <path d={linePath} fill="none" stroke="#F59E0B" strokeWidth="0.8"
+              {/* Amber line — constant 2px screen width everywhere. The viewBox
+                  is stretched non-uniformly (preserveAspectRatio="none"), which
+                  would otherwise fatten steep segments and thin flat ones;
+                  vector-effect pins the stroke to device pixels so it stays an
+                  even, fixed-width line top to bottom. */}
+              <path d={linePath} fill="none" stroke="#F59E0B" strokeWidth="2"
+                vectorEffect="non-scaling-stroke"
                 strokeLinecap="round" strokeLinejoin="round"
                 clipPath="url(#retDrawClip)" />
 
@@ -317,20 +322,31 @@ function RetentionChart({ buckets, durationSeconds, totalViewers, dropOffSecond,
               {dropOffSecond != null && durationSeconds > 0 && (() => {
                 const doX = (dropOffSecond / durationSeconds) * CHART_W;
                 return <line x1={doX} y1={0} x2={doX} y2={CHART_H_SVG}
-                  stroke="rgba(248,113,113,0.5)" strokeWidth="0.6" strokeDasharray="1.5 1.5" />;
+                  stroke="rgba(248,113,113,0.5)" strokeWidth="1.2"
+                  vectorEffect="non-scaling-stroke" strokeDasharray="4 4" />;
               })()}
 
-              {/* Hover crosshair */}
+              {/* Hover crosshair (the dot is drawn as HTML below so it stays a
+                  perfect circle — an SVG circle here would render as a flat oval
+                  under the non-uniform stretch). */}
               {hoverSvgX != null && hoverBucket && (
-                <>
-                  <line x1={hoverSvgX} y1={0} x2={hoverSvgX} y2={CHART_H_SVG}
-                    stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" strokeDasharray="2 2" />
-                  <circle cx={hoverSvgX}
-                    cy={CHART_H_SVG - (hoverBucket.pct / 100) * CHART_H_SVG}
-                    r="1.5" fill="#F59E0B" stroke="rgba(255,255,255,0.7)" strokeWidth="0.4" />
-                </>
+                <line x1={hoverSvgX} y1={0} x2={hoverSvgX} y2={CHART_H_SVG}
+                  stroke="rgba(255,255,255,0.18)" strokeWidth="1"
+                  vectorEffect="non-scaling-stroke" strokeDasharray="3 3" />
               )}
             </svg>
+
+            {/* Hover dot on the curve — HTML so it stays perfectly round */}
+            {hoverSvgX != null && hoverBucket && (
+              <div
+                className="absolute z-10 pointer-events-none h-2.5 w-2.5 rounded-full bg-amber-500
+                           ring-2 ring-white/70 -translate-x-1/2 -translate-y-1/2"
+                style={{
+                  left: `${hoverSvgX}%`,
+                  top : `${((CHART_H_SVG - (hoverBucket.pct / 100) * CHART_H_SVG) / H) * CHART_H}px`,
+                }}
+              />
+            )}
 
             {/* Floating tooltip — shows time (x) and retention % (y) at cursor */}
             {hoverSvgX != null && hoverBucket && (
