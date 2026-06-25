@@ -158,6 +158,46 @@ router.get('/clicks', requireAuth, async (req, res, next) => {
   }
 });
 
+// ── PATCH /api/cta-links/:id ─────────────────────────────────────────────
+// Edit a CTA link's button name and/or page name ONLY.
+// The destination URL and tracking link id are intentionally immutable —
+// they are live in the wild, so changing them would break attribution and
+// any buttons already pointing at the link.
+
+router.patch('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const { cta_name, page_name } = req.body ?? {};
+
+    if (cta_name !== undefined && !String(cta_name).trim()) {
+      return res.status(400).json({ error: 'cta_name required', message: 'Button name cannot be empty' });
+    }
+    if (cta_name === undefined && page_name === undefined) {
+      return res.status(400).json({ error: 'nothing_to_update', message: 'Provide cta_name and/or page_name' });
+    }
+
+    const { rows: [updated] } = await pool.query(
+      `UPDATE video_cta_links
+       SET    cta_name  = COALESCE($1, cta_name),
+              page_name = CASE WHEN $2::boolean THEN $3 ELSE page_name END,
+              updated_at = NOW()
+       WHERE  id = $4 AND user_id = $5
+       RETURNING id, cta_name, page_name, destination_url, created_at`,
+      [
+        cta_name !== undefined ? String(cta_name).trim().slice(0, 200) : null,
+        page_name !== undefined,
+        page_name !== undefined ? (String(page_name).trim().slice(0, 200) || null) : null,
+        req.params.id,
+        req.user.id,
+      ]
+    );
+
+    if (!updated) return res.status(404).json({ error: 'not_found' });
+    return res.json({ cta_link: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── DELETE /api/cta-links/:id ────────────────────────────────────────────
 // Delete a CTA link. Ownership verified via user_id.
 // Analytics events that recorded this link's clicks are NOT deleted —

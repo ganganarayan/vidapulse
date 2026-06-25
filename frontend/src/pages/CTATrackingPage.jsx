@@ -30,6 +30,33 @@ export default function CTATrackingPage() {
   const [formError,   setFormError]   = useState('');
   const [copiedId,    setCopiedId]    = useState(null);
   const [deletingId,  setDeletingId]  = useState(null);
+  const [editId,      setEditId]      = useState(null);
+  const [editForm,    setEditForm]    = useState({ cta_name: '', page_name: '' });
+  const [editSaving,  setEditSaving]  = useState(false);
+
+  function startEdit(link) {
+    setEditId(link.id);
+    setEditForm({ cta_name: link.cta_name ?? '', page_name: link.page_name ?? '' });
+  }
+  function cancelEdit() { setEditId(null); }
+
+  async function saveEdit(id) {
+    if (!editForm.cta_name.trim()) { showToast('Button name is required', 'error'); return; }
+    setEditSaving(true);
+    try {
+      const r = await api.patch(`/cta-links/${id}`, {
+        cta_name : editForm.cta_name.trim(),
+        page_name: editForm.page_name.trim() || null,
+      });
+      setLinks(prev => prev.map(l => l.id === id ? { ...l, ...r.data.cta_link } : l));
+      setEditId(null);
+      showToast('Link updated');
+    } catch (err) {
+      showToast(err.response?.data?.message ?? 'Failed to update link', 'error');
+    } finally {
+      setEditSaving(false);
+    }
+  }
 
   const load = useCallback(() => {
     if (!isPro) { setLoading(false); return; }
@@ -266,6 +293,58 @@ export default function CTATrackingPage() {
                       const trackingUrl = `${origin}/api/analytics/cta/link/${link.id}`;
                       const isCopied    = copiedId === link.id;
                       const isDeleting  = deletingId === link.id;
+                      const isEditing = editId === link.id;
+
+                      if (isEditing) {
+                        return (
+                          <div key={link.id} className="px-5 py-3.5">
+                            <div className="flex flex-col sm:flex-row gap-2.5">
+                              <div className="flex-1">
+                                <label className="block text-[10px] text-gray-500 uppercase tracking-wider mb-1">Button name</label>
+                                <input
+                                  autoFocus
+                                  value={editForm.cta_name}
+                                  onChange={e => setEditForm(p => ({ ...p, cta_name: e.target.value }))}
+                                  placeholder="e.g. Buy Now"
+                                  className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
+                                             text-gray-100 text-xs rounded-lg px-3 py-2 focus:outline-none"
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <label className="block text-[10px] text-gray-500 uppercase tracking-wider mb-1">Page name (optional)</label>
+                                <input
+                                  value={editForm.page_name}
+                                  onChange={e => setEditForm(p => ({ ...p, page_name: e.target.value }))}
+                                  placeholder="e.g. Sales Page"
+                                  className="w-full bg-gray-700 border border-gray-600 focus:border-amber-500
+                                             text-gray-100 text-xs rounded-lg px-3 py-2 focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 mt-2.5">
+                              <button
+                                onClick={() => saveEdit(link.id)}
+                                disabled={editSaving}
+                                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-amber-500/40
+                                           text-gray-900 text-xs font-semibold rounded-lg transition-colors"
+                              >
+                                {editSaving ? 'Saving…' : 'Save'}
+                              </button>
+                              <button
+                                onClick={cancelEdit}
+                                disabled={editSaving}
+                                className="px-3 py-1.5 text-gray-400 hover:text-gray-200 text-xs transition-colors"
+                              >
+                                Cancel
+                              </button>
+                              <span className="text-[10px] text-gray-500 ml-auto">
+                                Destination &amp; tracking link can't be changed — they're live.
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      }
+
                       return (
                         <div key={link.id} className="px-5 py-3.5 flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">
@@ -296,6 +375,14 @@ export default function CTATrackingPage() {
                             >
                               {isCopied ? <CheckSmIcon /> : <CopyIcon />}
                               {isCopied ? 'Copied' : 'Copy'}
+                            </button>
+                            <button
+                              onClick={() => startEdit(link)}
+                              className="p-1.5 text-gray-500 hover:text-amber-400 hover:bg-amber-500/10
+                                         rounded-lg transition-colors"
+                              title="Edit button & page name"
+                            >
+                              <PencilIcon />
                             </button>
                             <button
                               onClick={() => handleDelete(link.id)}
@@ -459,6 +546,16 @@ function TrashIcon() {
       <path d="M19 6l-1 14H6L5 6"/>
       <path d="M10 11v6"/><path d="M14 11v6"/>
       <path d="M9 6V4h6v2"/>
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9"/>
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
     </svg>
   );
 }
