@@ -390,7 +390,7 @@ async function _loadSettings() {
 
 async function _loadUser(userId) {
   const { rows: [u] } = await pool.query(
-    `SELECT u.name, u.email, u.phone, p.name AS plan
+    `SELECT u.id, u.name, u.email, u.phone, p.name AS plan
      FROM   users u JOIN plans p ON p.id = u.plan_id
      WHERE  u.id = $1`,
     [userId]
@@ -441,6 +441,9 @@ function _buildLogParams(user, eventKey, settings, extraFields = {}) {
     contact_name : user.name  || '',
     contact_email: user.email || '',
     ...(user.phone ? { contact_phone: user.phone } : {}),
+    // Stable VidaPulse user UUID → sent as "contact.contact_id" so the CRM can
+    // match/update a contact by id (survives email changes).
+    ...(user.id ? { contact_id: user.id } : {}),
     contact_plan : planName,
     event_type   : eventKey,
     ...extraFields,
