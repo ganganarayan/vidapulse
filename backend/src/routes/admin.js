@@ -1275,6 +1275,171 @@ router.get('/benchmarks', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/heatmap-diagnostic?video_id=<uuid>&format=csv|json
+//
+// Admin-only, READ-ONLY. Dumps the raw numbers behind the "Viewer Retention"
+// chart for one video so we can diagnose why the curve is non-monotonic (rises
+// after dropping). Emits a per-second table that overlays four series aligned
+// by second:
+//
+//   first_watches      — the chart's numerator (raw per-second watch count;
+//                         what HeatmapSection actually plots)
+//   replays            — replay-tagged watch count (pass >= 2)
+//   seek_lands         — number of seek events that LANDED on this second
+//                         (forward-seek / jump-to signal)
+//   sessions_reaching  — TRUE survival count: sessions whose furthest point
+//                         (max_watch_pct) reached at least this second.
+//                         This is what an honest retention curve would show.
+//
+// Diagnosis key: where first_watches >> sessions_reaching, the chart is
+// inflated (seek-fill or replay-recount). seek_lands clustering at a spike
+// points to the seek mechanism.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/heatmap-diagnostic', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const videoId = String(req.query.video_id || '').trim();
+    const format  = (req.query.format || 'csv').toLowerCase();
+    if (!/^[0-9a-fA-F-]{36}$/.test(videoId)) {
+      return res.status(400).json({ error: 'video_id query param (UUID) is required' });
+    }
+
+    // ── 1. Video meta + denominators ──────────────────────────────────────
+    const { rows: [video] } = await pool.query(
+      `SELECT v.id, v.title, v.duration_seconds,
+              v.primary_drop_off_second, v.primary_drop_off_pct,
+              (SELECT COUNT(*) FROM analytics_sessions s
+                 WHERE s.video_id = v.id AND s.play_count > 0) AS total_players,
+              (SELECT COUNT(*) FROM analytics_sessions s
+                 WHERE s.video_id = v.id)                       AS total_sessions
+       FROM   videos v
+       WHERE  v.id = $1`,
+      [videoId]
+    );
+    if (!video) return res.status(404).json({ error: 'Video not found' });
+
+    // ── 2. Raw heatmap aggregate (the chart's input) ──────────────────────
+    const { rows: heatmap } = await pool.query(
+      `SELECT second_bucket, first_watches, replays
+       FROM   analytics_heatmap_aggregate
+       WHERE  video_id = $1
+       ORDER  BY second_bucket ASC`,
+      [videoId]
+    );
+
+    // ── 3. Seek landing positions (event_type = 'seek') ───────────────────
+    const { rows: seeks } = await pool.query(
+      `SELECT FLOOR(video_position)::int AS sec, COUNT(*)::int AS cnt
+       FROM   analytics_events
+       WHERE  video_id = $1
+         AND  event_type = 'seek'
+         AND  video_position IS NOT NULL
+       GROUP  BY 1
+       ORDER  BY 1`,
+      [videoId]
+    );
+
+    // ── 4. Per-session furthest point (for the true survival curve) ───────
+    const { rows: sessionRows } = await pool.query(
+      `SELECT max_watch_pct
+       FROM   analytics_sessions
+       WHERE  video_id = $1 AND play_count > 0`,
+      [videoId]
+    );
+
+    // ── 5. Session behaviour summary (rewatch / seek prevalence) ──────────
+    const { rows: [behaviour] } = await pool.query(
+      `SELECT COALESCE(SUM(seek_count), 0)::int       AS total_seek_events,
+              COALESCE(ROUND(AVG(seek_count), 2), 0)  AS avg_seeks_per_session,
+              COALESCE(SUM(play_count), 0)::int       AS total_play_events,
+              COUNT(*) FILTER (WHERE reached_end)::int AS completed_sessions
+       FROM   analytics_sessions
+       WHERE  video_id = $1 AND play_count > 0`,
+      [videoId]
+    );
+
+    // ── Build per-second overlay table ────────────────────────────────────
+    const duration = Number(video.duration_seconds) || 0;
+    const fwMap = new Map(), rpMap = new Map(), skMap = new Map();
+    let maxSec = Math.ceil(duration);
+    for (const r of heatmap) {
+      const s = Number(r.second_bucket);
+      fwMap.set(s, Number(r.first_watches) || 0);
+      rpMap.set(s, Number(r.replays) || 0);
+      if (s > maxSec) maxSec = s;
+    }
+    for (const r of seeks) {
+      const s = Number(r.sec);
+      skMap.set(s, Number(r.cnt) || 0);
+      if (s > maxSec) maxSec = s;
+    }
+
+    // Sort furthest-point percentages descending for survival counting.
+    const pcts = sessionRows
+      .map(r => Number(r.max_watch_pct) || 0)
+      .sort((a, b) => b - a);
+    // countAtLeast(threshold) = how many sessions reached >= threshold pct
+    function reachingAt(thresholdPct) {
+      // pcts is sorted descending; find first index < threshold
+      let lo = 0, hi = pcts.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (pcts[mid] >= thresholdPct) lo = mid + 1; else hi = mid;
+      }
+      return lo; // number of elements >= threshold
+    }
+
+    const rows = [];
+    for (let s = 0; s <= maxSec; s++) {
+      const thresholdPct = duration > 0 ? (s / duration) * 100 : 0;
+      rows.push({
+        second           : s,
+        first_watches    : fwMap.get(s) || 0,
+        replays          : rpMap.get(s) || 0,
+        seek_lands       : skMap.get(s) || 0,
+        sessions_reaching: reachingAt(thresholdPct),
+      });
+    }
+
+    const meta = {
+      video_id               : video.id,
+      title                  : String(video.title || '').replace(/[\r\n,]+/g, ' ').trim(),
+      duration_seconds       : duration,
+      total_players          : Number(video.total_players) || 0,
+      total_sessions         : Number(video.total_sessions) || 0,
+      primary_drop_off_second: video.primary_drop_off_second,
+      primary_drop_off_pct   : video.primary_drop_off_pct,
+      total_seek_events      : Number(behaviour.total_seek_events) || 0,
+      avg_seeks_per_session  : Number(behaviour.avg_seeks_per_session) || 0,
+      total_play_events      : Number(behaviour.total_play_events) || 0,
+      completed_sessions     : Number(behaviour.completed_sessions) || 0,
+    };
+
+    if (format === 'json') {
+      return res.json({ meta, rows });
+    }
+
+    // ── CSV output ────────────────────────────────────────────────────────
+    const lines = [];
+    lines.push('# VidaPulse heatmap diagnostic (admin, read-only)');
+    for (const [k, v] of Object.entries(meta)) lines.push(`# ${k}=${v}`);
+    lines.push('# columns: second,first_watches,replays,seek_lands,sessions_reaching');
+    lines.push('second,first_watches,replays,seek_lands,sessions_reaching');
+    for (const r of rows) {
+      lines.push(`${r.second},${r.first_watches},${r.replays},${r.seek_lands},${r.sessions_reaching}`);
+    }
+    const csv = lines.join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition',
+      `attachment; filename="heatmap-diag-${video.id.slice(0, 8)}.csv"`);
+    return res.send(csv);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/analytics-diag
 //
 // Raw analytics counts — admin only, used to diagnose pipeline issues.

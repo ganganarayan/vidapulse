@@ -106,11 +106,38 @@ function generateFakeRetention(n = 200) {
 // ─────────────────────────────────────────────────────────────────────────
 
 export default function HeatmapSection({ videoId, video, userPlan }) {
-  const isPro = PRO_PLANS.has(userPlan);
+  const isPro   = PRO_PLANS.has(userPlan);
+  const isAdmin = userPlan === 'admin_lifetime';
 
   const [status,   setStatus]   = useState('idle');
   const [heatData, setHeatData] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [diagBusy, setDiagBusy] = useState(false);
+
+  // Admin-only: download the raw per-second numbers behind this chart as CSV.
+  // Read-only diagnostic — server enforces requireAdmin.
+  async function downloadDiagnostic() {
+    if (!videoId) return;
+    setDiagBusy(true);
+    try {
+      const res = await api.get(
+        `/admin/heatmap-diagnostic?video_id=${videoId}&format=csv`,
+        { responseType: 'blob' }
+      );
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `heatmap-diag-${String(videoId).slice(0, 8)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Diagnostic download failed: ' + (e?.response?.status || e?.message || 'error'));
+    } finally {
+      setDiagBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (!isPro || !videoId) return;
@@ -163,12 +190,27 @@ export default function HeatmapSection({ videoId, video, userPlan }) {
   const buckets = bucketRetention(heatmap, duration_seconds, total_viewers, 200);
 
   return (
-    <RetentionChart
-      buckets={buckets}
-      durationSeconds={duration_seconds}
-      totalViewers={total_viewers}
-      dropOffSecond={drop_off_second}
-    />
+    <div>
+      {isAdmin && (
+        <div className="flex justify-end mb-2">
+          <button
+            onClick={downloadDiagnostic}
+            disabled={diagBusy}
+            title="Download the raw per-second numbers behind this chart (admin)"
+            className="text-[11px] text-amber-400 hover:text-amber-300 disabled:opacity-50
+                       px-2.5 py-1 border border-amber-500/30 rounded-lg transition-colors"
+          >
+            {diagBusy ? 'Preparing…' : '⤓ Diagnostic CSV (admin)'}
+          </button>
+        </div>
+      )}
+      <RetentionChart
+        buckets={buckets}
+        durationSeconds={duration_seconds}
+        totalViewers={total_viewers}
+        dropOffSecond={drop_off_second}
+      />
+    </div>
   );
 }
 
