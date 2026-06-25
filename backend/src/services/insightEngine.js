@@ -614,58 +614,84 @@ async function _ruleGeography(videoId, video) {
 
 /**
  * drop_off_moment / engagement_spike / dead_zone
- * Source: analytics_heatmap_aggregate
+ * Source: analytics_sessions.max_watch_pct (survival curve) for drop_off + dead_zone;
+ *         analytics_heatmap_aggregate.replays for engagement_spike.
  * Returns an array — may yield 1, 2, or 3 insights.
  */
 async function _ruleHeatmap(videoId, video) {
   const results = [];
 
+  // Replay counts per second — only used for engagement_spike (rewatch hot
+  // spots) and as a duration fallback. (first_watches is intentionally NOT used
+  // here anymore; see the survival-curve computation below.)
   const { rows: buckets } = await pool.query(
-    `SELECT second_bucket,
-            first_watches + replays AS total_views,
-            first_watches,
-            replays
+    `SELECT second_bucket, replays
      FROM   analytics_heatmap_aggregate
      WHERE  video_id = $1
      ORDER  BY second_bucket ASC`,
     [videoId]
   );
-  if (buckets.length < MIN_SESSIONS_HEATMAP) return results;
+  // Reliable retention from each session's furthest point (max_watch_pct) —
+  // immune to the first_watches re-count / seek-fill inflation. drop_off and
+  // dead_zone below are computed from this SURVIVAL curve, NOT from first_watches
+  // (which used to fabricate giant false drop-offs at busy seconds).
+  // engagement_spike still uses the replays column (fixed separately in the
+  // embed/ingestion pass).
+  const { rows: pctRows } = await pool.query(
+    `SELECT FLOOR(LEAST(GREATEST(max_watch_pct, 0), 100))::int AS bucket,
+            COUNT(*)::int AS cnt
+     FROM   analytics_sessions
+     WHERE  video_id = $1 AND play_count > 0
+     GROUP  BY 1`,
+    [videoId]
+  );
+  const pctCounts = new Array(101).fill(0);
+  let players = 0;
+  for (const r of pctRows) {
+    const b = Math.max(0, Math.min(100, Number(r.bucket) || 0));
+    pctCounts[b] += Number(r.cnt) || 0;
+    players      += Number(r.cnt) || 0;
+  }
+  if (players < MIN_SESSIONS_HEATMAP) return results;
 
-  const peakViews = Math.max(...buckets.map(b => b.first_watches));
-  if (peakViews < MIN_SESSIONS_HEATMAP) return results;
+  // survival[p] = players who reached at least p% of the runtime (monotonic).
+  const survival = new Array(101).fill(0);
+  for (let p = 100, c = 0; p >= 0; p--) { c += pctCounts[p]; survival[p] = c; }
+  const peakR = survival[0];
 
-  // ── drop_off_moment: the second with the steepest sustained viewer loss ──
-  // Look for the 5-second window with the largest drop from peak
+  // Duration for percent→second mapping (fall back to last heatmap bucket).
+  let durationS = video?.duration_seconds ? parseFloat(video.duration_seconds) : 0;
+  if (!durationS && buckets.length > 0) {
+    durationS = Math.max(...buckets.map(b => Number(b.second_bucket))) + 10;
+  }
+  const pctToSec = (p) => Math.round(durationS > 0 ? (p / 100) * durationS : p);
+
+  // ── drop_off_moment: steepest fall in retention, past the intro bounce ──
+  // The first ~5% always sheds "never really started" viewers (not an editing
+  // insight), so we look beyond it for the percent with the largest retained-
+  // viewer loss. From the monotonic survival curve, so it can never be fabricated.
+  const DROP_START_PCT = 5;
   let maxDrop = 0;
-  let dropSecond = null;
-
-  for (let i = 1; i < buckets.length; i++) {
-    const before = buckets[i - 1].first_watches;
-    const after  = buckets[i].first_watches;
-    if (before > 0 && after < before) {
-      const dropPct = ((before - after) / peakViews) * 100;
-      if (dropPct > maxDrop) {
-        maxDrop = dropPct;
-        dropSecond = buckets[i].second_bucket;
-      }
-    }
+  let dropPctPoint = null;
+  for (let p = DROP_START_PCT + 1; p <= 100; p++) {
+    const lostPct = ((survival[p - 1] - survival[p]) / peakR) * 100;
+    if (lostPct > maxDrop) { maxDrop = lostPct; dropPctPoint = p; }
   }
 
-  if (dropSecond !== null && maxDrop >= 15) {
-    const viewsAtDrop = buckets.find(b => b.second_bucket === dropSecond)?.first_watches || 0;
-    const retentionPct = Math.round((viewsAtDrop / peakViews) * 100);
+  if (dropPctPoint !== null && maxDrop >= 15 && durationS > 0) {
+    const dropSecond   = pctToSec(dropPctPoint);
+    const retentionPct = Math.round((survival[dropPctPoint] / peakR) * 100);
 
     results.push({
       insight_type    : 'drop_off_moment',
       severity        : maxDrop >= 40 ? 'critical' : 'warning',
       timestamp_seconds: dropSecond,
-      headline        : `${100 - retentionPct}% of viewers leave around the ${_formatSeconds(dropSecond)} mark`,
-      body            : 'This is the moment in your video where you lose the most viewers in a short window. Something at this point — a transition, a topic shift, pacing, or a technical issue — is causing people to stop watching.',
+      headline        : `${Math.round(maxDrop)}% of viewers leave around the ${_formatSeconds(dropSecond)} mark`,
+      body            : 'This is the point where your retention falls the fastest. Something here — a transition, a topic shift, pacing, or a technical issue — is causing people to stop watching.',
       action_prompt   : 'Watch your video from 30 seconds before this point. Look for a slow section, an awkward cut, or a moment where the value delivery stalls.',
       metric_value    : Math.round(maxDrop),
       metric_label    : '% viewers lost at this moment',
-      data_snapshot   : { second: dropSecond, drop_pct: maxDrop, retention_pct: retentionPct, peak_views: peakViews },
+      data_snapshot   : { second: dropSecond, drop_pct: Math.round(maxDrop), retention_pct: retentionPct, peak_viewers: peakR },
     });
   }
 
@@ -695,44 +721,34 @@ async function _ruleHeatmap(videoId, video) {
     });
   }
 
-  // ── dead_zone: consecutive 30-second window with <10% of peak viewers ───
-  const threshold = peakViews * 0.1;
-  let deadStart = null;
-  let deadEnd   = null;
-  let longestDead = 0;
-  let longestStart = null;
-  let longestEnd   = null;
-  let currentRun = 0;
-
-  for (const bucket of buckets) {
-    if (bucket.first_watches < threshold) {
-      if (deadStart === null) deadStart = bucket.second_bucket;
-      deadEnd = bucket.second_bucket;
-      currentRun++;
-      if (currentRun > longestDead) {
-        longestDead  = currentRun;
-        longestStart = deadStart;
-        longestEnd   = deadEnd;
-      }
-    } else {
-      deadStart  = null;
-      deadEnd    = null;
-      currentRun = 0;
+  // ── dead_zone: the point past which fewer than 10% of viewers remain ────
+  // On a survival curve this is where the audience has effectively gone. If a
+  // long (>=30s) near-empty tail runs after it, the video is far longer than the
+  // part people actually watch.
+  if (durationS > 0) {
+    const floorR = peakR * 0.1;
+    let gonePctPoint = null;
+    for (let p = DROP_START_PCT; p <= 100; p++) {
+      if (survival[p] < floorR) { gonePctPoint = p; break; }
     }
-  }
-
-  if (longestDead >= 30 && longestStart !== null) {
-    results.push({
-      insight_type    : 'dead_zone',
-      severity        : 'opportunity',
-      timestamp_seconds: longestStart,
-      headline        : `Almost nobody watches the ${_formatSeconds(longestStart)}–${_formatSeconds(longestEnd)} section`,
-      body            : 'There is a section of your video that viewers consistently skip or abandon. This dead zone suggests the content here is not delivering value — it may be repetitive, slow, or off-topic.',
-      action_prompt   : 'Consider cutting this section entirely or moving its most valuable content earlier in the video.',
-      metric_value    : longestEnd - longestStart,
-      metric_label    : 'seconds of dead zone',
-      data_snapshot   : { start: longestStart, end: longestEnd, duration: longestEnd - longestStart, threshold_pct: 10 },
-    });
+    if (gonePctPoint !== null) {
+      const goneSecond  = pctToSec(gonePctPoint);
+      const tailSeconds = Math.max(0, Math.round(durationS) - goneSecond);
+      if (tailSeconds >= 30) {
+        const stillPct = Math.max(1, Math.round((survival[gonePctPoint] / peakR) * 100));
+        results.push({
+          insight_type    : 'dead_zone',
+          severity        : 'opportunity',
+          timestamp_seconds: goneSecond,
+          headline        : `Over 90% of viewers are gone by the ${_formatSeconds(goneSecond)} mark`,
+          body            : `Fewer than ${stillPct}% of viewers are still watching past this point, yet the video runs to ${_formatSeconds(Math.round(durationS))}. The long tail is effectively unwatched.`,
+          action_prompt   : 'Tighten the opening and end much sooner, or move your key message and call-to-action well before this point.',
+          metric_value    : tailSeconds,
+          metric_label    : 'seconds of near-empty tail',
+          data_snapshot   : { gone_second: goneSecond, still_watching_pct: stillPct, tail_seconds: tailSeconds, threshold_pct: 10 },
+        });
+      }
+    }
   }
 
   return results;
