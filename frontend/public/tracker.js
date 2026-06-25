@@ -116,7 +116,8 @@
   var lastTickTime    = null;
   var intervals       = [];      // [[start, end, pass], ...] collected since last ping
   var intervalStart   = null;
-  var watchPass       = 1;       // 1 = first watch, 2+ = replay
+  var furthestSec     = 0;       // furthest whole-second reached (first-watch frontier)
+  var lastPos         = 0;       // latest genuine playback position (pre-seek close point)
 
   // ── Utility ───────────────────────────────────────────────────────────
 
@@ -192,14 +193,22 @@
 
   // ── Interval tracking ────────────────────────────────────────────────
 
+  // Record a watched span [a,b). Seconds past the first-watch frontier are pass 1
+  // (first_watches); already-seen seconds are pass 2 (replays). De-dups re-counts
+  // and never fills seek-skipped seconds (seek handler closes at the pre-seek pos).
+  function pushWatched(a, b) {
+    a = Math.max(0, a); b = Math.max(a, b);
+    if (b <= a) return;
+    if (a < furthestSec) { var rb = Math.min(b, furthestSec); if (rb > a) intervals.push([a, rb, 2]); }
+    if (b > furthestSec) { var fa = Math.max(a, furthestSec); if (b > fa) intervals.push([fa, b, 1]); furthestSec = b; }
+  }
+
   function openInterval(currentSec) {
     intervalStart = currentSec;
   }
 
   function closeInterval(currentSec) {
-    if (intervalStart !== null && currentSec > intervalStart) {
-      intervals.push([intervalStart, currentSec, watchPass]);
-    }
+    if (intervalStart !== null) pushWatched(intervalStart, currentSec);
     intervalStart = null;
   }
 
@@ -264,6 +273,7 @@
   function onPlay(el) {
     playing     = true;
     lastTickTime = Date.now();
+    lastPos = el.currentTime || 0;
     openInterval(el.currentTime || 0);
     startHeartbeat(el);
     sendPing('play', el, false);
@@ -278,9 +288,12 @@
   }
 
   function onSeek(el) {
-    // Close current interval; open a new one at seek target
-    if (intervalStart !== null) closeInterval(el.currentTime || 0);
-    openInterval(el.currentTime || 0);
+    var d = el.currentTime || 0;
+    // Close the watched span at the PRE-seek position (lastPos) so skipped
+    // seconds are never recorded, then open a new one at the seek target.
+    if (intervalStart !== null) closeInterval(lastPos);
+    openInterval(d);
+    lastPos = d;
     sendPing('seek', el, false);
   }
 
@@ -290,7 +303,6 @@
     tick(el);
     closeInterval(el.duration || 0);
     maxPct = 100;
-    watchPass++;
     sendPing('end', el, false);
   }
 
@@ -313,6 +325,10 @@
     el.addEventListener('ended',    function () { onEnded(el);  });
     el.addEventListener('timeupdate', function () {
       if (playing) {
+        var c = el.currentTime || 0;
+        // Advance lastPos only on a normal small forward step; a large jump is a
+        // seek, whose target must not become the pre-seek close point.
+        if (c > lastPos && c - lastPos < 3) lastPos = c;
         var pct = _currentPct(el);
         if (pct > maxPct) maxPct = pct;
       }

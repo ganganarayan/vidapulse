@@ -565,8 +565,12 @@ router.post('/ping', async (req, res) => {
 
     // ── 2. Batch-upsert heatmap from watch intervals ────────────────────────
     if (Array.isArray(intervals) && intervals.length > 0) {
-      const firstBuckets  = [];
-      const replayBuckets = [];
+      // Dedup seconds within this ping so a single payload can never count a
+      // second more than once. The embed already classifies pass 1 (first watch)
+      // vs pass 2 (replay) via its first-watch frontier; these Sets are a
+      // server-side safety net against overlapping/duplicate intervals.
+      const firstSet  = new Set();
+      const replaySet = new Set();
 
       for (const iv of intervals) {
         if (!Array.isArray(iv) || iv.length < 2) continue;
@@ -581,9 +585,14 @@ router.post('/ping', async (req, res) => {
           continue;
         }
 
-        const bucket = watchPass <= 1 ? firstBuckets : replayBuckets;
-        for (let sec = start; sec < end; sec++) bucket.push(sec);
+        const set = watchPass <= 1 ? firstSet : replaySet;
+        for (let sec = start; sec < end; sec++) set.add(sec);
       }
+
+      // A second counted as a first-watch this ping must not also count as replay.
+      for (const sec of firstSet) replaySet.delete(sec);
+      const firstBuckets  = [...firstSet];
+      const replayBuckets = [...replaySet];
 
       if (firstBuckets.length > 0) {
         await pool.query(

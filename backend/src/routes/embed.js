@@ -372,7 +372,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
                   var c=player.getCurrentTime()||0;
                   var d=player.getDuration()||ytDur;
                   if(d>0){maxP=Math.max(maxP,c/d*100);}
-                  secs+=c-t0;ivs.push([t0,c]);t0=c;
+                  pushWatched(t0,c);secs+=Math.max(0,c-t0);t0=c;
                   ping('heartbeat');
                   if(RESUME)savePos(c);
                 }
@@ -391,14 +391,14 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
                 _ytSetUI(true);_ytSyncPlay();
               }
               if(e.data===S.PAUSED){
-                if(on){on=false;secs+=c-t0;ivs.push([t0,c]);
+                if(on){on=false;pushWatched(t0,c);secs+=Math.max(0,c-t0);
                   maxP=d>0?Math.max(maxP,c/d*100):maxP;ping('pause');}
                 curPos=c;
                 pw&&pw.classList.add('vp-paused');pw&&pw.classList.add('vp-active');
                 _ytSyncPlay();
               }
               if(e.data===S.ENDED){
-                if(on){on=false;secs+=d-t0;ivs.push([t0,d]);}
+                if(on){on=false;pushWatched(t0,d);secs+=Math.max(0,d-t0);}
                 maxP=100;_ended=true;curPos=d;ping('end');
                 pw&&pw.classList.add('vp-paused');_ytSyncPlay();
               }
@@ -545,8 +545,10 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
             var d=player.getDuration()||ytDur;
             if(d>0){
               var ct=(sk.value/1000)*d;
+              var cur=player.getCurrentTime()||0;   /* pre-seek position */
               player.seekTo(ct,true);
-              if(on){secs+=ct-t0;ivs.push([t0,ct]);t0=ct;}
+              if(on){pushWatched(t0,cur);secs+=Math.max(0,cur-t0);t0=ct;}
+              ping('seek');
             }
           }
           sk.addEventListener('change',_ytCommitSeek);
@@ -567,7 +569,8 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
           e.stopPropagation();
           var c=player.getCurrentTime()||0;var to=Math.max(0,c-10);
           player.seekTo(to,true);
-          if(on){secs+=c-t0;ivs.push([t0,c]);t0=to;}
+          if(on){pushWatched(t0,c);secs+=Math.max(0,c-t0);t0=to;}
+          ping('seek');
           _ytSetUI(true);
         });
         fwdBtn&&fwdBtn.addEventListener('click',function(e){
@@ -576,7 +579,8 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
           var d=player.getDuration()||ytDur;
           var to=Math.min(d||Infinity,c+10);
           player.seekTo(to,true);
-          if(on){secs+=c-t0;ivs.push([t0,c]);t0=to;}
+          if(on){pushWatched(t0,c);secs+=Math.max(0,c-t0);t0=to;}
+          ping('seek');
           _ytSetUI(true);
         });
 
@@ -640,7 +644,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
           if(!on){on=true;t0=d.seconds;ping('play');}
         });
         p.on('pause',function(d){
-          if(on){on=false;secs+=d.seconds-t0;ivs.push([t0,d.seconds]);
+          if(on){on=false;pushWatched(t0,d.seconds);secs+=Math.max(0,d.seconds-t0);
             p.getDuration().then(function(dur){maxP=dur>0?Math.max(maxP,d.seconds/dur*100):maxP;});
             ping('pause');}
         });
@@ -1154,14 +1158,21 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
 
         /* ── Analytics ──────────────────────────────── */
         v.addEventListener('loadedmetadata',function(){if(v.duration>0)dur=v.duration;});
-        v.addEventListener('timeupdate',function(){if(v.duration>0)_checkThresholds(v.currentTime,v.duration);});
-        v.addEventListener('play',function(){if(!on){on=true;t0=v.currentTime;curPos=v.currentTime;ping('play');}});
+        /* Track the latest genuine playback position. Only advance lastPos on a
+           normal small forward step (<3s); a large jump is a seek, whose target
+           must NOT become lastPos (otherwise the next close would fill the skip). */
+        v.addEventListener('timeupdate',function(){
+          var c=v.currentTime;
+          if(on&&c>lastPos&&c-lastPos<3)lastPos=c;
+          if(v.duration>0)_checkThresholds(c,v.duration);
+        });
+        v.addEventListener('play',function(){if(!on){on=true;t0=v.currentTime;lastPos=v.currentTime;curPos=v.currentTime;ping('play');}});
         v.addEventListener('pause',function(){
-          if(on){on=false;var e=v.currentTime;curPos=e;secs+=e-t0;ivs.push([t0,e]);
+          if(on){on=false;var e=v.currentTime;curPos=e;pushWatched(t0,e);secs+=Math.max(0,e-t0);
             maxP=v.duration>0?Math.max(maxP,e/v.duration*100):maxP;ping('pause');}
         });
         v.addEventListener('ended',function(){
-          if(on){on=false;var e=v.currentTime;curPos=e;secs+=e-t0;ivs.push([t0,e]);}
+          if(on){on=false;var e=v.currentTime;curPos=e;pushWatched(t0,e);secs+=Math.max(0,e-t0);}
           maxP=100;curPos=v.duration||curPos;
           /* Mark complete BEFORE pinging so _onUnload (pagehide / beforeunload)
              does not fire a second ping if the user closes the tab right after
@@ -1169,22 +1180,25 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
           _ended=true;
           ping('end');
         });
+        /* Seek: close the watched span at the PRE-seek position (lastPos) so the
+           skipped region is never recorded, then reopen at the seek target.
+           Also fires a 'seek' event so seeks are visible in analytics_events. */
         v.addEventListener('seeked',function(){
-          curPos=v.currentTime;
-          if(on){var e=v.currentTime;secs+=e-t0;ivs.push([t0,e]);t0=e;}
+          var d=v.currentTime;
+          if(on){pushWatched(t0,lastPos);secs+=Math.max(0,lastPos-t0);}
+          t0=d;lastPos=d;curPos=d;
+          ping('seek');
         });
-        /* Heartbeat every 15 s: flush the current in-progress interval so the
-           server has reliable data even if the user never pauses or ends.
-           Closes the interval at "now" and resets t0, so subsequent
-           pause/end pings only report new seconds (no double-count). */
+        /* Heartbeat every 15 s: flush the current in-progress span so the server
+           has reliable data even if the user never pauses or ends. Resets t0 so
+           subsequent pings only report new seconds (no double-count). */
         setInterval(function(){
           if(on&&v.duration>0){
             var now=v.currentTime;
             curPos=now;
             maxP=Math.max(maxP,now/v.duration*100);
             dur=v.duration;
-            secs+=now-t0;
-            ivs.push([t0,now]);
+            pushWatched(t0,now);secs+=Math.max(0,now-t0);
             t0=now;
             ping('heartbeat');
           }
@@ -1229,6 +1243,22 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
     console.log('[VidaPulse] viewer cookie:', ck);
 
     var sid=null, pq=[], on=false,t0=0,maxP=0,secs=0,ivs=[],dur=0,curPos=0;
+    /* furthestSec = furthest whole-second ever reached (the first-watch frontier);
+       lastPos = latest genuine playback position (used to close at the PRE-seek
+       point so skipped seconds are never recorded). */
+    var furthestSec=0, lastPos=0;
+    /* Record a watched span [a,b). Seconds past the first-watch frontier are
+       tagged pass 1 (first_watches); seconds already reached before (rewatch /
+       pause-play looping at one spot) are tagged pass 2 (replays). This de-dups
+       the per-second re-counts that used to inflate one moment to 30x+ its real
+       viewer count, and — because seek handlers pass the pre-seek end — it never
+       fills seek-skipped seconds. */
+    function pushWatched(a,b){
+      a=Math.max(0,a); b=Math.max(a,b);
+      if(b<=a)return;
+      if(a<furthestSec){var rb=Math.min(b,furthestSec);if(rb>a)ivs.push([a,rb,2]);}
+      if(b>furthestSec){var fa=Math.max(a,furthestSec);if(b>fa)ivs.push([fa,b,1]);furthestSec=b;}
+    }
 
     /* ── Viewer tracking (owner pixel + /api/track) ──────────────────────
        Gated by TRACK_ENABLED (server already verified Pro + enabled + pixel).
@@ -1375,7 +1405,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
           ?player.getCurrentTime()
           :(document.getElementById('vp-vid')?document.getElementById('vp-vid').currentTime:t0);
         savePos(now);
-        secs+=now-t0;ivs.push([t0,now]);
+        pushWatched(t0,now);secs+=Math.max(0,now-t0);
       }
       ping('heartbeat');
     }
