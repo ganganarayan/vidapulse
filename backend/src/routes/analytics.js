@@ -84,6 +84,23 @@ function parseBrowser(ua) {
   return 'Other';
 }
 
+// Known automated-agent tokens: email link scanners, link-preview crawlers,
+// uptime monitors, headless/scripting clients. These fetch tracking links
+// without a human ever clicking, inflating CTA click counts.
+const BOT_UA_RE = /bot\b|crawl|spider|slurp|scan|monitor|preview|headless|phantom|puppeteer|playwright|selenium|curl|wget|python-requests|aiohttp|go-http|okhttp|java\/|libwww|httpclient|facebookexternalhit|slackbot|whatsapp|telegram|discord|bingpreview|linkedinbot|twitterbot|pinterest|safelinks|proofpoint|mimecast|barracuda|urldefense|cloudfront|amazonaws|microsoftpreview/i;
+
+/**
+ * True only when the request looks like a real human browser click.
+ * Used to gate CTA-click RECORDING (the redirect itself always proceeds, so
+ * real users are never blocked). Filters bots/scanners that hit tracking URLs.
+ */
+function isLikelyHumanClick(ua) {
+  if (!ua) return false;                 // empty UA → automated
+  if (BOT_UA_RE.test(ua)) return false;  // known bot/scanner token
+  const b = parseBrowser(ua);
+  return !!b && b !== 'Other';           // must resolve to a real browser
+}
+
 /** Parse OS name from a User-Agent string */
 function parseOS(ua) {
   if (!ua) return null;
@@ -767,8 +784,12 @@ router.get('/cta/link/:ctaId', async (req, res) => {
   // Redirect immediately — tracking is fire-and-forget
   res.redirect(302, finalDest);
 
-  // Record click with full metadata (Pro/admin_lifetime plan only)
-  if (ctaLink.plan_name === 'pro' || ctaLink.plan_name === 'admin_lifetime') {
+  // Record click with full metadata (Pro/admin_lifetime plan only).
+  // Skip bots/link-scanners/preview crawlers — they hit the tracking URL
+  // without a human clicking and would inflate counts. The redirect above
+  // still runs for everyone, so real users are never affected.
+  if ((ctaLink.plan_name === 'pro' || ctaLink.plan_name === 'admin_lifetime')
+      && isLikelyHumanClick(req.headers['user-agent'])) {
     // Capture device/browser/country from the redirect request itself
     const clickIp      = getClientIp(req);
     const clickGeo     = lookupCountry(clickIp);
@@ -852,28 +873,32 @@ router.get('/cta/:videoId', async (req, res) => {
                      : 'desktop';
   const utm          = pickUtm(req.query);
 
-  // Record into the independent cta_click_logs table — Pro/admin owners only.
-  // The owner is resolved from the video; the log keeps video_id only as an
-  // informational reference (no FK), so it survives any future video purge.
-  pool.query(
-    `INSERT INTO cta_click_logs
-       (cta_link_id, user_id, video_id, cta_name, page_name, destination_url,
-        viewer_id, device, browser, country, country_code, city,
-        utm_source, utm_medium, utm_campaign, utm_term, utm_content)
-     SELECT NULL, v.user_id, v.id, NULL, NULL, $2,
-            $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
-     FROM   videos v
-     JOIN   users u ON u.id = v.user_id
-     JOIN   plans p ON p.id = u.plan_id
-     WHERE  v.id = $1
-       AND  v.is_active = TRUE
-       AND  p.name IN ('pro', 'admin_lifetime')`,
-    [
-      videoId, safeDest, ctaViewerId, clickDevice, clickBrowser,
-      clickGeo.name, clickGeo.code, clickGeo.city,
-      utm.utm_source, utm.utm_medium, utm.utm_campaign, utm.utm_term, utm.utm_content,
-    ]
-  ).catch(err => logger.warn(`[analytics/cta] insert failed: ${err.message}`));
+  // Skip bots/link-scanners/preview crawlers — they hit the tracking URL
+  // without a human clicking. The redirect above already ran for everyone.
+  if (isLikelyHumanClick(req.headers['user-agent'])) {
+    // Record into the independent cta_click_logs table — Pro/admin owners only.
+    // The owner is resolved from the video; the log keeps video_id only as an
+    // informational reference (no FK), so it survives any future video purge.
+    pool.query(
+      `INSERT INTO cta_click_logs
+         (cta_link_id, user_id, video_id, cta_name, page_name, destination_url,
+          viewer_id, device, browser, country, country_code, city,
+          utm_source, utm_medium, utm_campaign, utm_term, utm_content)
+       SELECT NULL, v.user_id, v.id, NULL, NULL, $2,
+              $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+       FROM   videos v
+       JOIN   users u ON u.id = v.user_id
+       JOIN   plans p ON p.id = u.plan_id
+       WHERE  v.id = $1
+         AND  v.is_active = TRUE
+         AND  p.name IN ('pro', 'admin_lifetime')`,
+      [
+        videoId, safeDest, ctaViewerId, clickDevice, clickBrowser,
+        clickGeo.name, clickGeo.code, clickGeo.city,
+        utm.utm_source, utm.utm_medium, utm.utm_campaign, utm.utm_term, utm.utm_content,
+      ]
+    ).catch(err => logger.warn(`[analytics/cta] insert failed: ${err.message}`));
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────
