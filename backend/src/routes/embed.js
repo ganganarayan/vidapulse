@@ -74,14 +74,14 @@ router.get('/:videoId', async (req, res) => {
     // Load player settings (non-fatal — falls back to defaults)
     const DEFAULTS = {
       autoplay: false, autoplay_muted: true, start_muted: true,
-      show_seek_bar: true, show_play_pause_btn: true, show_playback_speed: true,
+      show_seek_bar: true, show_time: false, show_play_pause_btn: true, show_playback_speed: true,
       show_fullscreen_btn: true, show_volume_control: true, show_rewind_forward: true,
       resume_playback: false, loop: false, accent_color: '#F59E0B',
     };
     let playerSettings = { ...DEFAULTS };
     try {
       const { rows: [ps] } = await pool.query(
-        `SELECT autoplay, autoplay_muted, start_muted, show_seek_bar,
+        `SELECT autoplay, autoplay_muted, start_muted, show_seek_bar, show_time,
                 show_play_pause_btn, show_playback_speed, show_fullscreen_btn,
                 show_volume_control, show_rewind_forward, resume_playback, loop, accent_color
          FROM   video_player_settings WHERE video_id = $1`,
@@ -133,6 +133,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
   const startMuted        = ps.start_muted           ?? true;
   const showPlayPause     = ps.show_play_pause_btn   ?? true;
   const showSeekBar       = ps.show_seek_bar         ?? true;
+  const showTime          = ps.show_time             ?? false;
   const showSpeed         = ps.show_playback_speed   ?? true;
   const showFullscreen    = ps.show_fullscreen_btn   ?? true;
   const showVolumeControl = ps.show_volume_control   ?? true;
@@ -140,8 +141,12 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
   const resumePlay        = ps.resume_playback       ?? false;
   const loopVideo         = ps.loop                 ?? false;
 
+  // Non-scrubbable time display: only when Show Time is on AND the seek bar
+  // is off (the seek bar already shows time when present).
+  const showTimeOnly = showTime && !showSeekBar;
+
   // Show the control bar only if at least one individual control is enabled
-  const anyControls = showPlayPause || showSeekBar || showSpeed || showFullscreen || showVolumeControl;
+  const anyControls = showPlayPause || showSeekBar || showTime || showSpeed || showFullscreen || showVolumeControl;
 
   let playerHtml  = '';
   let extraScript = '';
@@ -155,7 +160,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
   // the bottom-right corner — unavoidable per YouTube's ToS.
   if (source_type === 'youtube') {
     const ytId = extractYouTubeId(videoUrl);
-    const hasBar = showSeekBar || showSpeed || showFullscreen || showVolumeControl;
+    const hasBar = showSeekBar || showTimeOnly || showSpeed || showFullscreen || showVolumeControl;
 
     // ── Control HTML (mirrors native video section) ──────────────────
     const volHtml = showVolumeControl
@@ -167,6 +172,8 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
       ? `<span id="vp-cur">0:00</span>
          <input type="range" id="vp-seek" min="0" max="1000" value="0">
          <span id="vp-rem">-0:00</span>` : '';
+    const tmHtml = showTimeOnly
+      ? `<span id="vp-time">0:00&nbsp;/&nbsp;0:00</span>` : '';
     const spSel = showSpeed
       ? `<select id="vp-speed">
            <option value="0.25">0.25×</option><option value="0.5">0.5×</option>
@@ -178,7 +185,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
       ? `<button class="vp-btn" id="vp-fs" title="Fullscreen">
            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
          </button>` : '';
-    const leftGroup  = (volHtml || skHtml) ? `<div id="vp-left">${volHtml}${skHtml}</div>` : '';
+    const leftGroup  = (volHtml || skHtml || tmHtml) ? `<div id="vp-left">${volHtml}${skHtml}${tmHtml}</div>` : '';
     const rightGroup = (spSel || fsBtn)    ? `<div id="vp-right">${spSel}${fsBtn}</div>`   : '';
 
     const skipBackBtn = showRewindFwd
@@ -301,11 +308,12 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
         width:11px;height:11px;border-radius:50%;
         background:#f59e0b;cursor:pointer;border:none;
       }
-      #vp-cur,#vp-rem{
+      #vp-cur,#vp-rem,#vp-time{
         color:rgba(255,255,255,.8);font-size:11px;white-space:nowrap;
         flex-shrink:0;font-family:sans-serif;
       }
       #vp-rem{color:rgba(255,255,255,.55);}
+      #vp-time{flex:1;font-variant-numeric:tabular-nums;}
       #vp-seek{
         flex:1;-webkit-appearance:none;appearance:none;
         height:4px;border-radius:2px;
@@ -427,9 +435,11 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
         var sk=document.getElementById('vp-seek');
         var curTm=document.getElementById('vp-cur');
         var remTm=document.getElementById('vp-rem');
+        var tmEl=document.getElementById('vp-time');
         if(d>0&&sk){sk.style.setProperty('--pct',(c/d*100)+'%');sk.value=(c/d)*1000;}
         if(curTm)curTm.textContent=_ytFmt(c);
         if(remTm)remTm.textContent='-'+_ytFmt(d-c);
+        if(tmEl)tmEl.innerHTML=_ytFmt(c)+'\\u00A0/\\u00A0'+_ytFmt(d);
       }
 
       /* ── Icon sync ────────────────────────────────────────────── */
@@ -665,7 +675,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
   // ── HLS / MP4 / S3 / Azure (direct video) ───────────────────────────
   else if (['hls_stream','mp4_direct','amazon_s3','azure_blob'].includes(source_type)) {
     const isHls = source_type === 'hls_stream';
-    const hasBar = showSeekBar || showSpeed || showFullscreen || showVolumeControl;
+    const hasBar = showSeekBar || showTimeOnly || showSpeed || showFullscreen || showVolumeControl;
 
     // ── Bottom bar: left group (vol + seek + times) | right group (speed + fullscreen)
     const volHtml = showVolumeControl
@@ -677,6 +687,9 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
       ? `<span id="vp-cur">0:00</span>
          <input type="range" id="vp-seek" min="0" max="1000" value="0">
          <span id="vp-rem">-0:00</span>` : '';
+    // Elapsed / total time — read-only (no scrubbing)
+    const tmHtml = showTimeOnly
+      ? `<span id="vp-time">0:00&nbsp;/&nbsp;0:00</span>` : '';
     const spSel = showSpeed
       ? `<select id="vp-speed">
            <option value="0.5">0.5×</option><option value="1" selected>1×</option>
@@ -687,7 +700,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
       ? `<button class="vp-btn" id="vp-fs" title="Fullscreen">
            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
          </button>` : '';
-    const leftGroup  = (volHtml || skHtml) ? `<div id="vp-left">${volHtml}${skHtml}</div>`  : '';
+    const leftGroup  = (volHtml || skHtml || tmHtml) ? `<div id="vp-left">${volHtml}${skHtml}${tmHtml}</div>`  : '';
     const rightGroup = (spSel || fsBtn)    ? `<div id="vp-right">${spSel}${fsBtn}</div>` : '';
 
     // ── Skip back / forward buttons (↺10 and 10↻)
@@ -851,11 +864,13 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
       }
 
       /* Time labels */
-      #vp-cur,#vp-rem{
+      #vp-cur,#vp-rem,#vp-time{
         color:rgba(255,255,255,.8);font-size:11px;white-space:nowrap;
         flex-shrink:0;font-family:sans-serif;
       }
       #vp-rem{color:rgba(255,255,255,.55);}
+      /* Read-only time display fills the bar's flexible space when no seek bar */
+      #vp-time{flex:1;font-variant-numeric:tabular-nums;}
 
       /* Seek bar */
       #vp-seek{
@@ -928,11 +943,20 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
         var sk     = document.getElementById('vp-seek');
         var curTm  = document.getElementById('vp-cur');
         var remTm  = document.getElementById('vp-rem');
+        var tmEl   = document.getElementById('vp-time');
         var sp     = document.getElementById('vp-speed');
         var fs     = document.getElementById('vp-fs');
         var volBtn = document.getElementById('vp-vol-btn');
         var volSl  = document.getElementById('vp-vol');
         var hideT  = null;
+
+        /* ── Read-only elapsed / total time (no seek bar) ── */
+        if(tmEl){
+          function updateTime(){tmEl.innerHTML=fmt(v.currentTime)+'\\u00A0/\\u00A0'+fmt(v.duration);}
+          v.addEventListener('timeupdate',updateTime);
+          v.addEventListener('loadedmetadata',updateTime);
+          updateTime();
+        }
 
         /* ── UI show/hide ───────────────────────────── */
         function setUI(show){
