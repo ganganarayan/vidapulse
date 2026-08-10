@@ -325,31 +325,51 @@ async function start() {
       });
     });
 
-    // ── Step 2: Verify database is reachable ──────────────────────────────
-    logger.info('[server] Step 2/4 — Testing database connection...');
-    await testConnection();
-
-    // ── Step 3: Apply any pending schema migrations ───────────────────────
-    logger.info('[server] Step 3/4 — Running database migrations...');
-    await runMigrations();
-
-    // ── Step 4: Start background workers ─────────────────────────────────
-    logger.info('[server] Step 4/4 — Starting background workers...');
-    webhookSender.start();
-    scheduledJobs.start();
-
-    logger.info('');
-    logger.info('[server] ✓ Fully operational!');
-    logger.info(`[server]   Health check : http://localhost:${env.PORT}/api/health`);
-    logger.info(`[server]   Webhook URL  : ${env.APP_URL}/api/webhook/create-user`);
-    logger.info('[server] ✓ Workers started — webhook sender (30 s/60 s) · scheduled jobs (3 m/15 m/1 h)');
-    logger.info('');
+    // ── Steps 2–4: DB test → migrations → workers ────────────────────────
+    // Run these in the background WITH RETRY. The HTTP port is already bound
+    // (Step 1), so the app stays up and the healthcheck passes even if the
+    // database is briefly unreachable (e.g. a platform connectivity incident).
+    // Previously a DB blip here called process.exit(1) — crashing the whole
+    // app, failing the deploy, and stranding traffic on the old instance.
+    // Now the app survives and self-heals when the DB returns.
+    initDatabaseAndWorkers();
 
   } catch (err) {
-    logger.error('[server] ✗ FATAL: Startup failed!');
+    logger.error('[server] ✗ FATAL: Could not bind HTTP port!');
     logger.error(`[server]   ${err.message}`);
     logger.error(err.stack);
     process.exit(1);
+  }
+}
+
+// Whether background workers have been started (start them exactly once).
+let _workersStarted = false;
+
+/**
+ * Test the DB, run migrations, and start workers — retrying forever on
+ * failure. Never exits the process; the server keeps serving (health = 200)
+ * and recovers automatically once the database is reachable again.
+ */
+async function initDatabaseAndWorkers(attempt = 1) {
+  try {
+    logger.info(`[server] Step 2/4 — Testing database connection... (attempt ${attempt})`);
+    await testConnection();
+
+    logger.info('[server] Step 3/4 — Running database migrations...');
+    await runMigrations();
+
+    if (!_workersStarted) {
+      logger.info('[server] Step 4/4 — Starting background workers...');
+      webhookSender.start();
+      scheduledJobs.start();
+      _workersStarted = true;
+    }
+
+    logger.info('[server] ✓ Fully operational! DB connected, migrations applied, workers running.');
+  } catch (err) {
+    const retryMs = Math.min(30_000, 5_000 * attempt); // backoff, cap 30 s
+    logger.error(`[server] DB init attempt ${attempt} failed: ${err.message} — retrying in ${retryMs / 1000}s (app stays up)`);
+    setTimeout(() => initDatabaseAndWorkers(attempt + 1), retryMs);
   }
 }
 

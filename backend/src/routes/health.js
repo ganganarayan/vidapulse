@@ -67,10 +67,14 @@ router.get('/', async (req, res) => {
   }
 
   // ── 5. Build and send response ────────────────────────────────────────
-  const status     = dbConnected ? 'ok' : 'degraded';
-  const statusCode = dbConnected ?  200 :  503;
+  // LIVENESS probe: return 200 whenever the process is up and serving, even
+  // if the DB is momentarily unreachable. A transient DB blip must NOT fail
+  // the Railway healthcheck — that would crash-loop the deploy and strand
+  // traffic on the old instance. DB health is reported in the body
+  // (`status` / `database.connected`) for monitoring/readiness checks.
+  const status = dbConnected ? 'ok' : 'degraded';
 
-  res.status(statusCode).json({
+  res.status(200).json({
     status,
     timestamp: new Date().toISOString(),
     database: {
