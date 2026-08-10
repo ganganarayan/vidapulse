@@ -28,6 +28,13 @@ const pool = new Pool({
   max                    : 20,
   idleTimeoutMillis      : 30_000, // release idle connections after 30 s
   connectionTimeoutMillis:  2_000, // fail fast if pool is exhausted (2 s)
+  // Cap how long a single query can run. Without this, a query on a
+  // half-dead connection (e.g. after a DB blip) hangs forever and never
+  // releases its pool slot — 20 such hangs exhaust the pool and every new
+  // query (including login) stalls. Fail the query fast so the slot frees.
+  statement_timeout      : 30_000, // server cancels the query after 30 s
+  query_timeout          : 30_000, // client aborts + releases after 30 s
+  keepAlive              : true,   // detect dropped TCP connections sooner
 });
 
 // Log unexpected pool-level errors (dropped connections, etc.)

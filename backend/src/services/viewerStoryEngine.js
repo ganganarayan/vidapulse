@@ -476,7 +476,8 @@ async function _storyMobilePattern(videoId, video) {
          WHERE started_muted = FALSE OR unmuted_at_seconds IS NOT NULL
        )::int                                                    AS unmuted_sessions,
        ROUND(AVG(final_playback_speed), 2)                       AS avg_speed,
-       EXTRACT(HOUR FROM AVG(started_at AT TIME ZONE 'UTC'))     AS avg_hour_utc
+       -- Postgres has no avg(timestamp); average the hour-of-day instead.
+       ROUND(AVG(EXTRACT(HOUR FROM started_at AT TIME ZONE 'UTC'))) AS avg_hour_utc
      FROM analytics_sessions
      WHERE video_id = $1
        AND device_type IN ('mobile', 'desktop')
