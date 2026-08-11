@@ -59,8 +59,21 @@ function clientIp(req) {
 }
 
 /** Express middleware — logs bot requests, passes everything through. */
+// True for actual page requests worth counting per-link (KB pages, homepage,
+// embeds, app routes). Skips API, static assets, and asset file extensions so
+// path_hits stays a clean "which link had how many views" table.
+function isPageRequest(req) {
+  if (req.method !== 'GET') return false;
+  const p = req.path || '';
+  if (p.startsWith('/api') || p.startsWith('/assets') || p.startsWith('/kb-assets')) return false;
+  if (/\.(css|js|mjs|json|map|png|jpe?g|svg|gif|ico|webp|avif|woff2?|ttf|eot|txt|xml)$/i.test(p)) return false;
+  return true;
+}
+
 function crawlerLogger(req, res, next) {
   const bot = detectBot(req.headers['user-agent'] || '');
+
+  // Per-bot daily aggregate (which crawlers are browsing).
   if (bot) {
     pool.query(
       `INSERT INTO crawler_log (bot_name, day, hits, last_path, last_ip, last_seen)
@@ -73,6 +86,21 @@ function crawlerLogger(req, res, next) {
       [bot, (req.originalUrl || req.path || '').slice(0, 500), clientIp(req)]
     ).catch(err => logger.debug(`[crawler] log failed: ${err.message}`));
   }
+
+  // Per-link daily aggregate (which link had how many hits — incl. crawlers).
+  if (isPageRequest(req)) {
+    const path = (req.path || '/').slice(0, 500);
+    pool.query(
+      `INSERT INTO path_hits (path, day, hits, bot_hits, last_seen)
+       VALUES ($1, CURRENT_DATE, 1, $2, NOW())
+       ON CONFLICT (path, day) DO UPDATE
+         SET hits      = path_hits.hits + 1,
+             bot_hits  = path_hits.bot_hits + $2,
+             last_seen = NOW()`,
+      [path, bot ? 1 : 0]
+    ).catch(err => logger.debug(`[path_hits] log failed: ${err.message}`));
+  }
+
   next();
 }
 

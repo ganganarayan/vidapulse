@@ -259,6 +259,44 @@ router.get('/page-views', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/path-hits
+// Hits per link (page), over a window: total hits, bot hits, human hits.
+// Query: ?days=30&limit=300
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/path-hits', async (req, res, next) => {
+  try {
+    const days  = Math.min(parseInt(req.query.days, 10) || 30, 365);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 300, 1000);
+    const { rows } = await pool.query(
+      `SELECT path,
+              SUM(hits)::int                     AS hits,
+              SUM(bot_hits)::int                 AS bot_hits,
+              (SUM(hits) - SUM(bot_hits))::int   AS human_hits,
+              MAX(last_seen)                     AS last_seen
+       FROM   path_hits
+       WHERE  day >= CURRENT_DATE - ($1::int - 1)
+       GROUP  BY path
+       ORDER  BY hits DESC
+       LIMIT  $2`,
+      [days, limit]
+    );
+    const { rows: [tot] } = await pool.query(
+      `SELECT COALESCE(SUM(hits),0)::int AS total_hits,
+              COALESCE(SUM(bot_hits),0)::int AS total_bot_hits
+       FROM   path_hits WHERE day >= CURRENT_DATE - ($1::int - 1)`,
+      [days]
+    );
+    return res.json({
+      window_days: days,
+      total_hits: tot.total_hits,
+      total_bot_hits: tot.total_bot_hits,
+      total_human_hits: tot.total_hits - tot.total_bot_hits,
+      links: rows,
+    });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/crawler-log
 // Which bots/crawlers are browsing — per-bot totals + recent per-day rows.
 // ─────────────────────────────────────────────────────────────────────────────

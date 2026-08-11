@@ -15,14 +15,15 @@ export default function AdminPageViews() {
   const navigate = useNavigate();
   const [days,    setDays]    = useState(30);
   const [data,    setData]    = useState(null);
+  const [links,   setLinks]   = useState(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback((d) => {
     setLoading(true);
-    api.get(`/admin/page-views?days=${d}`)
-      .then(r => setData(r.data))
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
+    Promise.all([
+      api.get(`/admin/page-views?days=${d}`).then(r => setData(r.data)).catch(() => setData(null)),
+      api.get(`/admin/path-hits?days=${d}`).then(r => setLinks(r.data)).catch(() => setLinks(null)),
+    ]).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => { load(days); }, [load, days]);
@@ -75,8 +76,52 @@ export default function AdminPageViews() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <BreakdownTable title="By UTM source"   rows={data.by_source}   keyName="utm_source"   />
               <BreakdownTable title="By campaign"      rows={data.by_campaign} keyName="utm_campaign" />
-              <BreakdownTable title="Top pages"        rows={data.top_pages}   keyName="path"          mono />
               <BreakdownTable title="By country"       rows={data.by_country}  keyName="country_code" />
+            </div>
+
+            {/* Hits per link — every page, with human vs bot split */}
+            <div>
+              <div className="mb-3">
+                <h3 className="text-sm font-bold text-gray-200">Hits per link</h3>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  Every page (KB, homepage, embeds), counted server-side — includes crawlers the beacon can't see.
+                  {links && ` ${(links.total_hits ?? 0).toLocaleString()} total · ${(links.total_human_hits ?? 0).toLocaleString()} human · ${(links.total_bot_hits ?? 0).toLocaleString()} bot.`}
+                </p>
+              </div>
+              {(!links || (links.links ?? []).length === 0) ? (
+                <div className="py-8 text-center bg-gray-800/30 border border-gray-700/50 rounded-xl">
+                  <p className="text-sm text-gray-400">No link hits recorded yet.</p>
+                </div>
+              ) : (
+                <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl overflow-hidden overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-[10px] uppercase tracking-wider text-gray-500 border-b border-gray-700/50">
+                        <th className="px-3 py-2.5 font-semibold">Link</th>
+                        <th className="px-3 py-2.5 font-semibold text-right">Total</th>
+                        <th className="px-3 py-2.5 font-semibold text-right">Human</th>
+                        <th className="px-3 py-2.5 font-semibold text-right">Bot</th>
+                        <th className="px-3 py-2.5 font-semibold">Last hit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-700/30">
+                      {links.links.map((l, i) => (
+                        <tr key={i} className="text-gray-300 hover:bg-gray-800/40">
+                          <td className="px-3 py-2 font-mono text-[11px] text-gray-300 max-w-md truncate" title={l.path}>
+                            {l.path}
+                          </td>
+                          <td className="px-3 py-2 text-right font-bold text-amber-400">{(l.hits ?? 0).toLocaleString()}</td>
+                          <td className="px-3 py-2 text-right text-emerald-400">{(l.human_hits ?? 0).toLocaleString()}</td>
+                          <td className="px-3 py-2 text-right text-gray-500">{(l.bot_hits ?? 0).toLocaleString()}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-gray-500">
+                            {l.last_seen ? new Date(l.last_seen).toLocaleString() : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </>
         )}
