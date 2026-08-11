@@ -184,6 +184,35 @@ router.get('/version', (_req, res) => {
   res.json({ started_at: startedAt });
 });
 
+// ── GET /api/wake ─────────────────────────────────────────────────────────
+// Public wake endpoint. Hitting this URL from OUTSIDE (a bookmark, phone
+// shortcut, or uptime monitor) wakes a sleeping Railway instance — the
+// request itself does the waking. Every hit is logged to wake_log for the
+// admin Wake page. Optional query params: ?source=bookmark&note=...
+router.get('/wake', async (req, res) => {
+  const awakeAt = new Date().toISOString();
+  // Respond immediately (this is what wakes the container).
+  res.json({ ok: true, awake_at: awakeAt, message: 'VidaPulse is awake' });
+
+  // Log the wake (best-effort — never blocks or throws).
+  try {
+    const db     = require('../config/database').pool;
+    const source = String(req.query.source ?? 'unknown').slice(0, 100);
+    const note   = req.query.note ? String(req.query.note).slice(0, 500) : null;
+    const ip     = req.headers['cf-connecting-ip']
+                || (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+                || req.ip || null;
+    const ua     = (req.headers['user-agent'] || '').slice(0, 500) || null;
+    await db.query(
+      `INSERT INTO wake_log (source, ip, user_agent, note) VALUES ($1, $2, $3, $4)`,
+      [source, ip, ua, note]
+    );
+    logger.info(`[wake] Wake ping logged — source=${source} ip=${ip}`);
+  } catch (err) {
+    logger.warn(`[wake] failed to log wake ping: ${err.message}`);
+  }
+});
+
 // ── 404 handler for unknown /api/* routes ─────────────────
 // Catches any request that didn't match above routes
 router.use((req, res) => {

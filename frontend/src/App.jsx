@@ -39,6 +39,7 @@ import AdminTrackingLogs from './pages/AdminTrackingLogs';
 import AdminPromotionPage from './pages/AdminPromotionPage';
 import AdminRevenue       from './pages/AdminRevenue';
 import AdminCopyData     from './pages/AdminCopyData';
+import AdminWake         from './pages/AdminWake';
 import UpgradePage       from './pages/UpgradePage';
 import PaymentSuccess    from './pages/PaymentSuccess';
 import BillingPage       from './pages/BillingPage';
@@ -347,6 +348,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminCopyData />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/wake"
+            element={
+              <AdminRoute>
+                <AdminWake />
               </AdminRoute>
             }
           />

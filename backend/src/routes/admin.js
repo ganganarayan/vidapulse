@@ -181,6 +181,27 @@ router.post('/impersonate/end', requireAuth, requireImpersonating, async (req, r
 router.use(requireAuth, requireAdmin);
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/wake-log
+// Recent external wake pings (from GET /api/wake), newest first.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/wake-log', async (req, res, next) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
+    const { rows } = await pool.query(
+      `SELECT id, source, ip, user_agent, note, created_at
+       FROM   wake_log
+       ORDER  BY created_at DESC
+       LIMIT  $1`,
+      [limit]
+    );
+    const { rows: [agg] } = await pool.query(
+      `SELECT COUNT(*)::int AS total, MAX(created_at) AS last_wake_at FROM wake_log`
+    );
+    return res.json({ events: rows, total: agg.total, last_wake_at: agg.last_wake_at });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/webhook-settings
 // ─────────────────────────────────────────────────────────────────────────────
 
