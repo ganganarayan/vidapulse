@@ -202,6 +202,63 @@ router.get('/wake-log', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/page-views
+// Human-vs-bot page views on the landing page + KB, with UTM & top-page
+// breakdowns. Query: ?days=30
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/page-views', async (req, res, next) => {
+  try {
+    const days = Math.min(parseInt(req.query.days, 10) || 30, 365);
+    const since = `CURRENT_DATE - (${days}::int - 1)`;
+
+    const { rows: [totals] } = await pool.query(
+      `SELECT COUNT(*) FILTER (WHERE NOT is_bot)::int AS human_views,
+              COUNT(*) FILTER (WHERE is_bot)::int     AS bot_views,
+              COUNT(DISTINCT ip) FILTER (WHERE NOT is_bot)::int AS human_ips
+       FROM   page_views WHERE created_at >= ${since}`
+    );
+    // Human traffic by UTM source
+    const { rows: bySource } = await pool.query(
+      `SELECT COALESCE(NULLIF(utm_source,''),'(none)') AS utm_source,
+              COUNT(*)::int AS views
+       FROM   page_views
+       WHERE  created_at >= ${since} AND NOT is_bot
+       GROUP  BY 1 ORDER BY views DESC LIMIT 25`
+    );
+    // Human traffic by campaign
+    const { rows: byCampaign } = await pool.query(
+      `SELECT COALESCE(NULLIF(utm_campaign,''),'(none)') AS utm_campaign,
+              COUNT(*)::int AS views
+       FROM   page_views
+       WHERE  created_at >= ${since} AND NOT is_bot
+       GROUP  BY 1 ORDER BY views DESC LIMIT 25`
+    );
+    // Top pages (human)
+    const { rows: topPages } = await pool.query(
+      `SELECT path, COUNT(*)::int AS views
+       FROM   page_views
+       WHERE  created_at >= ${since} AND NOT is_bot
+       GROUP  BY path ORDER BY views DESC LIMIT 30`
+    );
+    // Top countries (human)
+    const { rows: byCountry } = await pool.query(
+      `SELECT COALESCE(country_code,'??') AS country_code, COUNT(*)::int AS views
+       FROM   page_views
+       WHERE  created_at >= ${since} AND NOT is_bot
+       GROUP  BY 1 ORDER BY views DESC LIMIT 15`
+    );
+    return res.json({
+      window_days: days,
+      totals,
+      by_source: bySource,
+      by_campaign: byCampaign,
+      top_pages: topPages,
+      by_country: byCountry,
+    });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/crawler-log
 // Which bots/crawlers are browsing — per-bot totals + recent per-day rows.
 // ─────────────────────────────────────────────────────────────────────────────

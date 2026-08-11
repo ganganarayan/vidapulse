@@ -233,6 +233,10 @@ function renderPager(prev, next) {
 
 // ── Full document ─────────────────────────────────────────────────
 
+// VidaPulse page-view beacon — fires an image request to /api/pageview on
+// load with path/referrer/utm/device so human vs bot traffic is tracked.
+const PAGEVIEW_BEACON = `<script>(function(){try{var q=new URLSearchParams(location.search),p=new URLSearchParams();p.set('path',location.pathname);p.set('host',location.hostname);if(document.referrer)p.set('ref',document.referrer);['utm_source','utm_medium','utm_campaign','utm_term','utm_content'].forEach(function(k){var v=q.get(k);if(v)p.set(k,v);});p.set('dt',innerWidth<768?'mobile':innerWidth<1024?'tablet':'desktop');new Image().src='https://app.vidapulse.io/api/pageview?'+p.toString()+'&t='+Date.now();}catch(e){}})();</script>`;
+
 function renderPage({ title, description, canonicalPath, graph, body, bodyScript, bodyClass, pager }) {
   const script = bodyScript ? `\n  ${bodyScript}` : '';
   const cls = bodyClass ? ` class="${bodyClass}"` : '';
@@ -250,6 +254,7 @@ ${body}
     </div>
   </main>${pagerHtml}
   ${renderFooter()}${script}
+  ${PAGEVIEW_BEACON}
 </body>
 </html>
 `;

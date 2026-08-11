@@ -213,6 +213,40 @@ router.get('/wake', async (req, res) => {
   }
 });
 
+// ── GET /api/pageview ─────────────────────────────────────────────────────
+// Beacon endpoint. A tiny script on the landing page + KB pages fires an
+// image request here on load with path/referrer/utm/device. Cross-origin
+// safe (image GET, no CORS). Logs to page_views; flags bots via UA.
+router.get('/pageview', (req, res) => {
+  res.status(204).end(); // respond instantly — it's a fire-and-forget beacon
+  try {
+    const db     = require('../config/database').pool;
+    const geoip  = require('geoip-lite');
+    const { detectBot } = require('../services/crawlerLogger');
+    const q      = req.query || {};
+    const ua     = req.headers['user-agent'] || '';
+    const botName = detectBot(ua);
+    const ip = req.headers['cf-connecting-ip']
+            || (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+            || req.ip || null;
+    const cc = (() => { try { return geoip.lookup(ip)?.country || null; } catch { return null; } })();
+    const s = (v, n = 200) => (v == null ? null : String(v).slice(0, n));
+    db.query(
+      `INSERT INTO page_views
+         (host, path, referrer, utm_source, utm_medium, utm_campaign, utm_term,
+          utm_content, device, is_bot, bot_name, country_code, ip)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [
+        s(q.host, 120), s(q.path, 2000), s(q.ref, 2000),
+        s(q.utm_source), s(q.utm_medium), s(q.utm_campaign), s(q.utm_term), s(q.utm_content),
+        s(q.dt, 20), !!botName, botName, cc, ip,
+      ]
+    ).catch(err => logger.debug(`[pageview] log failed: ${err.message}`));
+  } catch (err) {
+    logger.debug(`[pageview] handler error: ${err.message}`);
+  }
+});
+
 // ── 404 handler for unknown /api/* routes ─────────────────
 // Catches any request that didn't match above routes
 router.use((req, res) => {
