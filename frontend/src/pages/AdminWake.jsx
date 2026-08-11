@@ -22,17 +22,23 @@ export default function AdminWake() {
   const [loading,  setLoading]  = useState(true);
   const [copied,   setCopied]   = useState(false);
   const [pinging,  setPinging]  = useState(false);
+  const [crawlers, setCrawlers] = useState([]);
+  const [crawlerTotal, setCrawlerTotal] = useState(0);
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get('/admin/wake-log')
-      .then(r => {
-        setEvents(r.data.events ?? []);
-        setTotal(r.data.total ?? 0);
-        setLastWake(r.data.last_wake_at ?? null);
-      })
-      .catch(() => setEvents([]))
-      .finally(() => setLoading(false));
+    Promise.all([
+      api.get('/admin/wake-log')
+        .then(r => {
+          setEvents(r.data.events ?? []);
+          setTotal(r.data.total ?? 0);
+          setLastWake(r.data.last_wake_at ?? null);
+        })
+        .catch(() => setEvents([])),
+      api.get('/admin/crawler-log?days=7')
+        .then(r => { setCrawlers(r.data.bots ?? []); setCrawlerTotal(r.data.total_hits ?? 0); })
+        .catch(() => setCrawlers([])),
+    ]).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -107,6 +113,50 @@ export default function AdminWake() {
               {lastWake ? new Date(lastWake).toLocaleString() : '—'}
             </p>
           </div>
+        </div>
+
+        {/* Crawlers — what keeps the app awake */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-sm font-bold text-gray-200">Crawlers (last 7 days)</h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Bots browsing the app — {crawlerTotal.toLocaleString()} hits total. These keep the instance awake.
+              </p>
+            </div>
+          </div>
+          {crawlers.length === 0 ? (
+            <div className="py-8 text-center bg-gray-800/30 border border-gray-700/50 rounded-xl">
+              <p className="text-sm text-gray-400">No crawler activity recorded yet.</p>
+            </div>
+          ) : (
+            <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl overflow-hidden overflow-x-auto mb-6">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-[10px] uppercase tracking-wider text-gray-500 border-b border-gray-700/50">
+                    <th className="px-3 py-2.5 font-semibold">Bot</th>
+                    <th className="px-3 py-2.5 font-semibold">Hits</th>
+                    <th className="px-3 py-2.5 font-semibold">Last seen</th>
+                    <th className="px-3 py-2.5 font-semibold">Last path</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700/30">
+                  {crawlers.map(b => (
+                    <tr key={b.bot_name} className="text-gray-300 hover:bg-gray-800/40">
+                      <td className="px-3 py-2 font-medium text-gray-200">{b.bot_name}</td>
+                      <td className="px-3 py-2 font-bold text-amber-400">{(b.hits ?? 0).toLocaleString()}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-gray-400">
+                        {b.last_seen ? new Date(b.last_seen).toLocaleString() : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-gray-500 max-w-xs truncate" title={b.last_path || ''}>
+                        {b.last_path || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Log */}

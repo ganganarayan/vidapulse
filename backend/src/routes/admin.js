@@ -202,6 +202,35 @@ router.get('/wake-log', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/crawler-log
+// Which bots/crawlers are browsing — per-bot totals + recent per-day rows.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/crawler-log', async (req, res, next) => {
+  try {
+    const days = Math.min(parseInt(req.query.days, 10) || 7, 90);
+    // Per-bot summary over the window
+    const { rows: summary } = await pool.query(
+      `SELECT bot_name,
+              SUM(hits)::int      AS hits,
+              MAX(last_seen)      AS last_seen,
+              (ARRAY_AGG(last_path ORDER BY last_seen DESC))[1] AS last_path
+       FROM   crawler_log
+       WHERE  day >= CURRENT_DATE - ($1::int - 1)
+       GROUP  BY bot_name
+       ORDER  BY hits DESC`,
+      [days]
+    );
+    const { rows: [tot] } = await pool.query(
+      `SELECT COALESCE(SUM(hits),0)::int AS total_hits
+       FROM   crawler_log
+       WHERE  day >= CURRENT_DATE - ($1::int - 1)`,
+      [days]
+    );
+    return res.json({ window_days: days, total_hits: tot.total_hits, bots: summary });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/webhook-settings
 // ─────────────────────────────────────────────────────────────────────────────
 

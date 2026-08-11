@@ -134,6 +134,12 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
+// ── Crawler logging ───────────────────────────────────────────
+// Records which bots/crawlers browse the app (KB, homepage, API) into
+// crawler_log, aggregated per bot per day. Fire-and-forget; humans ignored.
+const { crawlerLogger } = require('./services/crawlerLogger');
+app.use(crawlerLogger);
+
 // ─────────────────────────────────────────────────────────────
 // Embed route — public, no auth, must come before API + static
 // GET /embed/:videoId → self-contained HTML player + tracking

@@ -1,20 +1,19 @@
 import { useEffect, useRef } from 'react';
 import api from '../lib/api';
 
-const POLL_INTERVAL_MS = 60_000; // check every 60 s
-
 /**
  * useVersionWatcher
  *
- * Polls GET /api/version every 60 s.  When the server's `started_at`
- * timestamp changes (new Railway deploy → process restart), the hook
- * calls window.location.reload(true) so the user automatically gets
- * the latest frontend build without having to refresh manually.
+ * Detects a new Railway deploy (server `started_at` changes) and reloads
+ * the page so the user gets the latest frontend build.
  *
- * First poll just records the baseline — it never triggers a reload
- * on the initial page load, only on subsequent changes.
- *
- * Mount this once in App.jsx so it runs for the entire session.
+ * IMPORTANT: this intentionally does NOT poll on a fixed interval. A 60 s
+ * poll from every open tab was constant inbound traffic that prevented the
+ * Railway instance from ever sleeping. Instead we check only:
+ *   • once on mount, and
+ *   • when the tab regains focus / becomes visible again.
+ * That still catches new deploys the moment a user returns to the tab,
+ * without a permanent idle heartbeat.
  */
 export function useVersionWatcher() {
   const baselineRef = useRef(null); // null = "not yet recorded"
@@ -29,26 +28,26 @@ export function useVersionWatcher() {
         if (!serverVersion) return;
 
         if (baselineRef.current === null) {
-          // First successful response — store baseline, do not reload
-          baselineRef.current = serverVersion;
-        } else if (serverVersion !== baselineRef.current) {
-          // Version changed: new deploy detected → reload to pick up new bundles
-          if (!cancelled) {
-            window.location.reload(true);
-          }
+          baselineRef.current = serverVersion;        // first response = baseline
+        } else if (serverVersion !== baselineRef.current && !cancelled) {
+          window.location.reload(true);               // new deploy → reload
         }
       } catch {
         // Network blip or server restarting mid-deploy — skip silently
       }
     }
 
-    // Check on mount, then on a fixed interval
-    check();
-    const timer = setInterval(check, POLL_INTERVAL_MS);
+    check(); // once on mount
+
+    // Re-check only when the user comes back to the tab (event-driven, not polled)
+    function onVisible() { if (document.visibilityState === 'visible') check(); }
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', check);
 
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', check);
     };
   }, []); // runs once per mount
 }
