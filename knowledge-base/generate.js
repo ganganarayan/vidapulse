@@ -421,14 +421,31 @@ function buildSearch() {
 
 function buildSitemap() {
   const lastmod = new Date().toISOString().slice(0, 10);
-  const urls = [{ loc: HUB, pri: '1.0', freq: 'weekly' }];
+
+  // Marketing / landing pages live on the apex host (vidapulse.io), which is
+  // served OFF-Railway and has no sitemap of its own. We list them here so a
+  // single submitted sitemap (app.vidapulse.io/sitemap.xml) covers the whole
+  // site — valid because Search Console is a DOMAIN property
+  // (sc-domain:vidapulse.io) that spans every subdomain. `abs:true` = use the
+  // loc verbatim (apex host) instead of prefixing the app origin. Fragment
+  // anchors (#pricing, #faq …) are intentionally omitted — Google collapses
+  // them onto the base page. `mod` = the pages' last real edit (not today's
+  // generation date, since this generator doesn't touch them).
+  const marketing = [
+    { loc: 'https://vidapulse.io/',               pri: '1.0', freq: 'weekly', mod: '2026-05-24', abs: true },
+    { loc: 'https://vidapulse.io/privacy-policy', pri: '0.3', freq: 'yearly', mod: '2026-05-24', abs: true },
+    { loc: 'https://vidapulse.io/terms-of-use',   pri: '0.3', freq: 'yearly', mod: '2026-05-24', abs: true },
+    { loc: 'https://vidapulse.io/refund-policy',  pri: '0.2', freq: 'yearly', mod: '2026-05-24', abs: true },
+  ];
+
+  const urls = [...marketing, { loc: HUB, pri: '1.0', freq: 'weekly' }];
   categories.forEach((c) => urls.push({ loc: `${HUB}/${c.slug}`, pri: '0.8', freq: 'weekly' }));
   resolved.filter((r) => r.status === 'published')
     .forEach((r) => urls.push({ loc: r.path, pri: '0.7', freq: 'monthly' }));
 
   const body = urls.map((u) => `  <url>
-    <loc>${T.absUrl(u.loc)}</loc>
-    <lastmod>${lastmod}</lastmod>
+    <loc>${u.abs ? u.loc : T.absUrl(u.loc)}</loc>
+    <lastmod>${u.mod || lastmod}</lastmod>
     <changefreq>${u.freq}</changefreq>
     <priority>${u.pri}</priority>
   </url>`).join('\n');

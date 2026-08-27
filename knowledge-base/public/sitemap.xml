@@ -1,1370 +1,1394 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
+    <loc>https://vidapulse.io/</loc>
+    <lastmod>2026-05-24</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://vidapulse.io/privacy-policy</loc>
+    <lastmod>2026-05-24</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://vidapulse.io/terms-of-use</loc>
+    <lastmod>2026-05-24</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://vidapulse.io/refund-policy</loc>
+    <lastmod>2026-05-24</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  <url>
     <loc>https://app.vidapulse.io/video-analytics-guide</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/vsl-optimization</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/revenue-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/funnel-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/guides</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/glossary</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/use-cases</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/pricing</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/switching</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-formats</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/benchmarks</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/tools</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/vsl-optimization/why-is-my-vsl-not-converting</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/vsl-optimization/where-viewers-leave-my-vsl</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/vsl-optimization/why-viewers-leave-before-the-offer</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/vsl-optimization/why-viewers-leave-in-the-first-3-seconds</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/vsl-optimization/what-is-a-good-vsl-retention-rate</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/vsl-optimization/what-percentage-of-viewers-should-reach-my-offer</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/vsl-optimization/how-can-i-improve-vsl-watch-time</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/vsl-optimization/why-does-my-vsl-get-views-but-no-sales</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/vsl-optimization/what-causes-drop-offs-in-a-vsl</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/vsl-optimization/how-do-i-identify-the-weakest-part-of-my-vsl</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/vsl-optimization/how-do-i-find-the-exact-minute-people-stop-watching</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/vsl-optimization/how-can-i-improve-vsl-conversion-rates</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-analytics/what-are-video-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-analytics/how-is-viewer-retention-calculated</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-analytics/why-is-audience-retention-important</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-analytics/what-metrics-matter-most-in-video-marketing</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-analytics/what-does-a-retention-curve-tell-you</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-analytics/how-can-i-measure-audience-attention</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/guides/how-to-optimize-a-vsl</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/guides/how-to-improve-vsl-retention</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/guides/how-to-improve-product-video-retention</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/guides/how-to-track-video-engagement</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/guides/how-to-install-vidapulse</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/guides/does-vidapulse-require-coding</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/glossary/what-is-audience-retention</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/glossary/what-is-a-video-heatmap</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/glossary/what-is-a-video-retention-graph</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/glossary/what-is-a-drop-off-point-in-video-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/glossary/what-is-average-watch-time</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/glossary/what-is-video-engagement-tracking</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/glossary/what-is-a-retention-curve</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/use-cases/how-do-coaches-improve-vsl-conversion-rates</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/use-cases/how-can-product-video-creators-track-viewer-engagement</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/use-cases/how-do-i-know-if-my-product-or-service-video-is-losing-attention</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/use-cases/why-are-my-product-or-service-registrations-not-converting</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/use-cases/what-causes-low-vsl-sign-ups-and-purchases</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/use-cases/why-do-video-viewers-drop-off</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/use-cases/how-can-i-optimize-a-coaching-or-consulting-funnel</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/vidapulse-vs-wistia</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/vidapulse-vs-vidyard</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/vidapulse-vs-vimeo-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/vidapulse-vs-youtube-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/vidapulse-vs-google-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/best-alternative-to-wistia</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/best-alternative-to-vidyard</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/best-video-analytics-software-for-coaches</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/what-is-the-best-video-analytics-software</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/what-tools-show-viewer-retention</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/free-video-analytics-tools</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/vidapulse-vs-hotjar</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/vidapulse-vs-lucky-orange</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/vidapulse-vs-mouseflow</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/vidapulse-vs-fullstory</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/video-analytics-vs-session-replay</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/do-i-need-a-heatmap-tool-or-video-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/best-tools-to-find-video-drop-offs</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/best-funnel-analytics-tools</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/best-video-analytics-for-vsls</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/comparisons/best-tools-to-measure-vsl-performance</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/how-can-i-tell-where-viewers-stop-watching-my-video</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/why-are-viewers-leaving-my-video</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/how-to-find-video-drop-off-points</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/how-do-i-know-if-my-video-is-losing-viewers</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/how-much-revenue-can-poor-retention-cost</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/leads-but-no-bookings</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/can-viewer-retention-affect-sales</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/why-do-viewers-leave-before-seeing-the-price</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/how-does-video-engagement-affect-conversions</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/why-are-my-ads-getting-clicks-but-no-sales</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/why-do-people-watch-my-vsl-but-not-buy</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/can-improving-retention-increase-sales</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/can-i-track-any-video-url</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/does-vidapulse-host-videos</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/can-i-use-vidapulse-with-youtube</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/can-i-use-vidapulse-with-vimeo</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/can-i-use-vidapulse-with-amazon-s3-videos</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/does-vidapulse-work-with-wistia</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/does-vidapulse-work-with-vidyard</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/questions/can-i-track-videos-on-landing-pages</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/revenue-analytics/what-is-revenue-leak-detection</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/revenue-analytics/how-much-revenue-am-i-losing-from-video-drop-offs</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/revenue-analytics/how-do-i-find-revenue-leaks-in-my-funnel</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/revenue-analytics/how-do-i-calculate-the-cost-of-video-drop-off</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/revenue-analytics/can-video-retention-predict-sales</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/revenue-analytics/does-watch-time-correlate-with-revenue</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/revenue-analytics/how-do-i-increase-vsl-revenue</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/revenue-analytics/why-are-my-leads-not-buying</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/revenue-analytics/which-part-of-my-vsl-loses-the-most-revenue</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/revenue-analytics/how-do-i-turn-video-views-into-revenue</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/revenue-analytics/what-is-video-marketing-roi</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/revenue-analytics/how-do-i-plug-revenue-leaks-in-a-vsl</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/funnel-analytics/what-is-funnel-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/funnel-analytics/how-do-i-analyze-a-sales-funnel</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/funnel-analytics/how-do-i-find-funnel-drop-offs</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/funnel-analytics/what-is-a-funnel-drop-off-rate</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/funnel-analytics/how-do-i-measure-funnel-engagement</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/funnel-analytics/what-is-video-funnel-optimization</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/funnel-analytics/how-do-i-optimize-a-video-sales-funnel</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/funnel-analytics/why-do-people-leave-before-checkout</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/funnel-analytics/how-do-i-improve-call-booking-rate</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/funnel-analytics/how-do-i-track-a-video-sales-funnel</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/funnel-analytics/landing-page-video-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/funnel-analytics/product-video-launch-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/for-coaches</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-coaches-find-where-vsls-lose-clients</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-coaches-turn-views-into-booked-calls</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/what-retention-rate-should-a-coaching-vsl-aim-for</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-coaches-test-vsl-changes</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/for-consultants</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-consultants-track-sales-video-performance</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-consultants-get-more-discovery-calls</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/why-do-consulting-prospects-leave-early</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-consultants-prove-video-roi</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/for-agencies</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-agencies-report-video-performance-to-clients</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-agencies-track-client-vsls-at-scale</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-agencies-find-drop-offs-in-client-videos</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-agencies-prove-video-results-to-clients</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/for-saas</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-saas-teams-track-demo-video-engagement</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-saas-teams-find-drop-offs-in-product-videos</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-does-video-retention-affect-saas-signups</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-saas-teams-measure-landing-page-video-engagement</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/for-b2b-sales</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-b2b-teams-track-sales-video-engagement</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-b2b-reps-know-if-prospects-watch-demos</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-does-video-engagement-affect-b2b-pipeline</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-b2b-teams-find-drop-offs-in-demo-videos</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/what-makes-a-coaching-vsl-convert</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-long-should-a-coaching-vsl-be</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-coaches-improve-their-vsl-hook</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-coaches-track-which-ads-bring-buyers</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-coaches-measure-vsl-roi</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/what-makes-a-consulting-sales-video-convert</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-long-should-a-consulting-sales-video-be</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-consultants-qualify-leads-with-video</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-consultants-reduce-call-no-shows-with-video</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-consultants-track-which-content-books-calls</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-agencies-audit-a-client-vsl</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-agencies-benchmark-client-video-performance</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-agencies-improve-client-vsl-conversion</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-agencies-set-up-video-tracking-for-clients</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-agencies-justify-video-retainers</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/what-makes-a-saas-demo-video-convert</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-saas-teams-improve-demo-completion-rate</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-saas-teams-ab-test-product-videos</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-saas-teams-track-video-on-pricing-pages</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-saas-teams-tie-video-engagement-to-trials</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/what-makes-a-b2b-demo-video-effective</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-b2b-teams-shorten-demo-videos-using-data</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-b2b-teams-use-video-engagement-as-a-signal</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-b2b-teams-improve-demo-completion</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-b2b-teams-track-video-across-the-sales-cycle</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-coaches-write-a-vsl-script-that-holds-attention</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-coaches-fix-a-low-converting-vsl</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-coaches-make-their-offer-clearer-on-video</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-coaches-use-a-video-heatmap</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-coaches-get-more-applications-from-a-vsl</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-consultants-structure-a-sales-video</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-consultants-fix-a-low-converting-sales-video</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-consultants-use-video-in-proposals</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-consultants-warm-up-leads-with-video</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-consultants-measure-which-videos-win-clients</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-agencies-win-clients-with-video-audits</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-agencies-onboard-a-client-for-video-tracking</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-agencies-report-video-roi-to-clients</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-agencies-ab-test-client-vsls</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-agencies-scale-video-optimization-across-clients</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-saas-teams-measure-explainer-video-performance</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-saas-teams-reduce-demo-video-drop-off</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-saas-teams-track-feature-announcement-videos</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-saas-teams-use-video-to-improve-activation</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-saas-teams-choose-the-right-demo-video-length</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-b2b-teams-measure-follow-up-video-engagement</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-b2b-teams-test-different-demo-openings</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-b2b-teams-know-which-demo-resonates</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-b2b-teams-use-video-in-outbound</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/industries/how-do-b2b-teams-prove-video-roi-to-leadership</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/pricing/is-video-analytics-worth-it</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/pricing/how-much-does-video-analytics-cost</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/pricing/free-vs-paid-video-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/pricing/do-i-need-video-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/pricing/is-vidapulse-worth-it</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/pricing/what-does-vidapulse-cost</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/pricing/when-is-video-analytics-worth-it</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/pricing/is-cheap-video-analytics-good-enough</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/switching/is-wistia-too-expensive</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/switching/is-vidyard-too-expensive</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/switching/how-to-switch-from-wistia-to-vidapulse</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/switching/how-to-switch-from-vidyard-to-vidapulse</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/switching/do-i-have-to-re-host-videos-to-switch-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/switching/how-to-get-video-heatmaps-without-wistia</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/switching/cheaper-way-to-track-video-retention</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-formats/vsl-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-formats/demo-video-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-formats/explainer-video-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-formats/sales-video-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-formats/product-video-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-formats/ad-landing-page-video-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-formats/testimonial-video-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/video-formats/pitch-video-analytics</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/benchmarks/what-is-a-good-play-rate</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/benchmarks/what-is-a-good-video-completion-rate</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/benchmarks/what-is-a-good-average-watch-time</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/benchmarks/what-is-a-good-video-drop-off-rate</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/benchmarks/what-is-a-good-engagement-rate-for-video</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/benchmarks/what-percentage-of-a-video-do-people-watch</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/benchmarks/how-do-i-benchmark-video-performance</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/benchmarks/what-is-a-good-conversion-rate-for-a-vsl</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/tools/revenue-leak-calculator</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/tools/offer-reach-calculator</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://app.vidapulse.io/video-analytics-guide/tools/watch-time-loss-calculator</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
