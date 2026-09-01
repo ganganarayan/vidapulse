@@ -54,6 +54,23 @@ export default function UpgradeModal() {
   const { user }                       = useAuth();
   const [loading, setLoading]          = useState(null); // 'starter' | 'pro' | null
   const [error,   setError]            = useState('');
+  const [founding, setFounding]        = useState(null); // { taken, remaining, limit, price_usd, closed }
+
+  // Founding-member pricing: while slots remain, Growth is $59/mo for life.
+  // Public endpoint, no auth; falls back to standard $79 on any failure.
+  useEffect(() => {
+    if (!upgradeTarget) return;
+    let live = true;
+    fetch('/api/founding-status')
+      .then((r) => r.json())
+      .then((s) => { if (live && s && typeof s.taken === 'number') setFounding(s); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [upgradeTarget]);
+
+  const foundingActive = !!(founding && !founding.closed);
+  const proValue       = foundingActive ? founding.price_usd : 79;
+  const proPrice       = `$${proValue}`;
 
   // Close on Escape key
   useEffect(() => {
@@ -81,12 +98,12 @@ export default function UpgradeModal() {
     await startSubscriptionCheckout({
       plan,
       currency : 'USD',
-      value    : plan === 'starter' ? 29 : 79,
+      value    : plan === 'starter' ? 29 : proValue,
       user,
       onError  : (msg) => { setError(msg); setLoading(null); },
       onDismiss: () => setLoading(null),
     });
-  }, [user]);
+  }, [user, proValue]);
 
   if (!upgradeTarget) return null;
 
@@ -156,8 +173,10 @@ export default function UpgradeModal() {
           <PlanCard
             planKey     = "pro"
             name        = "Growth"
-            tagline     = "Attribute the traffic that actually converts"
-            price       = "$79"
+            tagline     = {foundingActive
+              ? `🔒 Founding — ${founding.remaining} of ${founding.limit} left at $${founding.price_usd}/mo for life`
+              : "Attribute the traffic that actually converts"}
+            price       = {proPrice}
             features    = {PLAN_FEATURES.pro}
             current     = {currentPlan === 'pro' || currentPlan === 'admin_lifetime'}
             isFocused   = {upgradeTarget === 'pro'}

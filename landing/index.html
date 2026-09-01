@@ -690,7 +690,7 @@
       <h2 class="heading">One flat price per account</h2>
       <p class="subtext">Gated on capability, not per-seat. Every plan starts on the free plan.</p>
 
-      <div class="founding">&#128274; Founding cohort — first 100 accounts lock Growth at $59/mo for life.</div>
+      <div class="founding" id="founding-badge">&#128274; Founding members — first 100 accounts lock Growth at $59/mo for life.</div>
 
       <div class="pricing-grid">
 
@@ -1010,6 +1010,9 @@
       });
     })();
   </script>
+
+  <!-- Founding-members live counter — updates the badge with "X of 100 taken" -->
+  <script>(function(){try{fetch('/api/founding-status').then(function(r){return r.json();}).then(function(s){var b=document.getElementById('founding-badge');if(!b||!s||typeof s.taken!=='number')return;if(s.closed){b.innerHTML='🔒 Founding-member pricing is closed — all '+s.limit+' seats are taken.';return;}b.innerHTML='🔒 Founding members — <strong>'+s.taken+' of '+s.limit+'</strong> seats taken. Lock Growth at $59/mo for life.';}).catch(function(){});}catch(e){}})();</script>
 
   <!-- VidaPulse page-view beacon (path / referrer / UTM / device) -->
   <script>(function(){try{var q=new URLSearchParams(location.search),p=new URLSearchParams();p.set('path',location.pathname);p.set('host',location.hostname);if(document.referrer)p.set('ref',document.referrer);['utm_source','utm_medium','utm_campaign','utm_term','utm_content'].forEach(function(k){var v=q.get(k);if(v)p.set(k,v);});p.set('dt',innerWidth<768?'mobile':innerWidth<1024?'tablet':'desktop');new Image().src='https://app.vidapulse.io/api/pageview?'+p.toString()+'&t='+Date.now();}catch(e){}})();</script>

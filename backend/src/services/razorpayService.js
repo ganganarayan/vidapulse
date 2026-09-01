@@ -25,8 +25,11 @@ const logger  = require('../config/logger');
 // Plan definitions — amounts in the smallest currency unit (USD cents).
 const PLAN_CURRENCY = 'USD';
 const PLAN_DEFS = {
-  starter: { amount: 2900, displayName: 'VidaPulse Starter' },
-  pro    : { amount: 7900, displayName: 'VidaPulse Growth'  },
+  starter     : { amount: 2900, displayName: 'VidaPulse Starter' },
+  pro         : { amount: 7900, displayName: 'VidaPulse Growth'  },
+  // Founding-member price for Growth — first 100 payers lock $59/mo for life.
+  // The user's VidaPulse plan stays 'pro'; only the Razorpay plan (price) differs.
+  pro_founding: { amount: 5900, displayName: 'VidaPulse Growth (Founding)' },
 };
 
 // ─── Low-level HTTP helper ────────────────────────────────────────────────────
@@ -147,10 +150,12 @@ async function getOrCreatePlan(planKey) {
   const def = PLAN_DEFS[planKey];
   if (!def) throw new Error(`Unknown plan key: ${planKey}`);
 
-  // 1. Check env var override (admin-provided plan ID)
-  const envPlanId = planKey === 'starter'
-    ? env.RAZORPAY_PLAN_ID_STARTER
-    : env.RAZORPAY_PLAN_ID_PRO;
+  // 1. Check env var override (admin-provided plan ID). Only the standard
+  //    starter/pro plans have env overrides — 'pro_founding' always resolves
+  //    via the DB cache / API so it is never accidentally mapped to the $79 plan.
+  const envPlanId = planKey === 'starter' ? env.RAZORPAY_PLAN_ID_STARTER
+                  : planKey === 'pro'     ? env.RAZORPAY_PLAN_ID_PRO
+                  : null;
 
   if (envPlanId) {
     logger.debug(`[razorpay] Using env-configured plan ID ${envPlanId} for ${planKey}`);
@@ -211,15 +216,21 @@ async function getOrCreatePlan(planKey) {
  * @param {string} returnUrl  URL to redirect to after payment (e.g. https://app.vidapulse.io/payment/starter)
  * @returns {Promise<{ subscriptionId: string, paymentUrl: string }>}
  */
-async function createSubscription(user, planKey, returnUrl) {
+async function createSubscription(user, planKey, returnUrl, options = {}) {
+  // Founding members get the $59 'pro_founding' Razorpay plan while keeping
+  // their VidaPulse plan key = 'pro'. Because a Razorpay subscription is bound
+  // to its plan, every renewal stays $59 — that IS the lifetime price lock.
+  const founding      = options.founding === true && planKey === 'pro';
+  const razorpayPlan  = founding ? 'pro_founding' : planKey;
+
   const [customerId, planId] = await Promise.all([
     getOrCreateCustomer(user),
-    getOrCreatePlan(planKey),
+    getOrCreatePlan(razorpayPlan),
   ]);
 
   logger.info(
     `[razorpay] Creating subscription for user ${user.id} — ` +
-    `plan=${planKey} customer=${customerId} razorpay_plan=${planId}`
+    `plan=${planKey}${founding ? ' (founding $59)' : ''} customer=${customerId} razorpay_plan=${planId}`
   );
 
   const subscription = await _razorpayRequest('POST', '/v1/subscriptions', {
@@ -232,8 +243,9 @@ async function createSubscription(user, planKey, returnUrl) {
     // them (HTTP 400). Activation is webhook-driven (subscription.charged); the
     // client opens Razorpay Checkout in-page and returns the user to /payment/:plan.
     notes            : {
-      user_id: user.id,
-      plan   : planKey,
+      user_id : user.id,
+      plan    : planKey,               // always the VidaPulse plan key ('pro')
+      ...(founding ? { founding: '1' } : {}),
     },
   });
 

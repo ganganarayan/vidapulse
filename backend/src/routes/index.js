@@ -25,6 +25,7 @@ const geoip   = require('geoip-lite');
 const { requireAuth }  = require('../middleware/requireAuth');
 const { emitEvent }    = require('../services/behavioralEventService');
 const { getVisiblePromotionVideos } = require('../services/promotionService');
+const founding         = require('../services/foundingService');
 const { startedAt }    = require('../config/serverInfo');
 
 /** Extract real client IP, honouring Cloudflare and reverse-proxy headers */
@@ -98,6 +99,17 @@ router.get('/geo', (req, res) => {
   return res.json({ country });
 });
 
+// ── GET /api/founding-status ───────────────────────────────────────────────
+// Public (no auth). Powers the landing-page "X of 100 taken" counter. Runs on
+// every host (incl. the apex landing) so the fetch is same-origin. Never
+// throws — foundingService.getStatus() fails closed to taken=0.
+router.get('/founding-status', async (_req, res) => {
+  const status = await founding.getStatus();
+  // Small cache: the count changes rarely (only on a paid founding upgrade).
+  res.set('Cache-Control', 'public, max-age=60');
+  return res.json(status);
+});
+
 // ── GET /api/promotion-videos ─────────────────────────────────────────────
 // Returns promotion videos visible to the current user (plan-filtered, not hidden).
 router.get('/promotion-videos', requireAuth, async (req, res, next) => {
@@ -146,12 +158,25 @@ router.get('/upgrade', requireAuth, async (req, res, next) => {
     // USD-only pricing (matches the vidapulse.io landing page).
     const currency = 'USD';
 
+    // Founding pricing: while slots remain, Growth is offered at $59/mo for
+    // life (locked forever). Only relevant to users who can still take 'pro'.
+    const foundingStatus = await founding.getStatus();
+    const foundingActive = !foundingStatus.closed && upgrade_options.includes('pro');
+    const proUsd         = foundingActive ? foundingStatus.price_usd : 79;
+
     return res.json({
       current_plan       : plan,
       videos_count       : parseInt(stats.video_count, 10),
       total_plays_to_date: parseInt(stats.total_plays_to_date, 10),
       upgrade_options,
       currency,          // 'USD'
+      founding: {
+        active   : foundingActive,
+        price_usd: foundingStatus.price_usd,
+        taken    : foundingStatus.taken,
+        remaining: foundingStatus.remaining,
+        limit    : foundingStatus.limit,
+      },
       pricing: {
         starter: {
           name: 'Starter', usd: 29, usd_label: '$29', video_limit: 10,
@@ -159,9 +184,10 @@ router.get('/upgrade', requireAuth, async (req, res, next) => {
           price_label: '$29',
         },
         pro: {
-          name: 'Growth', usd: 79, usd_label: '$79', video_limit: 20,
-          price      : 79,
-          price_label: '$79',
+          name: 'Growth', usd: proUsd, usd_label: `$${proUsd}`, video_limit: 20,
+          price      : proUsd,
+          price_label: `$${proUsd}`,
+          founding   : foundingActive,
         },
       },
       // Razorpay: static payment-link URLs for INR one-time / subscription entry

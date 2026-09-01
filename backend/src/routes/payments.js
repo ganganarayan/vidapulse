@@ -48,6 +48,7 @@ const logger             = require('../config/logger');
 const { emitEvent }      = require('../services/behavioralEventService');
 const { requireAuth }    = require('../middleware/requireAuth');
 const razorpay           = require('../services/razorpayService');
+const founding           = require('../services/foundingService');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/payments/subscribe   (authenticated)
@@ -78,17 +79,30 @@ router.post('/subscribe', requireAuth, async (req, res, next) => {
 
     const returnUrl = `${env.APP_URL}/payment/${plan}`;
 
+    // Founding-member pricing: the first 100 to pay for Growth lock $59/mo for
+    // life. Offered only for 'pro' while slots remain. Reserve the slot now (so
+    // concurrent subscribers can't oversell); clear any stale reservation when a
+    // user instead takes the standard $79 plan, so their payment isn't mis-tagged.
+    const isFounding = plan === 'pro' && await founding.hasSlot();
+    if (isFounding)            await founding.reserve(user.id);
+    else if (plan === 'pro')   await founding.clearReservation(user.id);
+
     const { subscriptionId, paymentUrl } = await razorpay.createSubscription(
       { id: user.id, name: user.name, email: user.email, phone: user.phone },
       plan,
       returnUrl,
+      { founding: isFounding },
     );
 
-    logger.info(`[payments] Subscription ${subscriptionId} created for user ${user.id} (${plan})`);
+    logger.info(`[payments] Subscription ${subscriptionId} created for user ${user.id} (${plan}${isFounding ? ' founding $59' : ''})`);
 
     // keyId is the PUBLIC Razorpay key — safe to expose; the client needs it to
     // open Razorpay Checkout in-page with this subscription_id (same-tab flow).
-    return res.json({ paymentUrl, subscriptionId, keyId: env.RAZORPAY_KEY_ID });
+    return res.json({
+      paymentUrl, subscriptionId, keyId: env.RAZORPAY_KEY_ID,
+      founding: isFounding,
+      amount_usd: isFounding ? founding.FOUNDING_PRICE_USD : (plan === 'pro' ? 79 : 29),
+    });
 
   } catch (err) {
     logger.error(`[payments] /subscribe error: ${err.message}`);
@@ -173,8 +187,13 @@ router.post('/verify', requireAuth, async (req, res, next) => {
 
     await _upgradePlan(req.user.id, plan, amountPaise, razorpay_payment_id, 'subscription.verified');
 
-    logger.info(`[payments] ✓ /verify activated ${plan} for user ${req.user.id}`);
-    return res.json({ ok: true, plan });
+    // Founding confirmation: flip the flag if this user held a founding
+    // reservation (i.e. we created their subscription on the $59 plan).
+    let isFounding = false;
+    if (plan === 'pro') isFounding = await founding.confirm(req.user.id);
+
+    logger.info(`[payments] ✓ /verify activated ${plan}${isFounding ? ' (founding)' : ''} for user ${req.user.id}`);
+    return res.json({ ok: true, plan, founding: isFounding });
 
   } catch (err) {
     logger.error(`[payments] /verify error: ${err.message}`);
@@ -452,6 +471,11 @@ async function _handleOneTimePayment(body, eventType, res) {
   }
 
   await _upgradePlan(userId, planKey, amountPaise, razorpayPaymentId, eventType);
+
+  // Founding confirmation — force when the subscription notes flag it, else fall
+  // back to a live reservation (webhook may arrive after the reservation TTL).
+  if (planKey === 'pro') await founding.confirm(userId, { force: notes.founding === '1' });
+
   return res.json({ ok: true, upgraded: true, plan: planKey });
 }
 
@@ -542,6 +566,9 @@ async function _handleSubscriptionCharged(body, res) {
 
   // Also ensure the plan itself is set (in case of re-activation after expiry)
   await _upgradePlanRecord(userId, resolvedPlan);
+
+  // Founding confirmation on the (first) subscription charge.
+  if (resolvedPlan === 'pro') await founding.confirm(userId, { force: notes.founding === '1' });
 
   // Mark converted in onboarding
   await pool.query(

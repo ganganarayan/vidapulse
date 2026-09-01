@@ -30,7 +30,7 @@ Priced per account, not per seat. Every plan starts on the free plan. All prices
 - **Growth — $79/month (most popular)**: up to 20 videos. Adds UTM and source segmentation, conversion tracking, server-side pixel forwarding, video comparison, AI insights, priority support.
 - **Scale — $199/month**: multi-user access, API access, and white-label reports for agencies.
 
-Founding cohort: the first 100 accounts lock the Growth plan at $59/month for life.
+Founding members: the first 100 accounts to pay lock the Growth plan at $59/month for life.
 
 ## Target users
 
