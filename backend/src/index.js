@@ -179,11 +179,14 @@ if (env.NODE_ENV === 'production') {
   const CANONICAL_LANDING = ['vidapulse.io', 'www.vidapulse.io'];
   const landingDomains = new Set([...CANONICAL_LANDING, _appHost, `www.${_appHost}`]);
 
-  // TEMPORARY preview host — lets the staging Railway URL render the landing
-  // page for pre-cutover verification without touching live DNS. Never indexed
-  // (not in CANONICAL_LANDING → noindex + Disallow robots below).
-  // ⚠️ REMOVE this line before promoting orbitq → main.
-  landingDomains.add('vidapulse-staging.up.railway.app');
+  // Staging preview — let the staging Railway URL render the landing page for
+  // pre-cutover / marketing-copy verification without touching live DNS. Never
+  // indexed (not in CANONICAL_LANDING → noindex + Disallow robots below).
+  // Gated to the staging service (APP_URL points at orbitq) so it is inert on
+  // production and this file can promote to main unchanged.
+  if (/orbitq|staging/i.test(env.APP_URL)) {
+    landingDomains.add('vidapulse-staging.up.railway.app');
+  }
 
   // Extra landing hosts (staging/preview) from env — lets us serve the
   // marketing page on a Railway/preview host for pre-cutover testing without
