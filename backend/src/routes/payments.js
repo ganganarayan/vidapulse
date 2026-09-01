@@ -154,11 +154,11 @@ router.post('/verify', requireAuth, async (req, res, next) => {
     }
 
     // 4. Best-effort accurate payment record (amount/currency/method), then activate.
-    let amountPaise = null, currency = 'INR', paymentMethod = null;
+    let amountPaise = null, currency = 'USD', paymentMethod = null;
     try {
       const pay = await razorpay.fetchPayment(razorpay_payment_id);
       amountPaise   = parseInt(pay.amount || 0, 10) || null;
-      currency      = pay.currency || 'INR';
+      currency      = pay.currency || 'USD';
       paymentMethod = _extractPaymentMethod(pay);
     } catch (e) {
       logger.warn(`[payments] /verify fetchPayment failed: ${e.message}`);
@@ -417,7 +417,7 @@ async function _handleOneTimePayment(body, eventType, res) {
   const razorpayOrderId   = paymentEntity.order_id        || null;
   const razorpayLinkId    = linkEntity.id || paymentEntity.payment_link_id || null;
   const amountPaise       = parseInt(paymentEntity.amount  || 0, 10);
-  const currency          = paymentEntity.currency         || 'INR';
+  const currency          = paymentEntity.currency         || 'USD';
   const status            = paymentEntity.status           || 'captured';
   const userId            = notes.user_id ? String(notes.user_id).trim() : null;
   const planKey           = (notes.plan || '').toLowerCase().trim();
@@ -508,7 +508,7 @@ async function _handleSubscriptionCharged(body, res) {
       userId, razorpayPaymentId, razorpayOrderId: null,
       razorpayLinkId: subscriptionId, razorpayInvoiceId,
       plan: planKey, amountPaise,
-      currency: paymentEntity.currency || 'INR',
+      currency: paymentEntity.currency || 'USD',
       status: 'captured', notes, eventType: 'subscription.charged', paymentMethod,
     });
   }

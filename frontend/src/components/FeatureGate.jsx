@@ -28,9 +28,9 @@ const COPY = {
     cta   : 'Upgrade to Starter',
   },
   pro: {
-    badge : 'Pro Feature',
-    desc  : 'Upgrade to Pro to unlock this page and access the full analytics suite.',
-    cta   : 'Upgrade to Pro',
+    badge : 'Growth Feature',
+    desc  : 'Upgrade to Growth to unlock this page and access the full analytics suite.',
+    cta   : 'Upgrade to Growth',
   },
 };
 

@@ -27,8 +27,25 @@ function userAlreadyHas(userPlan, requiredPlan) {
 
 export function getLockColor(requiredPlan) {
   // Starter feature → cyan #00FFFF  (free users can tell it's a Starter lock)
-  // Pro feature     → brand amber #F59E0B  (consistent with app brand throughout)
+  // Growth feature  → brand amber #F59E0B  (consistent with app brand throughout)
   return requiredPlan === 'starter' ? '#00FFFF' : '#F59E0B';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// planDisplayName — user-facing tier label. Internal key 'pro' is shown as
+// "Growth" (the paid tier was repriced/renamed on the landing page).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PLAN_DISPLAY_NAMES = {
+  free          : 'Free',
+  starter       : 'Starter',
+  pro           : 'Growth',
+  scale         : 'Scale',
+  admin_lifetime: 'Admin',
+};
+
+export function planDisplayName(key) {
+  return PLAN_DISPLAY_NAMES[key] ?? (key ? key.charAt(0).toUpperCase() + key.slice(1) : '');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -84,7 +101,7 @@ export default function PlanTierBadge({ plan, userPlan }) {
       }}
     >
       <PadLockIcon size={9} color={color} />
-      {plan === 'pro' ? 'Pro' : 'Starter'}
+      {planDisplayName(plan)}
     </span>
   );
 }

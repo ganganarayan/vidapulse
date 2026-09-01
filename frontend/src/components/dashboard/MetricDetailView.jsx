@@ -25,8 +25,8 @@ const METRIC_REQUIRED_PLAN = {
   avg_watch    : 'starter',
   completion   : 'starter',
   watch_time   : 'starter',
-  dropoff      : 'pro',
-  rewatches    : 'pro',
+  dropoff      : 'starter',
+  rewatches    : 'starter',
 };
 
 const PLAN_RANK = { free: 0, starter: 1, pro: 2, admin_lifetime: 3 };

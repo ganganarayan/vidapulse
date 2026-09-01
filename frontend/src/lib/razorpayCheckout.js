@@ -59,8 +59,8 @@ export async function startSubscriptionCheckout({ plan, value, currency, user, o
     // Save the purchase intent so the Purchase pixel reports the right currency/value.
     savePurchaseIntent({
       plan,
-      currency: currency ?? 'INR',
-      value   : value ?? (plan === 'starter' ? 999 : 1999),
+      currency: currency ?? 'USD',
+      value   : value ?? (plan === 'starter' ? 29 : 79),
     });
 
     // No keyId/subscriptionId (older backend) → fall back to the hosted page.
@@ -73,7 +73,7 @@ export async function startSubscriptionCheckout({ plan, value, currency, user, o
       key            : data.keyId,
       subscription_id: data.subscriptionId,
       name           : 'VidaPulse',
-      description    : `${plan === 'pro' ? 'Pro' : 'Starter'} plan — monthly subscription`,
+      description    : `${plan === 'pro' ? 'Growth' : 'Starter'} plan — monthly subscription`,
       prefill        : {
         name   : user?.name  || '',
         email  : user?.email || '',

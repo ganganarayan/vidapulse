@@ -15,10 +15,10 @@ import FeatureWall from '../upgrade/FeatureWall';
  *  - Hover crosshair with tooltip
  *  - Stats row: avg retention, peak drop-off, total viewers
  *
- * Pro-only. Non-Pro users see a blurred fake chart behind FeatureWall.
+ * Starter+ feature. Free users see a blurred fake chart behind FeatureWall.
  */
 
-const PRO_PLANS      = new Set(['pro', 'admin_lifetime']);
+const PRO_PLANS      = new Set(['starter', 'pro', 'admin_lifetime']);
 const FAKE_DURATION_S = 312;
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ export default function HeatmapSection({ videoId, video, userPlan }) {
 
   if (!isPro) {
     return (
-      <FeatureWall feature="heatmap" requiredPlan="pro" currentPlan={userPlan} minHeight="260px">
+      <FeatureWall feature="heatmap" requiredPlan="starter" currentPlan={userPlan} minHeight="260px">
         <RetentionChart buckets={generateFakeRetention()} durationSeconds={FAKE_DURATION_S} totalViewers={142} fake />
       </FeatureWall>
     );

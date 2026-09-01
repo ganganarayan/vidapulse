@@ -248,10 +248,10 @@ function CtaAnalyticsSection({ videoId }) {
   if (status === 'upgrade') {
     return (
       <div className="bg-gray-800/30 border border-gray-700/40 border-dashed rounded-xl px-5 py-6 text-center">
-        <p className="text-sm font-medium text-gray-300 mb-1">CTA Click Tracking is a Pro feature</p>
+        <p className="text-sm font-medium text-gray-300 mb-1">CTA Click Tracking is a Growth feature</p>
         <p className="text-xs text-gray-500 mb-3">Upgrade to track which CTA buttons viewers click and see device/geo breakdowns.</p>
         <Link to="/upgrade" className="text-xs text-amber-400 hover:text-amber-300 underline underline-offset-2">
-          Upgrade to Pro →
+          Upgrade to Growth →
         </Link>
       </div>
     );

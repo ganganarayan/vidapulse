@@ -41,7 +41,7 @@ const INSIGHT_FEATURE_MAP = {
 };
 
 const FEATURE_REQUIRED_PLAN = {
-  heatmap              : 'pro',
+  heatmap              : 'starter',
   viewer_level         : 'pro',
   audience_segmentation: 'pro',
   conversion_tracking  : 'pro',

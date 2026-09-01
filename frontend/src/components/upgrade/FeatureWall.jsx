@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import UpgradeModal, { PlanBadge } from './UpgradeModal';
-import { getLockColor } from '../PlanTierBadge';
+import { getLockColor, planDisplayName } from '../PlanTierBadge';
 
 /**
  * FeatureWall
@@ -41,7 +41,7 @@ const FEATURE_LABELS = {
 
 const PLAN_DESCRIPTIONS = {
   starter: 'Starter plan',
-  pro    : 'Pro plan',
+  pro    : 'Growth plan',
 };
 
 export default function FeatureWall({
@@ -103,12 +103,12 @@ export default function FeatureWall({
 
             {/* Feature name */}
             <p className="text-sm font-semibold text-gray-200 mb-1">
-              {requiredPlan === 'pro' ? 'Pro Features' : featureLabel}
+              {requiredPlan === 'pro' ? 'Growth Features' : featureLabel}
             </p>
 
             {/* Description */}
             <p className="text-xs text-gray-400 mb-4">
-              Available on the {capitalize(requiredPlan)} plan
+              Available on the {planDisplayName(requiredPlan)} plan
             </p>
 
             {/* CTA chip */}

@@ -143,25 +143,25 @@ router.get('/upgrade', requireAuth, async (req, res, next) => {
     }
 
     const env    = require('../config/env');
-    const india  = isIndianUser(req);
-    const currency = india ? 'INR' : 'USD';
+    // USD-only pricing (matches the vidapulse.io landing page).
+    const currency = 'USD';
 
     return res.json({
       current_plan       : plan,
       videos_count       : parseInt(stats.video_count, 10),
       total_plays_to_date: parseInt(stats.total_plays_to_date, 10),
       upgrade_options,
-      currency,          // 'INR' | 'USD' — derived from request IP
+      currency,          // 'USD'
       pricing: {
         starter: {
-          inr: 999,  usd: 15, inr_label: '₹999',   usd_label: '$15', video_limit: 10,
-          price      : india ? 999  : 15,
-          price_label: india ? '₹999'   : '$15',
+          name: 'Starter', usd: 29, usd_label: '$29', video_limit: 10,
+          price      : 29,
+          price_label: '$29',
         },
         pro: {
-          inr: 1999, usd: 29, inr_label: '₹1,999', usd_label: '$29', video_limit: 20,
-          price      : india ? 1999 : 29,
-          price_label: india ? '₹1,999' : '$29',
+          name: 'Growth', usd: 79, usd_label: '$79', video_limit: 20,
+          price      : 79,
+          price_label: '$79',
         },
       },
       // Razorpay: static payment-link URLs for INR one-time / subscription entry

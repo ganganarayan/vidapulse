@@ -170,7 +170,7 @@ function AppSidebar({ onClose }) {
           >
             <span className="flex items-center gap-1.5">
               <UpgradeIcon />
-              {user.plan === 'free' ? 'Upgrade plan' : 'Upgrade to Pro'}
+              {user.plan === 'free' ? 'Upgrade plan' : 'Upgrade to Growth'}
             </span>
             <span className="text-amber-500/70">→</span>
           </button>
@@ -327,13 +327,13 @@ export function VideoSidebar({ video, activeView, onViewChange, user, drawerOpen
         {navItem('avg_watch',   <WatchIcon />,   'Avg. Watch %',   !isStarter, 'starter')}
         {navItem('play_rate',   <PlayRateIcon />,'Play Rate')}
         {navItem('completion',  <CheckIcon />,   'Completion Rate', !isStarter, 'starter')}
-        {navItem('dropoff',     <DropoffIcon />, 'Drop-off Rate',   !isPro,     'pro')}
+        {navItem('dropoff',     <DropoffIcon />, 'Drop-off Rate',   !isStarter, 'starter')}
         {navItem('watch_time',  <ClockIcon />,   'Watch Time',      !isStarter, 'starter')}
-        {navItem('rewatches',   <RepeatIcon />,  'Re-watches',      !isPro,     'pro')}
+        {navItem('rewatches',   <RepeatIcon />,  'Re-watches',      !isStarter, 'starter')}
         {navItem('domains',     <DomainIcon />,  'Domains')}
 
         <SidebarDivider label="Engagement" />
-        {navItem('heatmap',     <HeatmapIcon />, 'Engagement Heatmap', !isPro,     'pro')}
+        {navItem('heatmap',     <HeatmapIcon />, 'Engagement Heatmap', !isStarter, 'starter')}
         {navItem('stories',     <StoriesIcon />, 'Viewer Stories',     !isStarter, 'starter')}
         {navItem('insights',    <SparklesIcon />,'AI Insights',        !isPro,     'pro')}
 

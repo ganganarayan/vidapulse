@@ -9,9 +9,9 @@
  *   • Creating Subscriptions (returns the hosted payment URL)
  *   • Cancelling Subscriptions
  *
- * Plans created here:
- *   starter — ₹999/month  (99900 paise)
- *   pro     — ₹1,999/month (199900 paise)
+ * Plans created here (USD):
+ *   starter — $29/month  (2900 cents)
+ *   pro     — $79/month  (7900 cents)   — displayed as "Growth"
  *
  * All network calls use the built-in https module (no extra SDK dependency).
  * Errors are thrown as plain Error objects — callers should handle them.
@@ -22,10 +22,11 @@ const { pool }= require('../config/database');
 const env     = require('../config/env');
 const logger  = require('../config/logger');
 
-// Plan definitions — amounts in paise (1 INR = 100 paise)
+// Plan definitions — amounts in the smallest currency unit (USD cents).
+const PLAN_CURRENCY = 'USD';
 const PLAN_DEFS = {
-  starter: { amount: 99900,  displayName: 'VidaPulse Starter' },
-  pro    : { amount: 199900, displayName: 'VidaPulse Pro'     },
+  starter: { amount: 2900, displayName: 'VidaPulse Starter' },
+  pro    : { amount: 7900, displayName: 'VidaPulse Growth'  },
 };
 
 // ─── Low-level HTTP helper ────────────────────────────────────────────────────
@@ -167,14 +168,14 @@ async function getOrCreatePlan(planKey) {
   }
 
   // 3. Create via API
-  logger.info(`[razorpay] Creating Razorpay plan for ${planKey} (₹${def.amount / 100}/mo)`);
+  logger.info(`[razorpay] Creating Razorpay plan for ${planKey} ($${def.amount / 100}/mo)`);
   const plan = await _razorpayRequest('POST', '/v1/plans', {
     period  : 'monthly',
     interval: 1,
     item    : {
       name    : def.displayName,
       amount  : def.amount,
-      currency: 'INR',
+      currency: PLAN_CURRENCY,
     },
   });
 

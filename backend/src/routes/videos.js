@@ -1412,7 +1412,7 @@ router.get('/:id/analytics/breakdown', requireAuth, async (req, res, next) => {
 //     by_country: [{label, count, pct}] }
 // ─────────────────────────────────────────────────────────────────────────
 
-router.get('/:id/cta-analytics', requireAuth, planGate('heatmap'), async (req, res, next) => {
+router.get('/:id/cta-analytics', requireAuth, planGate('conversion_tracking'), async (req, res, next) => {
   try {
     const { rows: [video] } = await pool.query(
       `SELECT id FROM videos WHERE id=$1 AND (user_id=$2 OR $3::boolean) AND is_active=TRUE`,
@@ -1532,7 +1532,7 @@ router.get('/:id/retention', requireAuth, async (req, res, next) => {
 //   duration_seconds }
 // ─────────────────────────────────────────────────────────────────────────
 
-router.get('/:id/viewer-engagement', requireAuth, planGate('heatmap'), async (req, res, next) => {
+router.get('/:id/viewer-engagement', requireAuth, planGate('viewer_level'), async (req, res, next) => {
   try {
     const { rows: [video] } = await pool.query(
       `SELECT id, duration_seconds

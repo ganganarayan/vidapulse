@@ -18,7 +18,7 @@
  *   Usage:  router.post('/videos', requireAuth, videoLimitGate, handler)
  *
  *   Checks whether the user has reached their plan's video upload limit.
- *   Free: 1 video · Starter: 10 videos · Pro: unlimited
+ *   Free: 1 video · Starter: 10 videos · Growth: 20 videos
  *   Emits free_limit_hit if the limit is reached.
  *
  * ── Structured 403 response ───────────────────────────────────────────────
@@ -63,10 +63,10 @@ const FEATURE_PLAN_REQUIREMENTS = {
   geography           : 'starter',
   device_breakdown    : 'starter',
   avg_time_watched    : 'starter',
+  heatmap             : 'starter',  // engagement heatmap + drop-off (landing: Starter)
 
-  // ── Pro-only features ─────────────────────────────────────────────────
-  video_tracking      : 'pro',  // per-video Meta Pixel + tracking webhooks
-  heatmap             : 'pro',
+  // ── Growth-only features (internal plan key stays 'pro') ──────────────
+  video_tracking      : 'pro',  // server-side pixel forwarding + tracking webhooks
   viewer_level        : 'pro',
   audience_segmentation: 'pro',
   conversion_tracking  : 'pro',
@@ -81,7 +81,7 @@ const FEATURE_PLAN_REQUIREMENTS = {
 const VIDEO_LIMIT = {
   free          : 1,
   starter       : 10,
-  pro           : null,
+  pro           : 20,   // "Growth" tier — landing caps Growth at 20 videos
   admin_lifetime: null,
 };
 
@@ -155,8 +155,8 @@ function planGate(featureName) {
 
 async function videoLimitGate(req, res, next) {
   try {
-    // admin_lifetime and pro have no video cap
-    if (req.user.plan === 'admin_lifetime' || req.user.plan === 'pro') {
+    // admin_lifetime has no video cap
+    if (req.user.plan === 'admin_lifetime') {
       return next();
     }
 

@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useUpgrade }        from '../contexts/UpgradeContext';
 import { useAuth }           from '../contexts/AuthContext';
 import { startSubscriptionCheckout } from '../lib/razorpayCheckout';
-import { getLockColor }       from './PlanTierBadge';
+import { getLockColor, planDisplayName } from './PlanTierBadge';
 
-// Plan color: Starter=#00FFFF  Pro=#F59E0B  (single source of truth)
+// Plan color: Starter=#00FFFF  Growth=#F59E0B  (single source of truth)
 function planColor(planKey) { return getLockColor(planKey); }
 
 /**
@@ -24,21 +24,28 @@ function planColor(planKey) { return getLockColor(planKey); }
 
 const PLAN_FEATURES = {
   starter: [
-    '10 videos',
-    'Full analytics dashboard',
-    'Viewer stories',
-    'Drop-off rate & watch time',
-    'Traffic sources & geography',
-    'Priority email support',
+    'Up to 10 videos',
+    'Drop-off point & engagement heatmap',
+    'Avg. time watched',
+    'Geography, device & browser',
+    'Total plays, play rate & unique visitors',
+    'Email support',
   ],
   pro: [
-    '20 videos',
-    'All Starter features',
-    'Engagement heatmap (full)',
-    'CTA tracking & conversion',
-    'AI-powered video insights',
-    'Custom player branding',
-    'Dedicated support',
+    'Up to 20 videos',
+    'Everything in Starter',
+    'UTM & source segmentation',
+    'Conversion tracking & funnels',
+    'Server-side pixel forwarding',
+    'Video comparison & AI insights',
+    'Priority support',
+  ],
+  scale: [
+    'Everything in Growth',
+    'Multi-user access',
+    'API access',
+    'White-label reports',
+    'Priority support',
   ],
 };
 
@@ -73,8 +80,8 @@ export default function UpgradeModal() {
     // user to /payment/:plan, which polls until the webhook activates the plan.
     await startSubscriptionCheckout({
       plan,
-      currency : 'INR',
-      value    : plan === 'starter' ? 999 : 1999,
+      currency : 'USD',
+      value    : plan === 'starter' ? 29 : 79,
       user,
       onError  : (msg) => { setError(msg); setLoading(null); },
       onDismiss: () => setLoading(null),
@@ -99,7 +106,7 @@ export default function UpgradeModal() {
       />
 
       {/* Modal panel */}
-      <div className="relative w-full max-w-2xl bg-gray-900 border border-gray-700/60 rounded-2xl shadow-2xl overflow-y-auto max-h-[92vh]">
+      <div className="relative w-full max-w-4xl bg-gray-900 border border-gray-700/60 rounded-2xl shadow-2xl overflow-y-auto max-h-[92vh]">
 
         {/* Header */}
         <div className="px-5 py-3 border-b border-gray-800 flex items-start justify-between">
@@ -129,14 +136,14 @@ export default function UpgradeModal() {
         )}
 
         {/* Plan cards */}
-        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
 
           {/* Starter */}
           <PlanCard
             planKey     = "starter"
             name        = "Starter"
-            tagline     = "For creators growing their audience"
-            price       = "₹999"
+            tagline     = "Find the drop-off on your funnel videos"
+            price       = "$29"
             features    = {PLAN_FEATURES.starter}
             current     = {currentPlan === 'starter'}
             isFocused   = {upgradeTarget === 'starter'}
@@ -145,12 +152,12 @@ export default function UpgradeModal() {
             onSubscribe = {() => handleSubscribe('starter')}
           />
 
-          {/* Pro */}
+          {/* Growth (internal key: pro) */}
           <PlanCard
             planKey     = "pro"
-            name        = "Pro"
-            tagline     = "For any serious business, B2B or B2C, to scale through video marketing"
-            price       = "₹1,999"
+            name        = "Growth"
+            tagline     = "Attribute the traffic that actually converts"
+            price       = "$79"
             features    = {PLAN_FEATURES.pro}
             current     = {currentPlan === 'pro' || currentPlan === 'admin_lifetime'}
             isFocused   = {upgradeTarget === 'pro'}
@@ -160,18 +167,26 @@ export default function UpgradeModal() {
             onSubscribe = {() => handleSubscribe('pro')}
           />
 
+          {/* Scale — contact only (multi-user / API / white-label built on demand) */}
+          <ContactCard
+            name    = "Scale"
+            tagline = "For agencies running many client funnels"
+            price   = "$199"
+            features= {PLAN_FEATURES.scale}
+          />
+
         </div>
 
         {/* Fine print */}
         <div className="px-5 pb-3 text-center space-y-0.5">
           <p className="text-xs text-gray-500 font-medium">
-            Your card will be charged every month until you cancel.
+            Every plan starts on the free plan · billed monthly · cancel anytime.
           </p>
           <p className="text-xs text-gray-400">
             Payments processed securely by Razorpay · Plan activates within minutes of payment
           </p>
           <p className="text-xs text-gray-500">
-            Need more than 20 videos?{' '}
+            Need multi-user, API, or white-label?{' '}
             <a href="mailto:support@vidapulse.io" className="text-amber-400 hover:text-amber-300 transition-colors">
               Contact support@vidapulse.io
             </a>
@@ -270,6 +285,42 @@ function PlanCard({
           Not available for your plan
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Contact Card (Scale — no self-serve checkout) ──────────────────────────
+
+function ContactCard({ name, tagline, price, features }) {
+  return (
+    <div className="relative flex flex-col bg-gray-800/60 border border-gray-700/50 rounded-xl p-5 transition-all">
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-base font-bold text-gray-100">{name}</h3>
+      </div>
+      <p className="text-xs text-gray-500 mb-4">{tagline}</p>
+
+      <div className="mb-5">
+        <span className="text-2xl font-bold text-gray-100">{price}</span>
+        <span className="text-xs text-gray-500 ml-1.5">/ month</span>
+      </div>
+
+      <ul className="flex-1 space-y-2 mb-6">
+        {features.map(f => (
+          <li key={f} className="flex items-start gap-2 text-xs text-gray-400">
+            <span className="text-emerald-400 flex-shrink-0 mt-0.5">✓</span>
+            {f}
+          </li>
+        ))}
+      </ul>
+
+      <a
+        href="mailto:support@vidapulse.io?subject=VidaPulse%20Scale%20plan"
+        className="w-full py-2.5 rounded-lg text-sm font-semibold text-center
+                   bg-gray-700/60 text-gray-100 border border-gray-600/60
+                   hover:bg-gray-700 transition-colors"
+      >
+        Talk to us →
+      </a>
     </div>
   );
 }

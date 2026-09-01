@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import api from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { startSubscriptionCheckout } from '../../lib/razorpayCheckout';
-import { getLockColor } from '../PlanTierBadge';
+import { getLockColor, planDisplayName } from '../PlanTierBadge';
 
 /**
  * UpgradeModal
@@ -37,20 +37,20 @@ const FEATURE_LABELS = {
 const PLAN_FEATURES = {
   starter: [
     'Up to 10 videos',
-    'Geographic data',
-    'Device & browser breakdown',
+    'Drop-off point & engagement heatmap',
     'Avg. time watched',
+    'Geography, device & browser',
     'Total plays, play rate & unique visitors',
     'Domain tracking & embed code',
   ],
   pro: [
-    '20 videos',
-    'Engagement heatmaps',
-    'Viewer-level analytics',
-    'Audience segmentation',
-    'Conversion tracking & funnels',
-    'Custom events, reports & smart alerts',
+    'Up to 20 videos',
     'Everything in Starter',
+    'UTM & source segmentation',
+    'Conversion tracking & funnels',
+    'Server-side pixel forwarding',
+    'Video comparison & AI insights',
+    'Priority support',
   ],
 };
 
@@ -59,11 +59,11 @@ const PLAN_FEATURES = {
 /** Default pricing shown immediately — API call updates currency/price in background */
 function defaultUpgradeData(currentPlan) {
   return {
-    currency       : 'INR',
+    currency       : 'USD',
     upgrade_options: currentPlan === 'starter' ? ['pro'] : ['starter', 'pro'],
     pricing: {
-      starter: { price_label: '₹999',   price: 999,  inr: 999,  usd: 15, video_limit: 10 },
-      pro    : { price_label: '₹1,999', price: 1999, inr: 1999, usd: 29, video_limit: 20 },
+      starter: { name: 'Starter', price_label: '$29', price: 29, usd: 29, video_limit: 10 },
+      pro    : { name: 'Growth',  price_label: '$79', price: 79, usd: 79, video_limit: 20 },
     },
   };
 }
@@ -88,8 +88,8 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
     setSubscribing(plan);
     await startSubscriptionCheckout({
       plan,
-      currency : upgradeData.currency ?? 'INR',
-      value    : upgradeData.pricing?.[plan]?.price ?? (plan === 'starter' ? 999 : 1999),
+      currency : upgradeData.currency ?? 'USD',
+      value    : upgradeData.pricing?.[plan]?.price ?? (plan === 'starter' ? 29 : 79),
       user,
       onError  : (msg) => { setSubError(msg); setSubscribing(null); },
       onDismiss: () => setSubscribing(null),
@@ -147,12 +147,12 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-50">
-                Unlock {capitalize(requiredPlan)} Features
+                Unlock {planDisplayName(requiredPlan)} Features
               </h2>
               <p className="text-sm text-gray-400 mt-0.5">
                 {feature === 'video_upload'
-                  ? `You've reached the video limit on your ${capitalize(currentPlan)} plan.`
-                  : `Upgrade to unlock ${featureLabel} and all ${capitalize(requiredPlan)} plan features.`
+                  ? `You've reached the video limit on your ${planDisplayName(currentPlan)} plan.`
+                  : `Upgrade to unlock ${featureLabel} and all ${planDisplayName(requiredPlan)} plan features.`
                 }
               </p>
             </div>
@@ -209,8 +209,8 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
 function PlanCard({ plan, pricing, isHighlighted, features, singleCard, subscribing, onSubscribe }) {
   const color = getLockColor(plan); // #00FFFF starter, #F59E0B pro
 
-  // price_label is set by the backend based on the user's IP (INR for India, USD otherwise)
-  const priceLabel = pricing?.price_label ?? pricing?.inr_label ?? `₹${pricing?.inr ?? '—'}`;
+  // price_label is set by the backend (USD).
+  const priceLabel = pricing?.price_label ?? pricing?.usd_label ?? `$${pricing?.usd ?? '—'}`;
 
   return (
     <div
@@ -232,7 +232,7 @@ function PlanCard({ plan, pricing, isHighlighted, features, singleCard, subscrib
       {/* Plan name + price */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <span className="font-bold text-gray-50">{capitalize(plan)}</span>
+          <span className="font-bold text-gray-50">{planDisplayName(plan)}</span>
           <PlanBadge plan={plan} />
         </div>
         <div className="flex items-baseline gap-1">
@@ -271,7 +271,7 @@ function PlanCard({ plan, pricing, isHighlighted, features, singleCard, subscrib
             Redirecting…
           </>
         ) : (
-          `Upgrade to ${capitalize(plan)} →`
+          `Upgrade to ${planDisplayName(plan)} →`
         )}
       </button>
     </div>
@@ -287,7 +287,7 @@ export function PlanBadge({ plan }) {
   return (
     <span className="px-2 py-0.5 text-xs font-medium rounded-full border"
           style={{ color, background: `${color}18`, borderColor: `${color}40` }}>
-      {plan === 'pro' ? 'Pro' : 'Starter'}
+      {planDisplayName(plan)}
     </span>
   );
 }

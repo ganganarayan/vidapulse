@@ -17,7 +17,7 @@ import IndividualViewerSection     from './IndividualViewerSection';
 import TrafficSourcesSection       from './TrafficSourcesSection';
 import DomainsSection              from './DomainsSection';
 import TrackingSettingsView        from './TrackingSettingsView';
-import PlanTierBadge, { PlanCrown, getLockColor, PadLockIcon } from '../PlanTierBadge';
+import PlanTierBadge, { PlanCrown, getLockColor, PadLockIcon, planDisplayName } from '../PlanTierBadge';
 import { useUpgrade }          from '../../contexts/UpgradeContext';
 
 /**
@@ -91,8 +91,8 @@ const CARD_REQUIRED_PLAN = {
   avg_watch  : 'starter',
   completion : 'starter',
   watch_time : 'starter',
-  dropoff    : 'pro',
-  rewatches  : 'pro',
+  dropoff    : 'starter',
+  rewatches  : 'starter',
 };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -258,7 +258,7 @@ export default function VideoAnalyticsView({
                 <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">
                   Audience Retention
                 </p>
-                <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Engagement Heatmap <PlanTierBadge plan="pro" userPlan={user?.plan} /></h2>
+                <h2 className="text-2xl font-bold text-gray-50 flex items-center gap-2">Engagement Heatmap <PlanTierBadge plan="starter" userPlan={user?.plan} /></h2>
                 <p className="text-xs text-gray-400 mt-1">
                   Percentage of viewers still watching at each point in the video.
                 </p>
@@ -491,7 +491,7 @@ function MetricCard({ label, value, format, visible, accent, className = '', onC
         {locked
           ? <span className="font-medium inline-flex items-center gap-1" style={{ color: getLockColor(requiredPlan) }}>
               <PadLockIcon size={9} color={getLockColor(requiredPlan)} />
-              Upgrade to {requiredPlan} →
+              Upgrade to {planDisplayName(requiredPlan)} →
             </span>
           : <span className="text-gray-400">{subtitle ?? 'View details →'}</span>
         }
