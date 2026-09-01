@@ -445,6 +445,44 @@
       .features-grid, .pricing-grid { grid-template-columns: 1fr; }
       .hero-actions .btn { width: 100%; justify-content: center; }
     }
+
+    /* ══════════════════════════════════════════════ SIGNUP MODAL ══════════ */
+    .signup-overlay {
+      position: fixed; inset: 0; z-index: 300; display: none;
+      align-items: center; justify-content: center; padding: 20px;
+      background: rgba(15,23,42,.6); backdrop-filter: blur(4px);
+    }
+    .signup-overlay.open { display: flex; }
+    .signup-modal {
+      position: relative; width: 100%; max-width: 420px; background: #ffffff;
+      border-radius: 18px; padding: 30px 28px; box-shadow: 0 30px 70px rgba(15,23,42,.35);
+    }
+    .signup-close {
+      position: absolute; top: 14px; right: 16px; background: none; border: none;
+      font-size: 24px; line-height: 1; color: #94A3B8; cursor: pointer; padding: 4px;
+    }
+    .signup-close:hover { color: #0F172A; }
+    .signup-modal h3 { font-size: 22px; font-weight: 800; color: #0F172A; letter-spacing: -0.5px; margin-bottom: 6px; }
+    .signup-modal .sm-sub { font-size: 14px; color: #64748B; margin-bottom: 22px; }
+    .signup-field { margin-bottom: 14px; }
+    .signup-field label { display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 5px; }
+    .signup-field input {
+      width: 100%; padding: 11px 13px; font-size: 15px; color: #0F172A;
+      border: 1.5px solid #E2E8F0; border-radius: 9px; outline: none; transition: border-color .15s;
+    }
+    .signup-field input:focus { border-color: #F59E0B; box-shadow: 0 0 0 3px rgba(245,158,11,.12); }
+    .signup-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+    .signup-submit {
+      width: 100%; margin-top: 6px; padding: 13px; font-size: 15px; font-weight: 700;
+      color: #0F172A; background: #F59E0B; border: none; border-radius: 9px; cursor: pointer;
+      transition: opacity .15s, transform .15s;
+    }
+    .signup-submit:hover { opacity: .94; transform: translateY(-1px); }
+    .signup-submit:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+    .signup-msg { font-size: 13px; margin-top: 12px; text-align: center; min-height: 18px; }
+    .signup-msg.err { color: #B91C1C; }
+    .signup-msg.ok  { color: #059669; }
+    .signup-fine { font-size: 12px; color: #94A3B8; text-align: center; margin-top: 14px; line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -468,7 +506,7 @@
       </ul>
       <div class="nav-cta">
         <a href="https://app.vidapulse.io/login" class="nav-login">Log in</a>
-        <a href="https://app.vidapulse.io/login" class="btn btn-primary">Show my drop-off point</a>
+        <a href="https://app.vidapulse.io/login" class="btn btn-primary js-signup">Show my drop-off point</a>
       </div>
     </div>
   </nav>
@@ -487,7 +525,7 @@
           VidaPulse shows exactly where they drop, in the video you already have. No re-hosting, no code, no per-seat bill.
         </p>
         <div class="hero-actions">
-          <a href="https://app.vidapulse.io/login" class="btn btn-primary btn-lg">Show my drop-off point &rarr;</a>
+          <a href="https://app.vidapulse.io/login" class="btn btn-primary btn-lg js-signup">Show my drop-off point &rarr;</a>
           <a href="#how-it-works" class="btn btn-outline btn-lg">See how it works</a>
         </div>
         <p class="hero-reassure"><strong>Free forever on 1 video</strong> &nbsp;·&nbsp; No card &nbsp;·&nbsp; Works with the video you already have</p>
@@ -671,7 +709,7 @@
             <li><span class="check">&#10003;</span> Embed code</li>
             <li><span class="check">&#10003;</span> Community support</li>
           </ul>
-          <a href="https://app.vidapulse.io/login" class="btn btn-outline plan-cta">Start tracking free</a>
+          <a href="https://app.vidapulse.io/login" class="btn btn-outline plan-cta js-signup">Start tracking free</a>
         </div>
 
         <!-- Starter -->
@@ -690,7 +728,7 @@
             <li><span class="check">&#10003;</span> Geo, device &amp; browser</li>
             <li><span class="check">&#10003;</span> Email support</li>
           </ul>
-          <a href="https://app.vidapulse.io/login" class="btn btn-outline plan-cta">Start free, upgrade later</a>
+          <a href="https://app.vidapulse.io/login" class="btn btn-outline plan-cta js-signup">Start free, upgrade later</a>
         </div>
 
         <!-- Growth -->
@@ -710,7 +748,7 @@
             <li><span class="check">&#10003;</span> Video comparison</li>
             <li><span class="check">&#10003;</span> AI insights &amp; priority support</li>
           </ul>
-          <a href="https://app.vidapulse.io/login" class="btn btn-primary plan-cta">Start free, upgrade later</a>
+          <a href="https://app.vidapulse.io/login" class="btn btn-primary plan-cta js-signup">Start free, upgrade later</a>
         </div>
 
         <!-- Scale -->
@@ -803,7 +841,7 @@
     <div class="container">
       <h2>See the exact second buyers leave your VSL.</h2>
       <p>Free forever on 1 video · No card · Works with the video you already have.</p>
-      <a href="https://app.vidapulse.io/login" class="btn btn-dark btn-lg">Show my drop-off point &rarr;</a>
+      <a href="https://app.vidapulse.io/login" class="btn btn-dark btn-lg js-signup">Show my drop-off point &rarr;</a>
     </div>
   </section>
 
@@ -856,7 +894,7 @@
   <!-- Mobile sticky CTA -->
   <div class="sticky-cta">
     <div class="sc-text"><b>Free on 1 video</b> No card required</div>
-    <a href="https://app.vidapulse.io/login" class="btn btn-primary">Show my drop-off</a>
+    <a href="https://app.vidapulse.io/login" class="btn btn-primary js-signup">Show my drop-off</a>
   </div>
 
   <script>
@@ -878,6 +916,98 @@
         bar.style.cssText = 'height:' + Math.round(v * 100) + '%;background:' + color + ';opacity:' + (0.55 + v * 0.45) + ';';
         bars.appendChild(bar);
       }
+    })();
+  </script>
+
+  <!-- ═══════════════════════════════════════ SIGNUP MODAL ═══════════ -->
+  <div class="signup-overlay" id="signup-overlay" role="dialog" aria-modal="true" aria-labelledby="signup-title">
+    <div class="signup-modal">
+      <button class="signup-close" id="signup-close" aria-label="Close">&times;</button>
+      <h3 id="signup-title">Start tracking free</h3>
+      <p class="sm-sub">Free forever on 1 video. No card required.</p>
+      <form id="signup-form" novalidate>
+        <div class="signup-field">
+          <label for="su-name">Name</label>
+          <input type="text" id="su-name" name="name" autocomplete="name" required />
+        </div>
+        <div class="signup-field">
+          <label for="su-email">Work email</label>
+          <input type="email" id="su-email" name="email" autocomplete="email" required />
+        </div>
+        <div class="signup-field">
+          <label for="su-phone">Phone</label>
+          <input type="tel" id="su-phone" name="phone" autocomplete="tel" />
+        </div>
+        <!-- honeypot: hidden from humans, bots fill it -->
+        <div class="signup-hp" aria-hidden="true">
+          <label for="su-company">Company website</label>
+          <input type="text" id="su-company" name="company_website" tabindex="-1" autocomplete="off" />
+        </div>
+        <button type="submit" class="signup-submit" id="signup-submit">Create my free account &rarr;</button>
+        <p class="signup-msg" id="signup-msg" role="status" aria-live="polite"></p>
+        <p class="signup-fine">By continuing you agree to our <a href="/terms-of-use" style="color:#64748B;text-decoration:underline;">Terms</a> and <a href="/privacy-policy" style="color:#64748B;text-decoration:underline;">Privacy Policy</a>.</p>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var overlay = document.getElementById('signup-overlay');
+      var form    = document.getElementById('signup-form');
+      var msg     = document.getElementById('signup-msg');
+      var submit  = document.getElementById('signup-submit');
+      if (!overlay || !form) return;
+
+      function openModal(e) { if (e) e.preventDefault(); overlay.classList.add('open'); document.body.style.overflow = 'hidden'; var n = document.getElementById('su-name'); if (n) setTimeout(function(){ n.focus(); }, 30); }
+      function closeModal() { overlay.classList.remove('open'); document.body.style.overflow = ''; }
+
+      // Wire every signup CTA to open the modal (href stays as a no-JS fallback).
+      document.querySelectorAll('.js-signup').forEach(function (el) { el.addEventListener('click', openModal); });
+      document.getElementById('signup-close').addEventListener('click', closeModal);
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) closeModal(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && overlay.classList.contains('open')) closeModal(); });
+
+      function leadSource() {
+        var q = new URLSearchParams(location.search), ls = {};
+        ['utm_source','utm_medium','utm_campaign','utm_term','utm_content'].forEach(function (k) { var v = q.get(k); if (v) ls[k] = v; });
+        return ls;
+      }
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        msg.textContent = ''; msg.className = 'signup-msg';
+        var name = document.getElementById('su-name').value.trim();
+        var email = document.getElementById('su-email').value.trim();
+        var phone = document.getElementById('su-phone').value.trim();
+        var company_website = document.getElementById('su-company').value;
+        if (!name || !email) { msg.textContent = 'Please enter your name and email.'; msg.className = 'signup-msg err'; return; }
+
+        submit.disabled = true; var orig = submit.innerHTML; submit.textContent = 'Creating your account…';
+        fetch('/api/auth/lead-signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name, email: email, phone: phone, company_website: company_website, lead_source: leadSource() }),
+        }).then(function (r) {
+          return r.json().then(function (data) { return { status: r.status, data: data }; });
+        }).then(function (res) {
+          if (res.status === 201 && res.data && res.data.set_password_url) {
+            msg.textContent = 'Account created — taking you to set your password…'; msg.className = 'signup-msg ok';
+            window.location.href = res.data.set_password_url;
+            return;
+          }
+          if (res.status === 409 && res.data && res.data.login_url) {
+            msg.textContent = 'You already have an account — taking you to log in…'; msg.className = 'signup-msg ok';
+            window.location.href = res.data.login_url;
+            return;
+          }
+          msg.textContent = (res.data && res.data.message) || 'Something went wrong. Please try again.';
+          msg.className = 'signup-msg err';
+          submit.disabled = false; submit.innerHTML = orig;
+        }).catch(function () {
+          msg.textContent = 'Network error. Please try again.'; msg.className = 'signup-msg err';
+          submit.disabled = false; submit.innerHTML = orig;
+        });
+      });
     })();
   </script>
 

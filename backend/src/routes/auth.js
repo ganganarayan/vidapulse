@@ -554,6 +554,139 @@ router.post('/register', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// POST /api/auth/lead-signup   (public — the vidapulse.io landing form)
+//
+// Passwordless free-account capture from the marketing landing page. Because
+// /api/* is served on every host, the landing posts here same-origin (works on
+// the live apex AND on a staging/preview host — no CORS).
+//   1. IP rate-limited (reuses the login window).
+//   2. Honeypot: a filled hidden `company_website` field → fake success, no-op.
+//   3. Creates a free 'subscriber' account (password_set = FALSE,
+//      created_via = 'landing') + a 24h set_password token.
+//   4. Emits user_signed_up → fires the contact webhook to the CRM.
+//   5. Returns { set_password_url } on the APP host so the visitor sets a
+//      password and lands in the dashboard. Existing email → 409 { login_url }.
+// ─────────────────────────────────────────────────────────────
+
+const leadSignupSchema = z.object({
+  name : z.string().trim().min(1, 'Name is required').max(200),
+  email: z.string().email('Enter a valid email address'),
+  phone: z.string().trim().max(40).optional().nullable(),
+});
+
+router.post('/lead-signup', async (req, res, next) => {
+  try {
+    const clientIp = (req.headers['x-forwarded-for'] || req.ip || '')
+      .toString().split(',')[0].trim();
+    if (_loginRateLimited(clientIp)) {
+      return res.status(429).json({
+        error: 'Too Many Requests',
+        message: 'Too many attempts. Please try again in a few minutes.',
+      });
+    }
+
+    // Honeypot — real users never fill this hidden field.
+    if (req.body?.company_website) {
+      return res.status(200).json({ ok: true, set_password_url: `${env.APP_URL}/login` });
+    }
+
+    const parsed = leadSignupSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: parsed.error.issues[0]?.message || 'Invalid input',
+      });
+    }
+
+    const normalizedEmail = parsed.data.email.toLowerCase().trim();
+    const finalName       = parsed.data.name.trim();
+    const normalizedPhone = parsed.data.phone ? String(parsed.data.phone).trim() : null;
+    const ls              = normalizeLeadSource(req.body?.lead_source);
+
+    // Existing account → route them to login instead of erroring hard.
+    const { rows: existing } = await pool.query(
+      `SELECT id FROM users WHERE email = $1`, [normalizedEmail]
+    );
+    if (existing.length > 0) {
+      return res.status(409).json({
+        error: 'Conflict', existing: true,
+        login_url: `${env.APP_URL}/login`,
+        message: 'An account with that email already exists — please log in.',
+      });
+    }
+
+    let userId, token;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: plans } = await client.query(
+        `SELECT id FROM plans WHERE name = 'free' AND is_active = TRUE LIMIT 1`
+      );
+      if (!plans.length) throw new Error('Free plan not found');
+
+      const { rows: [user] } = await client.query(
+        `INSERT INTO users (email, name, phone, plan_id, role, password_set, created_via,
+                            signup_utm_source, signup_utm_medium, signup_utm_campaign,
+                            signup_utm_term, signup_utm_content)
+         VALUES ($1, $2, $3, $4, 'subscriber', FALSE, 'landing', $5, $6, $7, $8, $9)
+         RETURNING id`,
+        [normalizedEmail, finalName, normalizedPhone, plans[0].id,
+         ls.utm_source, ls.utm_medium, ls.utm_campaign, ls.utm_term, ls.utm_content]
+      );
+      userId = user.id;
+
+      await client.query(
+        `INSERT INTO user_preferences (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [userId]
+      );
+      await client.query(
+        `INSERT INTO onboarding_state (user_id, signed_up_at) VALUES ($1, NOW()) ON CONFLICT DO NOTHING`,
+        [userId]
+      );
+
+      token = crypto.randomBytes(48).toString('hex');
+      await client.query(
+        `INSERT INTO auth_tokens (user_id, token, purpose, expires_at)
+         VALUES ($1, $2, 'set_password', NOW() + INTERVAL '24 hours')`,
+        [userId, token]
+      );
+
+      // Returning-after-purge notice (parity with /register).
+      await client.query(
+        `UPDATE users u
+            SET previously_purged_at = pa.purged_at, purge_notice_shown = FALSE
+           FROM (SELECT purged_at FROM purged_accounts
+                  WHERE LOWER(email) = LOWER($2) ORDER BY purged_at DESC LIMIT 1) pa
+          WHERE u.id = $1`,
+        [userId, normalizedEmail]
+      );
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    // Fire the CRM contact webhook via the single source of truth for signups.
+    emitEvent(userId, 'user_signed_up', null, {
+      signup_source: 'landing',
+      email        : normalizedEmail,
+      plan         : 'free',
+    });
+
+    logger.info(`[auth/lead-signup] New landing lead: ${normalizedEmail}`);
+
+    // set-password lives on the APP host (env.APP_URL), never the landing host.
+    const setPasswordUrl = `${env.APP_URL}/set-password?token=${token}`;
+    return res.status(201).json({ ok: true, set_password_url: setPasswordUrl });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
 // PATCH /api/auth/me  (requires auth)
 //
 // Updates the authenticated user's name and/or password.
