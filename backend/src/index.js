@@ -171,7 +171,19 @@ if (env.NODE_ENV === 'production') {
   // Build landing domains from APP_URL (e.g. vidapulse.io + www.vidapulse.io)
   // plus keep .in entries during transition
   const _appHost       = (() => { try { return new URL(env.APP_URL).hostname.replace(/^[^.]+\./, ''); } catch { return 'vidapulse.io'; } })();
-  const landingDomains = new Set([_appHost, `www.${_appHost}`]);
+
+  // Canonical marketing hostnames — HARDCODED so the landing page is served on
+  // the apex regardless of what APP_URL is set to. (The old APP_URL-derived
+  // value is fragile: e.g. APP_URL=https://vidapulse.io derives 'io'.) These are
+  // the only landing hosts allowed to be indexed by search engines.
+  const CANONICAL_LANDING = ['vidapulse.io', 'www.vidapulse.io'];
+  const landingDomains = new Set([...CANONICAL_LANDING, _appHost, `www.${_appHost}`]);
+
+  // TEMPORARY preview host — lets the staging Railway URL render the landing
+  // page for pre-cutover verification without touching live DNS. Never indexed
+  // (not in CANONICAL_LANDING → noindex + Disallow robots below).
+  // ⚠️ REMOVE this line before promoting orbitq → main.
+  landingDomains.add('vidapulse-staging.up.railway.app');
 
   // Extra landing hosts (staging/preview) from env — lets us serve the
   // marketing page on a Railway/preview host for pre-cutover testing without
@@ -259,7 +271,7 @@ if (env.NODE_ENV === 'production') {
 
   // Preview/staging landing hosts (from LANDING_HOSTS) must never be indexed —
   // only the canonical apex + www may rank. Send noindex + a Disallow robots.
-  const canonicalLanding = new Set([_appHost, `www.${_appHost}`]);
+  const canonicalLanding = new Set([...CANONICAL_LANDING, _appHost, `www.${_appHost}`]);
   app.use((req, res, next) => {
     if (landingDomains.has(req.hostname) && !canonicalLanding.has(req.hostname)) {
       res.setHeader('X-Robots-Tag', 'noindex, nofollow');
