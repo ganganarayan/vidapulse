@@ -37,6 +37,12 @@ module.exports = {
   APP_URL     : process.env.APP_URL.replace(/\/$/, ''), // strip trailing slash
   LOG_LEVEL   : process.env.LOG_LEVEL  || 'info',
 
+  // Extra hostnames that should serve the marketing landing page (in addition
+  // to the apex + www derived from APP_URL). Comma-separated. Used to preview
+  // the landing on a Railway/staging host BEFORE repointing the live domain.
+  // e.g. LANDING_HOSTS="vidapulse-staging.up.railway.app,preview.vidapulse.io"
+  LANDING_HOSTS: process.env.LANDING_HOSTS || '',
+
   // Database
   DATABASE_URL: process.env.DATABASE_URL,
 

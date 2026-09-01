@@ -173,6 +173,15 @@ if (env.NODE_ENV === 'production') {
   const _appHost       = (() => { try { return new URL(env.APP_URL).hostname.replace(/^[^.]+\./, ''); } catch { return 'vidapulse.io'; } })();
   const landingDomains = new Set([_appHost, `www.${_appHost}`]);
 
+  // Extra landing hosts (staging/preview) from env — lets us serve the
+  // marketing page on a Railway/preview host for pre-cutover testing without
+  // repointing the live apex. Comma-separated; matched against req.hostname.
+  (env.LANDING_HOSTS || '')
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean)
+    .forEach((h) => landingDomains.add(h));
+
   // ─────────────────────────────────────────────────────────────
   // Knowledge Base — static, AI-crawlable HTML on the APP domain
   //
@@ -245,6 +254,19 @@ if (env.NODE_ENV === 'production') {
       });
     }
 
+    next();
+  });
+
+  // Preview/staging landing hosts (from LANDING_HOSTS) must never be indexed —
+  // only the canonical apex + www may rank. Send noindex + a Disallow robots.
+  const canonicalLanding = new Set([_appHost, `www.${_appHost}`]);
+  app.use((req, res, next) => {
+    if (landingDomains.has(req.hostname) && !canonicalLanding.has(req.hostname)) {
+      res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+      if (req.path === '/robots.txt') {
+        return res.type('text/plain').send('User-agent: *\nDisallow: /\n');
+      }
+    }
     next();
   });
 
