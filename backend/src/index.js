@@ -197,6 +197,37 @@ if (env.NODE_ENV === 'production') {
     .filter(Boolean)
     .forEach((h) => landingDomains.add(h));
 
+  // ── Landing-page CSP override ──────────────────────────────────────────────
+  // The marketing landing (landingDomains) relies on inline <script> blocks —
+  // the signup modal, the founding-members counter, and the page-view beacon —
+  // plus a cross-origin beacon image to the app API. helmet's default production
+  // CSP (script-src 'self'; img-src 'self' data:) SILENTLY blocks all of that,
+  // so none of the landing's JS runs (modal dead, counter stuck on the static
+  // fallback, beacon dropped). Give landing hosts a landing-appropriate CSP that
+  // allows inline scripts + https images/beacons; the app keeps helmet's strict
+  // CSP untouched. (A marketing page reflects no user input, so 'unsafe-inline'
+  // here is a low risk; moving the scripts to an external file would let us drop
+  // it later.)
+  const LANDING_CSP = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https:",
+    "img-src 'self' data: https:",
+    "font-src 'self' https: data:",
+    "connect-src 'self' https:",
+    "form-action 'self'",
+    "base-uri 'self'",
+    "frame-ancestors 'self'",
+    "object-src 'none'",
+    "upgrade-insecure-requests",
+  ].join(';');
+  app.use((req, res, next) => {
+    if (landingDomains.has(req.hostname)) {
+      res.setHeader('Content-Security-Policy', LANDING_CSP);
+    }
+    next();
+  });
+
   // ─────────────────────────────────────────────────────────────
   // Knowledge Base — static, AI-crawlable HTML on the APP domain
   //
