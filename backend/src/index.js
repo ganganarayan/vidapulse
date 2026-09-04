@@ -210,10 +210,13 @@ if (env.NODE_ENV === 'production') {
   // it later.)
   const LANDING_CSP = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    // 'unsafe-inline' for the landing's own inline scripts; clarity.ms for the
+    // Microsoft Clarity tag (the only third-party script the landing loads).
+    "script-src 'self' 'unsafe-inline' https://www.clarity.ms https://*.clarity.ms",
     "style-src 'self' 'unsafe-inline' https:",
     "img-src 'self' data: https:",
     "font-src 'self' https: data:",
+    // https: covers the page-view beacon to the app API + Clarity's beacons.
     "connect-src 'self' https:",
     "form-action 'self'",
     "base-uri 'self'",
