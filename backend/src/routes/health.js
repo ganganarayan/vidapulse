@@ -74,20 +74,9 @@ router.get('/', async (req, res) => {
   // (`status` / `database.connected`) for monitoring/readiness checks.
   const status = dbConnected ? 'ok' : 'degraded';
 
-  // ── Process memory (real RSS of this Node service — no guessing) ──────
-  const mem = process.memoryUsage();
-  const mb  = (n) => Math.round((n / 1048576) * 10) / 10;
-
   res.status(200).json({
     status,
     timestamp: new Date().toISOString(),
-    memory: {
-      rss_mb       : mb(mem.rss),        // total resident memory (what Railway bills)
-      heap_used_mb : mb(mem.heapUsed),
-      heap_total_mb: mb(mem.heapTotal),
-      external_mb  : mb(mem.external),
-      uptime_s     : Math.round(process.uptime()),
-    },
     database: {
       connected   : dbConnected,
       pool_total  : poolStats.pool_total,
