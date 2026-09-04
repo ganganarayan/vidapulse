@@ -168,6 +168,14 @@ app.use('/api', routes);
 if (env.NODE_ENV === 'production') {
   const landingDir     = path.join(__dirname, '../../landing');
   const frontendDist   = path.join(__dirname, '../../frontend/dist');
+
+  // EJS view engine — the marketing landing is a server-rendered EJS view
+  // (backend/views/landing.ejs) with all behaviour in external JS files under
+  // landing/assets/. This replaces the old static landing/index.html so the
+  // page carries no inline scripts (structurally CSP-clean) and can inject
+  // live server data (the founding-members count) at render time.
+  app.set('view engine', 'ejs');
+  app.set('views', path.join(__dirname, '../views'));
   // Build landing domains from APP_URL (e.g. vidapulse.io + www.vidapulse.io)
   // plus keep .in entries during transition
   const _appHost       = (() => { try { return new URL(env.APP_URL).hostname.replace(/^[^.]+\./, ''); } catch { return 'vidapulse.io'; } })();
@@ -350,9 +358,18 @@ if (env.NODE_ENV === 'production') {
   // Catch-all: serve the correct index.html based on the domain.
   // For React Router — any unmatched path on the app subdomain serves
   // index.html so client-side routing works (e.g. /login, /dashboard/videos).
-  app.get('*', (req, res) => {
+  app.get('*', async (req, res) => {
     if (landingDomains.has(req.hostname)) {
-      res.sendFile(path.join(landingDir, 'index.html'));
+      // Server-render the landing view with the live founding-members count
+      // injected (falls back to an empty cohort if the lookup fails).
+      let f = { taken: 0, limit: 100, price_usd: 59, closed: false };
+      try { f = await require('./services/foundingService').getStatus(); } catch (e) { /* fall back */ }
+      return res.render('landing', {
+        foundingTaken : f.taken,
+        foundingLimit : f.limit,
+        foundingPrice : f.price_usd,
+        foundingClosed: f.closed,
+      });
     } else {
       // No-cache so users always get the freshest entry point after a deploy
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
