@@ -1069,13 +1069,33 @@ const PLAYER_DEFAULTS = {
   resume_playback       : false,
   loop                  : false,
   accent_color          : '#F59E0B',
+  cta_enabled           : false,
+  cta_overlays          : [],
 };
 
 const PLAYER_COLS = [
   'autoplay', 'autoplay_muted', 'start_muted', 'show_seek_bar', 'show_time',
   'show_play_pause_btn', 'show_playback_speed', 'show_fullscreen_btn',
   'show_volume_control', 'show_rewind_forward', 'resume_playback', 'loop', 'accent_color',
+  'cta_enabled', 'cta_overlays',
 ];
+
+const MAX_CTA_OVERLAYS = 3;
+
+// One timed overlay button. Sticky by design (no end/hide field) — once shown it
+// only dims. x/y are the button CENTER as a % of the player box; w is its width %.
+const ctaOverlaySchema = z.object({
+  id               : z.string().trim().min(1).max(40),
+  label            : z.string().trim().min(1).max(80),
+  url              : z.string().trim().max(2000)
+                       .refine(u => u.startsWith('http://') || u.startsWith('https://'),
+                               { message: 'url must start with http:// or https://' }),
+  start_second     : z.number().finite().min(0).max(86400),
+  dim_after_seconds: z.number().finite().min(0).max(600).default(10),
+  x                : z.number().finite().min(0).max(100).default(50),
+  y                : z.number().finite().min(0).max(100).default(85),
+  w                : z.number().finite().min(5).max(95).default(40),
+}).strip();
 
 async function fetchPlayerSettings(videoId) {
   try {
@@ -1139,6 +1159,10 @@ const playerSettingsSchema = z.object({
   resume_playback       : nullBool,
   loop                  : nullBool,
   accent_color          : z.string().regex(/^#[0-9a-fA-F]{6}$/).nullish().transform(v => v ?? undefined),
+  cta_enabled           : nullBool,
+  // The frontend sends the full array on any change. Cap at MAX_CTA_OVERLAYS and
+  // drop unknown keys; null/absent leaves the stored value untouched.
+  cta_overlays          : z.array(ctaOverlaySchema).max(MAX_CTA_OVERLAYS).nullish().transform(v => v ?? undefined),
 });
 
 router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
@@ -1163,14 +1187,16 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
     const existing = await fetchPlayerSettings(req.params.id);
     const merged   = { ...existing, ...parseResult.data };
     if (!merged.accent_color) merged.accent_color = PLAYER_DEFAULTS.accent_color;
+    if (!Array.isArray(merged.cta_overlays)) merged.cta_overlays = [];
 
     // Note: no user_id in INSERT — CHECK constraint forbids video_id + user_id both non-null.
     await pool.query(
       `INSERT INTO video_player_settings
          (video_id, autoplay, autoplay_muted, start_muted, show_seek_bar, show_time,
           show_play_pause_btn, show_playback_speed, show_fullscreen_btn,
-          show_volume_control, show_rewind_forward, resume_playback, loop, accent_color)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          show_volume_control, show_rewind_forward, resume_playback, loop, accent_color,
+          cta_enabled, cta_overlays)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb)
        ON CONFLICT (video_id) DO UPDATE SET
          autoplay              = EXCLUDED.autoplay,
          autoplay_muted        = EXCLUDED.autoplay_muted,
@@ -1185,6 +1211,8 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
          resume_playback       = EXCLUDED.resume_playback,
          loop                  = EXCLUDED.loop,
          accent_color          = EXCLUDED.accent_color,
+         cta_enabled           = EXCLUDED.cta_enabled,
+         cta_overlays          = EXCLUDED.cta_overlays,
          updated_at            = NOW()`,
       [
         req.params.id,
@@ -1192,6 +1220,7 @@ router.patch('/:id/player-settings', requireAuth, async (req, res, next) => {
         merged.show_seek_bar, merged.show_time, merged.show_play_pause_btn, merged.show_playback_speed,
         merged.show_fullscreen_btn, merged.show_volume_control, merged.show_rewind_forward,
         merged.resume_playback, merged.loop, merged.accent_color,
+        merged.cta_enabled ?? false, JSON.stringify(merged.cta_overlays),
       ]
     );
 

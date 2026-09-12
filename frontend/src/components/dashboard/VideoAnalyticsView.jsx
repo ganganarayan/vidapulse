@@ -17,6 +17,7 @@ import IndividualViewerSection     from './IndividualViewerSection';
 import TrafficSourcesSection       from './TrafficSourcesSection';
 import DomainsSection              from './DomainsSection';
 import TrackingSettingsView        from './TrackingSettingsView';
+import CtaOverlayEditor            from './CtaOverlayEditor';
 import PlanTierBadge, { PlanCrown, getLockColor, PadLockIcon, planDisplayName } from '../PlanTierBadge';
 import { useUpgrade }          from '../../contexts/UpgradeContext';
 
@@ -321,7 +322,7 @@ export default function VideoAnalyticsView({
 
         {/* ── Player settings view ─────────────────────────────────── */}
         {activeView === 'player' && (
-          video?.is_promo && !isAdmin ? <PromoRestricted /> : <PlayerSettingsView videoId={video?.id} />
+          video?.is_promo && !isAdmin ? <PromoRestricted /> : <PlayerSettingsView videoId={video?.id} video={video} />
         )}
 
         {/* ── Tracking view (viewer-plane, Pro) ────────────────────── */}
@@ -687,7 +688,7 @@ const PLAYER_ROWS = [
   { key: 'loop',                label: 'Loop',                desc: 'Replay the video automatically when it ends' },
 ];
 
-function PlayerSettingsView({ videoId }) {
+function PlayerSettingsView({ videoId, video }) {
   const { showToast } = useToast();
   const [settings, setSettings] = useState(null);
   const [saving,   setSaving]   = useState(false);
@@ -699,9 +700,11 @@ function PlayerSettingsView({ videoId }) {
       .catch(() => setSettings({ ...PLAYER_DEFAULTS }));
   }, [videoId]);
 
-  async function toggle(key) {
+  // Merge a patch into the current settings and upsert the whole object.
+  // Used by the boolean toggles and by the CTA overlay editor.
+  async function save(patch) {
     const prev = { ...settings };
-    const next = { ...settings, [key]: !settings[key] };
+    const next = { ...settings, ...patch };
     setSettings(next);
     setSaving(true);
     try {
@@ -714,6 +717,10 @@ function PlayerSettingsView({ videoId }) {
     } finally {
       setSaving(false);
     }
+  }
+
+  function toggle(key) {
+    return save({ [key]: !settings[key] });
   }
 
   return (
@@ -763,6 +770,16 @@ function PlayerSettingsView({ videoId }) {
               </button>
             </div>
           ))
+        )}
+
+        {/* Timed CTA overlays — appears at the bottom; the toggle expands it */}
+        {settings !== null && (
+          <CtaOverlayEditor
+            video={video}
+            settings={settings}
+            saving={saving}
+            onSave={(patch) => save(patch)}
+          />
         )}
       </div>
     </div>

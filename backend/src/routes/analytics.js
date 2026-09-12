@@ -919,7 +919,7 @@ router.get('/cta/:videoId', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────
 
 router.post('/event', async (req, res) => {
-  const { session_id, video_id, event_type, position } = req.body ?? {};
+  const { session_id, video_id, event_type, position, cta_id } = req.body ?? {};
   res.json({ ok: true }); // always respond 200 quickly
 
   if (!video_id || event_type !== 'cta_click') {
@@ -938,27 +938,34 @@ router.post('/event', async (req, res) => {
     const safePosition = (position !== null && position !== undefined)
       ? (parseFloat(position) || null) : null;
 
+    // Placement id (which timed overlay drove the click). Stored in metadata so a
+    // booking attributes to CTA-1 / CTA-2 / CTA-3 — the customer/owner is already
+    // derivable from video_id. Sanitised to a short slug; empty → '{}'.
+    const safeCtaId = (typeof cta_id === 'string' && cta_id.trim())
+      ? cta_id.trim().slice(0, 40) : null;
+    const metadata  = safeCtaId ? JSON.stringify({ cta_id: safeCtaId }) : '{}';
+
     if (session_id) {
       // Session-linked click: verify session belongs to this video
       await pool.query(
         `INSERT INTO analytics_events
-           (session_id, video_id, event_type, video_position, occurred_at)
-         SELECT $1, $2, 'cta_click', $3, NOW()
+           (session_id, video_id, event_type, video_position, metadata, occurred_at)
+         SELECT $1, $2, 'cta_click', $3, $4::jsonb, NOW()
          WHERE EXISTS (
            SELECT 1 FROM analytics_sessions
            WHERE id = $1 AND video_id = $2
          )`,
-        [session_id, video_id, safePosition]
+        [session_id, video_id, safePosition, metadata]
       );
     } else {
       // Session-less click: verify video exists
       await pool.query(
         `INSERT INTO analytics_events
-           (session_id, video_id, event_type, video_position, occurred_at)
-         SELECT NULL, id, 'cta_click', $2, NOW()
+           (session_id, video_id, event_type, video_position, metadata, occurred_at)
+         SELECT NULL, id, 'cta_click', $2, $3::jsonb, NOW()
          FROM   videos
          WHERE  id = $1 AND is_active = TRUE`,
-        [video_id, safePosition]
+        [video_id, safePosition, metadata]
       );
     }
   } catch (err) {

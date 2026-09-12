@@ -77,13 +77,15 @@ router.get('/:videoId', async (req, res) => {
       show_seek_bar: true, show_time: false, show_play_pause_btn: true, show_playback_speed: true,
       show_fullscreen_btn: true, show_volume_control: true, show_rewind_forward: true,
       resume_playback: false, loop: false, accent_color: '#F59E0B',
+      cta_enabled: false, cta_overlays: [],
     };
     let playerSettings = { ...DEFAULTS };
     try {
       const { rows: [ps] } = await pool.query(
         `SELECT autoplay, autoplay_muted, start_muted, show_seek_bar, show_time,
                 show_play_pause_btn, show_playback_speed, show_fullscreen_btn,
-                show_volume_control, show_rewind_forward, resume_playback, loop, accent_color
+                show_volume_control, show_rewind_forward, resume_playback, loop, accent_color,
+                cta_enabled, cta_overlays
          FROM   video_player_settings WHERE video_id = $1`,
         [videoId]
       );
@@ -140,6 +142,31 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
   const showRewindFwd     = ps.show_rewind_forward   ?? true;
   const resumePlay        = ps.resume_playback       ?? false;
   const loopVideo         = ps.loop                 ?? false;
+
+  // ── Timed CTA overlays ───────────────────────────────────────────────
+  // Sticky buttons that appear over the video at a start second and never hide
+  // (they only dim). Re-sanitised server-side so a bad row can never inject
+  // markup or a non-http scheme. Only kept when the feature is enabled.
+  const ctaEnabled  = (ps.cta_enabled ?? false) === true;
+  const rawOverlays = Array.isArray(ps.cta_overlays) ? ps.cta_overlays : [];
+  const ctaOverlays = ctaEnabled ? rawOverlays.slice(0, 3).map((o, i) => {
+    const url = String(o?.url ?? '').trim();
+    if (!/^https?:\/\//i.test(url)) return null;
+    const num = (v, d, lo, hi) => {
+      const n = Number(v); if (!Number.isFinite(n)) return d;
+      return Math.min(hi, Math.max(lo, n));
+    };
+    return {
+      id           : String(o?.id ?? `cta-${i + 1}`).trim().slice(0, 40) || `cta-${i + 1}`,
+      label        : String(o?.label ?? 'Learn more').trim().slice(0, 80) || 'Learn more',
+      url          : url.slice(0, 2000),
+      start        : num(o?.start_second, 0, 0, 86400),
+      dimAfter     : num(o?.dim_after_seconds, 10, 0, 600),
+      x            : num(o?.x, 50, 0, 100),
+      y            : num(o?.y, 85, 0, 100),
+      w            : num(o?.w, 40, 5, 95),
+    };
+  }).filter(Boolean) : [];
 
   // Non-scrubbable time display: only when Show Time is on AND the seek bar
   // is off (the seek bar already shows time when present).
@@ -371,6 +398,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
                   var c=player.getCurrentTime()||0;
                   var d=player.getDuration()||ytDur;
                   if(d>0){ytDur=d;dur=d;curPos=c;_ytUpdateSeek(c,d);_checkThresholds(c,d);}
+                  _checkCtas(c);
                 }
               },250);
               /* 15-second analytics heartbeat */
@@ -498,7 +526,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
 
         /* Click anywhere on wrap = play/pause (only when Play/Pause enabled) */
         pw&&pw.addEventListener('click',function(e){
-          if(e.target.closest('button,input,select'))return;
+          if(e.target.closest('button,input,select,a[data-cta-id]'))return;
           ${showPlayPause ? 'if(player.getPlayerState()===YT.PlayerState.PLAYING){player.pauseVideo();}else{player.playVideo();}' : ''}
           _ytSetUI(true);
         });
@@ -663,6 +691,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
         });
         p.on('timeupdate',function(d){
           _checkThresholds(d.seconds, dur);
+          _checkCtas(d.seconds);
           p.getDuration().then(function(dur){
             if(dur>0)maxP=Math.max(maxP,d.seconds/dur*100);
           });
@@ -1018,7 +1047,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
         /* Only when the Play/Pause control is enabled — otherwise clicking
            must not toggle playback (it would override autoplay). */
         pw&&pw.addEventListener('click',function(e){
-          if(e.target.closest('button,input,select'))return;
+          if(e.target.closest('button,input,select,a[data-cta-id]'))return;
           ${showPlayPause ? 'v.paused?v.play():v.pause();' : ''}
           setUI(true);
         });
@@ -1189,6 +1218,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
           var c=v.currentTime;
           if(on&&c>lastPos&&c-lastPos<3)lastPos=c;
           if(v.duration>0)_checkThresholds(c,v.duration);
+          _checkCtas(c);
         });
         v.addEventListener('play',function(){if(!on){on=true;t0=v.currentTime;lastPos=v.currentTime;curPos=v.currentTime;ping('play');}});
         v.addEventListener('pause',function(){
@@ -1439,6 +1469,79 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
     window.addEventListener('pagehide',_onUnload,{capture:true});
   `;
 
+  // ── CTA overlay: markup, styles, runtime ────────────────────────────
+  const ctaAccent = /^#[0-9a-fA-F]{6}$/.test(ps.accent_color || '') ? ps.accent_color : '#F59E0B';
+  const ctaLayerHtml = ctaOverlays.length ? `
+    <div id="vp-cta-layer">
+      ${ctaOverlays.map(o => `<a class="vp-cta" data-cta-id="${esc(o.id)}"
+          href="${esc(o.url)}" target="_blank" rel="noopener noreferrer nofollow"
+          style="left:${o.x}%;top:${o.y}%;width:${o.w}%">${esc(o.label)}</a>`).join('')}
+    </div>` : '';
+  const ctaStyles = ctaOverlays.length ? `
+    #vp-cta-layer{position:absolute;inset:0;pointer-events:none;z-index:20;}
+    .vp-cta{
+      position:absolute;transform:translate(-50%,-50%);box-sizing:border-box;
+      max-width:92%;display:none;align-items:center;justify-content:center;
+      text-align:center;padding:11px 18px;border-radius:9px;
+      background:${ctaAccent};color:#fff;font-family:sans-serif;font-weight:700;
+      font-size:15px;line-height:1.2;text-decoration:none;word-break:break-word;
+      box-shadow:0 6px 22px rgba(0,0,0,.45);cursor:pointer;pointer-events:auto;
+      opacity:0;transition:opacity .35s ease,filter .15s;
+      -webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+    .vp-cta.vp-cta--show{display:flex;opacity:1;animation:vpCtaIn .35s ease;}
+    .vp-cta.vp-cta--show.vp-cta--dim{opacity:.55;}
+    .vp-cta.vp-cta--show:hover{opacity:1;filter:brightness(1.06);}
+    .vp-cta.vp-cta--show:active{transform:translate(-50%,-50%) scale(.97);}
+    @keyframes vpCtaIn{from{opacity:0;transform:translate(-50%,-42%);}to{opacity:1;transform:translate(-50%,-50%);}}
+    @media (max-width:480px){.vp-cta{font-size:13px;padding:9px 14px;}}
+  ` : '';
+  const ctaRuntime = `
+    /* ── Timed CTA overlays ─────────────────────────────────────────────
+       Sticky buttons revealed at a start second; never hidden afterwards
+       (they only dim, so subtitles/on-screen action stay visible). A click
+       fires a placement-tagged cta_click event (so a booking attributes to
+       CTA-1 / CTA-2 / CTA-3) then opens the destination. stopPropagation keeps
+       the click off the video's play/pause handler — the one real gotcha. */
+    var CTA_OVERLAYS=${JSON.stringify(ctaOverlays)};
+    var _checkCtas=function(){};
+    (function(){
+      if(!CTA_OVERLAYS.length)return;
+      var layer=document.getElementById('vp-cta-layer');
+      if(!layer)return;
+      var reg=[];
+      CTA_OVERLAYS.forEach(function(o){
+        var sel='[data-cta-id="'+((window.CSS&&CSS.escape)?CSS.escape(o.id):o.id)+'"]';
+        var el=layer.querySelector(sel);
+        if(!el)return;
+        reg.push({cfg:o,el:el,shown:false});
+        el.addEventListener('click',function(e){
+          e.stopPropagation();
+          try{
+            fetch(API+'/analytics/event',{method:'POST',keepalive:true,
+              headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({video_id:VID,event_type:'cta_click',
+                session_id:sid||null,cta_id:o.id,
+                position:(typeof curPos==='number'&&curPos>0)?curPos:undefined})}).catch(function(){});
+          }catch(_){}
+          console.log('[VidaPulse] cta_click →',o.id);
+        });
+      });
+      _checkCtas=function(cur){
+        if(typeof cur==='number'&&cur>0)curPos=cur;
+        for(var i=0;i<reg.length;i++){
+          var n=reg[i];
+          if(!n.shown&&cur>=n.cfg.start){
+            n.shown=true;
+            n.el.classList.add('vp-cta--show');
+            if(n.cfg.dimAfter>0){
+              (function(el){setTimeout(function(){el.classList.add('vp-cta--dim');},n.cfg.dimAfter*1000);})(n.el);
+            }
+          }
+        }
+      };
+    })();
+  `;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1459,15 +1562,18 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
     #yt-wrap{position:absolute;inset:0}
     #yt-player{position:absolute;inset:0}
     ${extraStyles}
+    ${ctaStyles}
   </style>
 </head>
 <body>
   <div id="player-wrap">
     ${playerHtml}
+    ${ctaLayerHtml}
   </div>
   <script>
     ${metaPixelInit}
     ${trackerCore}
+    ${ctaRuntime}
     ${extraScript}
   </script>
 </body>
