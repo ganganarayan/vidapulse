@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link }                from 'react-router-dom';
 import api                     from '../../lib/api';
-import { generateEmbedSnippet, generateEmbedSnippetScript } from '../../lib/embed';
+import { generateEmbedSnippet } from '../../lib/embed';
 import { useToast }            from '../../contexts/ToastContext';
 import { ThemeToggle }         from '../../contexts/ThemeContext';
 import InsightsSection         from './InsightsSection';
@@ -571,11 +571,9 @@ function EmbedView({ video, user }) {
 
   const [linkCopied,    setLinkCopied]    = useState(false);
   const [embedCopied,   setEmbedCopied]   = useState(false);
-  const [cidCopied,     setCidCopied]     = useState(false);
 
   const origin  = typeof window !== 'undefined' ? window.location.origin : '';
   const snippet = generateEmbedSnippet(video?.id ?? '', origin);
-  const cidSnippet = generateEmbedSnippetScript(video?.id ?? '', origin);
 
   function copyLink() {
     navigator.clipboard.writeText(video?.original_url ?? '')
@@ -585,11 +583,6 @@ function EmbedView({ video, user }) {
   function copyEmbed() {
     navigator.clipboard.writeText(snippet)
       .then(() => { setEmbedCopied(true); setTimeout(() => setEmbedCopied(false), 3000); })
-      .catch(() => {});
-  }
-  function copyCidEmbed() {
-    navigator.clipboard.writeText(cidSnippet)
-      .then(() => { setCidCopied(true); setTimeout(() => setCidCopied(false), 3000); })
       .catch(() => {});
   }
   return (
@@ -643,35 +636,6 @@ function EmbedView({ video, user }) {
             {embedCopied
               ? <><CheckSmallIcon className="text-gray-900" /> Copied!</>
               : <><CopyIcon /> Copy embed code</>
-            }
-          </button>
-        </div>
-
-        {/* Advanced: customer-id (cid) forwarding embed — for VSL / destination pages
-            reached with ?cid=<id> (e.g. an assessment result link). */}
-        <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-1">
-            <p className="text-sm font-semibold text-gray-200">Embed with customer&nbsp;ID tracking</p>
-            <span className="text-[9px] uppercase tracking-wider font-semibold text-indigo-300 bg-indigo-500/15 border border-indigo-500/25 rounded px-1.5 py-0.5">Advanced</span>
-          </div>
-          <p className="text-xs text-gray-400 leading-relaxed mb-3">
-            Use this on a VSL or destination page that receives a <code className="text-gray-300">?cid=&lt;id&gt;</code> in
-            its URL (for example an assessment result link). This snippet forwards that
-            <code className="text-gray-300"> cid</code> (and any utm_* params) onto the player, so each viewer here is
-            mapped to that customer&nbsp;ID. A plain iframe can&apos;t do this — the parent URL isn&apos;t readable
-            cross-origin. Requires a page builder that allows <code className="text-gray-300">&lt;script&gt;</code>.
-          </p>
-          <pre className="bg-gray-950 border border-gray-800 rounded-xl p-4 text-xs text-gray-300 font-mono leading-relaxed overflow-x-auto whitespace-pre-wrap break-all">
-            {cidSnippet}
-          </pre>
-          <button
-            onClick={copyCidEmbed}
-            className="mt-3 flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-400
-                       text-white text-sm font-semibold rounded-lg transition-colors"
-          >
-            {cidCopied
-              ? <><CheckSmallIcon className="text-white" /> Copied!</>
-              : <><CopyIcon /> Copy cid embed code</>
             }
           </button>
         </div>
