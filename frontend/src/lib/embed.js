@@ -29,16 +29,20 @@ export function generateEmbedSnippet(videoId, origin = window.location.origin) {
 
 /**
  * Optional script-based snippet — same iframe, but forwards the host page's
- * utm_* params onto the iframe src (reliable attribution where the referrer is
- * stripped by Referrer-Policy). Only for builders that permit <script>.
+ * `cid` (opaque customer id) and utm_* params from the page URL onto the iframe
+ * src. Use this on a VSL / destination page reached with `?cid=<id>` (e.g. an
+ * Assess360 result link): a cross-origin iframe can't read the parent URL, and
+ * the default Referrer-Policy strips the query string from the referrer, so
+ * forwarding is the reliable way for VidaPulse to bind the viewer to that
+ * customer id. Only for builders that permit <script>.
  */
 export function generateEmbedSnippetScript(videoId, origin = window.location.origin) {
-  const cid = `vp-${videoId}`;
-  return `<div id="${cid}" style="position:relative;width:100%;max-width:560px;aspect-ratio:16/9;margin:auto"></div>
+  const boxId = `vp-${videoId}`;
+  return `<div id="${boxId}" style="position:relative;width:100%;max-width:560px;aspect-ratio:16/9;margin:auto"></div>
 <script>
 (function(){
   var base="${origin}/embed/${videoId}";
-  var keep=["utm_source","utm_medium","utm_campaign","utm_term","utm_content"];
+  var keep=["cid","utm_source","utm_medium","utm_campaign","utm_term","utm_content"];
   var src=new URLSearchParams(window.location.search), out=new URLSearchParams();
   keep.forEach(function(k){var v=src.get(k); if(v) out.set(k,v);});
   var qs=out.toString();
@@ -46,7 +50,7 @@ export function generateEmbedSnippetScript(videoId, origin = window.location.ori
   f.src=base+(qs?("?"+qs):"");
   f.style.cssText="position:absolute;inset:0;width:100%;height:100%;border:0";
   f.allow="autoplay; fullscreen; picture-in-picture"; f.allowFullscreen=true;
-  document.getElementById("${cid}").appendChild(f);
+  document.getElementById("${boxId}").appendChild(f);
 })();
 </script>`;
 }
