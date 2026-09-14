@@ -10,9 +10,14 @@
  * Responsive via the padding-ratio wrapper (56.25% = 16:9), which works
  * everywhere (no dependency on the modern `aspect-ratio` CSS property).
  *
- * UTM: a cross-origin iframe can't read the parent URL, but the embed already
- * captures utm_* from `document.referrer`. For builders that DO allow scripts
- * and want guaranteed parent-URL UTM forwarding, use generateEmbedSnippetScript().
+ * Parent-URL params (cid / utm_*): a cross-origin iframe can't read the parent
+ * URL, so the embed recovers them from `document.referrer`. Browsers default to
+ * `strict-origin-when-cross-origin`, which strips the query from that referrer —
+ * so the iframe carries `referrerpolicy="unsafe-url"`, which sends the FULL parent
+ * URL (query included) to VidaPulse ONLY. It is scoped to this element, so the
+ * host page's own policy for every other resource (its pixels/analytics) is
+ * unchanged. This is what lets a plain, script-free iframe pick up the assessment
+ * `?cid=<id>` (and utm_*) when the page URL carries it.
  */
 
 export function generateEmbedSnippet(videoId, origin = window.location.origin) {
@@ -22,6 +27,7 @@ export function generateEmbedSnippet(videoId, origin = window.location.origin) {
     <iframe src="${src}"
       style="position:absolute;top:0;left:0;width:100%;height:100%;border:0"
       allow="autoplay; fullscreen; picture-in-picture"
+      referrerpolicy="unsafe-url"
       allowfullscreen loading="lazy" title="VidaPulse video"></iframe>
   </div>
 </div>`;
