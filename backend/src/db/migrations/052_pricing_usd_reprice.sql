@@ -34,7 +34,6 @@ WHERE name = 'starter';
 -- ── Pro → displayed as "Growth", $79, 20 videos ────────────────────────────
 UPDATE plans
 SET price_usd    = 79,
-    price_inr    = 0,
     video_limit  = 20,
     display_name = 'Growth',
     features     = '["up_to_20_videos","all_starter_features","viewer_level_analytics","audience_segmentation","conversion_tracking","funnels","server_side_pixel_forwarding","video_comparison","ai_insights","events_tracking","reports","alerts","priority_support"]',
