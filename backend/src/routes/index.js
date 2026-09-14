@@ -228,7 +228,29 @@ router.get('/_diag/migrations', async (_req, res) => {
     const applied    = rows.map(r => r.filename);
     const appliedSet = new Set(applied);
     const pending    = files.filter(f => !appliedSet.has(f));
-    res.json({ total_files: files.length, applied_count: applied.length, pending, applied });
+
+    // Dry-run the FIRST pending migration (the boot-blocker) inside a transaction
+    // we always roll back — no changes persist — to capture the exact Postgres
+    // error that has been failing silently on boot.
+    let dry_run = null;
+    if (pending.length > 0) {
+      const client = await db.connect();
+      try {
+        const sql = fs.readFileSync(path.join(dir, pending[0]), 'utf8');
+        await client.query('BEGIN');
+        try {
+          await client.query(sql);
+          dry_run = { file: pending[0], result: 'would_succeed' };
+        } catch (e) {
+          dry_run = { file: pending[0], error: e.message, code: e.code, detail: e.detail || null };
+        } finally {
+          await client.query('ROLLBACK');
+        }
+      } finally {
+        client.release();
+      }
+    }
+    res.json({ total_files: files.length, applied_count: applied.length, pending, dry_run, applied });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
