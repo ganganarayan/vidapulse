@@ -210,67 +210,6 @@ router.get('/version', (_req, res) => {
   res.json({ started_at: startedAt });
 });
 
-// ── GET /api/_diag/migrations ─────────────────────────────────────────────
-// TEMPORARY diagnostic (public, read-only) — added 2026-09-14 to debug why the
-// customer_id migration (055) is not applying on prod. Reports applied vs
-// pending migrations. Doubles as a deploy marker: a 404 here means the running
-// build predates this commit (missed deploy). REMOVE once 055 is confirmed.
-router.get('/_diag/migrations', async (_req, res) => {
-  try {
-    const fs   = require('fs');
-    const path = require('path');
-    const db   = require('../config/database').pool;
-    const dir  = path.join(__dirname, '..', 'db', 'migrations');
-    const files = fs.existsSync(dir)
-      ? fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort()
-      : [];
-    const { rows } = await db.query('SELECT filename FROM _migrations ORDER BY filename');
-    const applied    = rows.map(r => r.filename);
-    const appliedSet = new Set(applied);
-    const pending    = files.filter(f => !appliedSet.has(f));
-
-    // Dry-run the FIRST pending migration (the boot-blocker) inside a transaction
-    // we always roll back — no changes persist — to capture the exact Postgres
-    // error that has been failing silently on boot.
-    let dry_run = null;
-    if (pending.length > 0) {
-      const client = await db.connect();
-      try {
-        const sql = fs.readFileSync(path.join(dir, pending[0]), 'utf8');
-        await client.query('BEGIN');
-        try {
-          await client.query(sql);
-          dry_run = { file: pending[0], result: 'would_succeed' };
-        } catch (e) {
-          dry_run = { file: pending[0], error: e.message, code: e.code, detail: e.detail || null };
-        } finally {
-          await client.query('ROLLBACK');
-        }
-      } finally {
-        client.release();
-      }
-    }
-    // Real schema of the tables migration 052 touches (no guessing which columns
-    // exist on prod). Also the plans rows, so we can see the live pricing.
-    let schema = {};
-    try {
-      const cols = await db.query(
-        `SELECT table_name, column_name, data_type
-           FROM information_schema.columns
-          WHERE table_name IN ('plans','razorpay_plans')
-          ORDER BY table_name, ordinal_position`
-      );
-      schema.columns = cols.rows;
-      const plans = await db.query(`SELECT name, price_usd, video_limit, display_name FROM plans ORDER BY name`);
-      schema.plans = plans.rows;
-    } catch (e) { schema.error = e.message; }
-
-    res.json({ total_files: files.length, applied_count: applied.length, pending, dry_run, schema, applied });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ── GET /api/wake ─────────────────────────────────────────────────────────
 // Public wake endpoint. Hitting this URL from OUTSIDE (a bookmark, phone
 // shortcut, or uptime monitor) wakes a sleeping Railway instance — the
