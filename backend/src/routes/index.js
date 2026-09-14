@@ -210,6 +210,30 @@ router.get('/version', (_req, res) => {
   res.json({ started_at: startedAt });
 });
 
+// ── GET /api/_diag/migrations ─────────────────────────────────────────────
+// TEMPORARY diagnostic (public, read-only) — added 2026-09-14 to debug why the
+// customer_id migration (055) is not applying on prod. Reports applied vs
+// pending migrations. Doubles as a deploy marker: a 404 here means the running
+// build predates this commit (missed deploy). REMOVE once 055 is confirmed.
+router.get('/_diag/migrations', async (_req, res) => {
+  try {
+    const fs   = require('fs');
+    const path = require('path');
+    const db   = require('../config/database').pool;
+    const dir  = path.join(__dirname, '..', 'db', 'migrations');
+    const files = fs.existsSync(dir)
+      ? fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort()
+      : [];
+    const { rows } = await db.query('SELECT filename FROM _migrations ORDER BY filename');
+    const applied    = rows.map(r => r.filename);
+    const appliedSet = new Set(applied);
+    const pending    = files.filter(f => !appliedSet.has(f));
+    res.json({ total_files: files.length, applied_count: applied.length, pending, applied });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/wake ─────────────────────────────────────────────────────────
 // Public wake endpoint. Hitting this URL from OUTSIDE (a bookmark, phone
 // shortcut, or uptime monitor) wakes a sleeping Railway instance — the
