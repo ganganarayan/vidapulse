@@ -305,6 +305,7 @@ router.post('/session', async (req, res) => {
     screen_width  = null,
     screen_height = null,
     user_agent    = null,
+    customer_id   = null,
   } = req.body ?? {};
 
   if (!video_id || typeof video_id !== 'string') {
@@ -371,6 +372,12 @@ router.post('/session', async (req, res) => {
     const realIp = getClientIp(req);
     const geo    = lookupCountry(realIp);
 
+    // Opaque customer id forwarded from the embedding app (?cid=...).
+    // Sanitise to safe id chars only, cap at 128; empty → null (no PII expected).
+    const cleanCid = customer_id
+      ? (String(customer_id).replace(/[^a-zA-Z0-9\-_]/g, '').slice(0, 128) || null)
+      : null;
+
     // Create a fresh analytics session
     const { rows: [session] } = await pool.query(
       `INSERT INTO analytics_sessions
@@ -382,10 +389,11 @@ router.post('/session', async (req, res) => {
           user_agent, ip_address,
           country_code, country_name, city, region, timezone,
           latitude, longitude,
+          customer_id,
           started_at)
        VALUES
          ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::inet,
-          $18,$19,$20,$21,$22,$23,$24,NOW())
+          $18,$19,$20,$21,$22,$23,$24,$25,NOW())
        RETURNING id`,
       [
         video_id,
@@ -412,6 +420,7 @@ router.post('/session', async (req, res) => {
         geo.timezone || null,
         geo.lat      ?? null,
         geo.lng      ?? null,
+        cleanCid,
       ]
     );
 

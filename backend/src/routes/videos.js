@@ -1584,7 +1584,8 @@ router.get('/:id/viewer-engagement', requireAuth, planGate('viewer_level'), asyn
               s.city,
               s.max_watch_pct,
               s.play_count,
-              s.reached_end
+              s.reached_end,
+              s.customer_id
        FROM   analytics_sessions s
        WHERE  s.video_id = $1
        ORDER  BY s.started_at DESC
@@ -1641,6 +1642,7 @@ router.get('/:id/viewer-engagement', requireAuth, planGate('viewer_level'), asyn
         max_watch_pct: parseFloat(s.max_watch_pct) || 0,
         play_count  : parseInt(s.play_count, 10) || 0,
         reached_end : s.reached_end,
+        customer_id : s.customer_id || null,
         segments,
       };
     });

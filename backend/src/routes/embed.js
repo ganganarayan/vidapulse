@@ -1365,6 +1365,23 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
     var UTM=_getUTM();
     console.log('[VidaPulse] UTM:', JSON.stringify(UTM));
 
+    /* ── Customer id (cid) capture ────────────────────────────────────────
+       The embedding app appends an opaque customer id to the iframe src:
+         /embed/<video-id>?cid=<customer-id>
+       We read it from our own URL (the iframe's location) and, as a fallback,
+       from the referrer if the snippet forwarded it onto the parent. Opaque id
+       only — it just maps this session back to the app's customer record. */
+    function _getCID(){
+      function scan(url){
+        if(!url)return null;
+        try{var v=new URL(url,location.href).searchParams.get('cid');return v||null;}
+        catch(_){return null;}
+      }
+      return scan(location.href)||scan(document.referrer)||null;
+    }
+    var CID=_getCID();
+    console.log('[VidaPulse] cid:', CID);
+
     function sess(){
       console.log('[VidaPulse] creating session...');
       fetch(API+'/analytics/session',{method:'POST',
@@ -1378,7 +1395,8 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
           utm_medium:UTM.utm_medium||null,
           utm_campaign:UTM.utm_campaign||null,
           utm_term:UTM.utm_term||null,
-          utm_content:UTM.utm_content||null})
+          utm_content:UTM.utm_content||null,
+          customer_id:CID||null})
       }).then(function(r){
         console.log('[VidaPulse] session HTTP status:', r.status);
         return r.json();
