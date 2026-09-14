@@ -250,7 +250,22 @@ router.get('/_diag/migrations', async (_req, res) => {
         client.release();
       }
     }
-    res.json({ total_files: files.length, applied_count: applied.length, pending, dry_run, applied });
+    // Real schema of the tables migration 052 touches (no guessing which columns
+    // exist on prod). Also the plans rows, so we can see the live pricing.
+    let schema = {};
+    try {
+      const cols = await db.query(
+        `SELECT table_name, column_name, data_type
+           FROM information_schema.columns
+          WHERE table_name IN ('plans','razorpay_plans')
+          ORDER BY table_name, ordinal_position`
+      );
+      schema.columns = cols.rows;
+      const plans = await db.query(`SELECT name, price_usd, video_limit, display_name FROM plans ORDER BY name`);
+      schema.plans = plans.rows;
+    } catch (e) { schema.error = e.message; }
+
+    res.json({ total_files: files.length, applied_count: applied.length, pending, dry_run, schema, applied });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

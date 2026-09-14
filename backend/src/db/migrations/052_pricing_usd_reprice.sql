@@ -18,9 +18,13 @@
 -- next subscription attempt.
 
 -- ── Starter → $29, 10 videos, gains heatmap / drop-off / re-watches ─────────
+-- NOTE (2026-09-14): the original also set `price_inr = 0`, but the prod `plans`
+-- table has no price_inr column (schema drift vs staging) — that column-does-
+-- not-exist error (42703) failed 052 on EVERY boot for ~2 weeks, blocking
+-- 053/054/055 behind it (incl. the analytics_sessions.customer_id column). All
+-- pricing is USD now, so the INR zeroing is dropped rather than reintroduced.
 UPDATE plans
 SET price_usd    = 29,
-    price_inr    = 0,
     video_limit  = 10,
     display_name = 'Starter',
     features     = '["up_to_10_videos","all_free_features","total_plays","play_rate","unique_visitors_count","domain_tracking","direct_link_embed_code","geographic_data","device_browser_breakdown","avg_time_watched","engagement_heatmaps","drop_off_rate","rewatches","custom_player_controls","playlists","email_support"]',
