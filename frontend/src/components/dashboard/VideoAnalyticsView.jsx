@@ -571,19 +571,9 @@ function EmbedView({ video, user }) {
 
   const [linkCopied,    setLinkCopied]    = useState(false);
   const [embedCopied,   setEmbedCopied]   = useState(false);
-  // The builder merge expression that resolves to the viewer's assessment token
-  // (e.g. "{{request.query.t}}"). Entered once, persisted per-browser, and baked
-  // into the copied embed src so there's nothing to hand-edit per page.
-  const [tokenExpr, setTokenExpr] = useState(() => {
-    try { return localStorage.getItem('vp_embed_token_expr') || ''; } catch { return ''; }
-  });
-  function onTokenExprChange(v) {
-    setTokenExpr(v);
-    try { localStorage.setItem('vp_embed_token_expr', v); } catch { /* ignore */ }
-  }
 
   const origin  = typeof window !== 'undefined' ? window.location.origin : '';
-  const snippet = generateEmbedSnippet(video?.id ?? '', origin, tokenExpr);
+  const snippet = generateEmbedSnippet(video?.id ?? '', origin);
 
   function copyLink() {
     navigator.clipboard.writeText(video?.original_url ?? '')
@@ -648,36 +638,6 @@ function EmbedView({ video, user }) {
               : <><CopyIcon /> Copy embed code</>
             }
           </button>
-
-          {/* Viewer-id passthrough — enter the builder's merge expression once and
-              it's baked into the copied embed src (no per-page hand-editing). */}
-          <div className="mt-4 pt-4 border-t border-gray-800/60">
-            <p className="text-xs font-semibold text-gray-300 mb-1">Tag each viewer with an id (optional)</p>
-            <p className="text-[11px] text-gray-400 leading-relaxed mb-2">
-              Mapping viewers back to your app (e.g. an assessment lead)? Paste your page builder&apos;s
-              merge expression for the URL token below — it&apos;s baked into the embed code above as
-              <code className="text-emerald-300"> ?t=</code>, so you copy the whole thing with the id
-              already in the <span className="text-gray-300">src</span>. Putting the id in the src (not
-              the referrer) is what survives <span className="text-gray-300">in-app browsers</span>
-              (Facebook / Instagram), which strip the referrer. Leave blank for a plain embed.
-            </p>
-            <input
-              type="text"
-              value={tokenExpr}
-              onChange={(e) => onTokenExprChange(e.target.value)}
-              placeholder="{{request.query.t}}"
-              spellCheck={false}
-              className="w-full bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2 text-xs
-                         text-emerald-200 font-mono placeholder-gray-600
-                         focus:outline-none focus:border-emerald-500/60"
-            />
-            <p className="text-[10px] text-gray-500 mt-1.5">
-              {tokenExpr && tokenExpr.trim()
-                ? <>Baked in — the embed code above now ends with <code className="text-emerald-300">?t={tokenExpr.trim()}</code>. Copy it as-is.</>
-                : <>Common syntaxes: <code className="text-gray-400">{'{{request.query.t}}'}</code>, <code className="text-gray-400">{'{{url.t}}'}</code>, <code className="text-gray-400">{'{{get.t}}'}</code> — check your builder&apos;s docs.</>
-              }
-            </p>
-          </div>
         </div>
 
         {/* CTA Tracking note */}

@@ -1365,30 +1365,32 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
     var UTM=_getUTM();
     console.log('[VidaPulse] UTM:', JSON.stringify(UTM));
 
-    /* ── Customer id capture (token is the source of truth) ───────────────
-       The embedding app (assessment/VSL) identifies a viewer by an opaque id.
-       We read it from our OWN iframe URL first, then the parent referrer:
-         - t   = the assessment RESULT TOKEN. Primary identifier: present on
-                 EVERY VSL URL (fresh completions AND every email/WhatsApp
-                 nurture link, old or new), so it maps back even for
-                 re-engagement clicks that have no fresh opt-in.
-         - cid = legacy fallback, only for links that still carry ?cid=.
-       Best delivery: the VSL page injects the token straight into THIS iframe's
-       src via a builder merge field (/embed/<id>?t=<token>) - then it sits in
-       our own location and is captured with NO dependency on the referrer, so
-       it survives in-app browsers (Facebook/Instagram webviews) that strip the
-       referrer. The referrer scan stays as a fallback for the referrerpolicy
-       setup. Opaque token only - no PII. Stored in analytics_sessions.customer_id. */
+    /* ── Viewer id capture (token is the source of truth) ─────────────────
+       The embedding app (assessment/VSL) identifies a viewer by an opaque id,
+       read from our OWN iframe URL first, then the parent referrer:
+         - t / r = the assessment RESULT TOKEN. It is on EVERY VSL URL (fresh
+                   completions AND every email/WhatsApp nurture link). r is the
+                   SAME token delivered via the host page builder's built-in
+                   URL-param forwarder, which appends it straight onto THIS
+                   iframe src - so it lands in our own location and survives
+                   in-app browsers (Facebook/Instagram) that strip the referrer.
+         - cid   = legacy id, only for links that still carry ?cid=.
+       _readParam matches ?name= OR &name= via regex, because that forwarder does
+       src + "&r=" + value, which can leave a param with a leading & and no '?'
+       (URLSearchParams would miss it). Opaque only - no PII. token -> viewer_token,
+       cid -> customer_id. */
     function _readParam(name){
       function scan(url){
         if(!url)return null;
-        try{var v=new URL(url,location.href).searchParams.get(name);return v||null;}
-        catch(_){return null;}
+        try{
+          var m=String(url).match(new RegExp('[?&]'+name+'=([^&#]*)'));
+          return (m&&m[1])?decodeURIComponent(m[1]):null;
+        }catch(_){return null;}
       }
       return scan(location.href)||scan(document.referrer)||null;
     }
-    var TOK=_readParam('t');    /* assessment result token (?t=) — primary */
-    var CID=_readParam('cid');  /* legacy customer id (?cid=) — when present */
+    var TOK=_readParam('t')||_readParam('r');  /* assessment token: ?t= direct, or ?r= forwarded by the builder */
+    var CID=_readParam('cid');                 /* legacy customer id (?cid=) */
     console.log('[VidaPulse] viewer ids — token:', TOK, 'cid:', CID);
 
     function sess(){

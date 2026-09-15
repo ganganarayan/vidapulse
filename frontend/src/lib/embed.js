@@ -20,14 +20,8 @@
  * `?cid=<id>` (and utm_*) when the page URL carries it.
  */
 
-// `tokenExpr` (optional): a per-page merge expression the embedding builder
-// resolves to the viewer's assessment token, e.g. "{{request.query.t}}". When
-// given, it is baked into the iframe src as ?t=<expr> so the copied code already
-// carries the id passthrough (captured even in in-app browsers, which strip the
-// referrer) — no hand-editing of the src per page. Empty = the plain snippet.
-export function generateEmbedSnippet(videoId, origin = window.location.origin, tokenExpr = '') {
-  const q   = tokenExpr && tokenExpr.trim() ? `?t=${tokenExpr.trim()}` : '';
-  const src = `${origin}/embed/${videoId}${q}`;
+export function generateEmbedSnippet(videoId, origin = window.location.origin) {
+  const src = `${origin}/embed/${videoId}`;
   return `<div style="position:relative;width:100%;max-width:560px;margin:0 auto">
   <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden">
     <iframe src="${src}"
