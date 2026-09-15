@@ -638,6 +638,26 @@ function EmbedView({ video, user }) {
               : <><CopyIcon /> Copy embed code</>
             }
           </button>
+
+          {/* Viewer-id passthrough note — how to tag each viewer with an id from
+              the embedding app (assessment token / cid) so it maps back. */}
+          <div className="mt-4 pt-4 border-t border-gray-800/60">
+            <p className="text-xs font-semibold text-gray-300 mb-1">Tag each viewer with an id (optional)</p>
+            <p className="text-[11px] text-gray-400 leading-relaxed">
+              To map a viewer back to your app (e.g. an assessment lead), put the id in the iframe
+              <span className="text-gray-300"> src</span> — the player captures
+              <code className="text-emerald-300"> ?t=</code> (token) and
+              <code className="text-indigo-300"> ?cid=</code> (customer id) automatically:
+            </p>
+            <pre className="mt-2 bg-gray-950 border border-gray-800 rounded-lg p-3 text-[11px] text-gray-300 font-mono overflow-x-auto whitespace-pre-wrap break-all">
+{`src="${origin}/embed/${video?.id ?? ''}?t={{ your page's URL-param merge, e.g. request.query.t }}"`}
+            </pre>
+            <p className="text-[11px] text-gray-400 leading-relaxed mt-2">
+              Putting the id in the <span className="text-gray-300">src</span> (not the referrer) is what
+              makes it survive <span className="text-gray-300">in-app browsers</span> (Facebook / Instagram),
+              which strip the referrer. Your page builder supplies the value via a merge field.
+            </p>
+          </div>
         </div>
 
         {/* CTA Tracking note */}
