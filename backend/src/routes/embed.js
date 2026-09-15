@@ -1379,18 +1379,17 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
        it survives in-app browsers (Facebook/Instagram webviews) that strip the
        referrer. The referrer scan stays as a fallback for the referrerpolicy
        setup. Opaque token only - no PII. Stored in analytics_sessions.customer_id. */
-    function _getCID(){
+    function _readParam(name){
       function scan(url){
         if(!url)return null;
-        try{
-          var qs=new URL(url,location.href).searchParams;
-          return qs.get('t')||qs.get('cid')||null;   /* token leads; cid fallback */
-        }catch(_){return null;}
+        try{var v=new URL(url,location.href).searchParams.get(name);return v||null;}
+        catch(_){return null;}
       }
       return scan(location.href)||scan(document.referrer)||null;
     }
-    var CID=_getCID();
-    console.log('[VidaPulse] viewer id (token/cid):', CID);
+    var TOK=_readParam('t');    /* assessment result token (?t=) — primary */
+    var CID=_readParam('cid');  /* legacy customer id (?cid=) — when present */
+    console.log('[VidaPulse] viewer ids — token:', TOK, 'cid:', CID);
 
     function sess(){
       console.log('[VidaPulse] creating session...');
@@ -1406,7 +1405,8 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
           utm_campaign:UTM.utm_campaign||null,
           utm_term:UTM.utm_term||null,
           utm_content:UTM.utm_content||null,
-          customer_id:CID||null})
+          customer_id:CID||null,
+          viewer_token:TOK||null})
       }).then(function(r){
         console.log('[VidaPulse] session HTTP status:', r.status);
         return r.json();

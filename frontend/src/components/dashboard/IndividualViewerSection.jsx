@@ -65,6 +65,7 @@ function generateFakeSessions(n = 12) {
       max_watch_pct: maxPct,
       play_count: i < 3 ? 2 : 1,
       reached_end: maxPct >= 90,
+      viewer_token: i % 2 === 0 ? `TKN${(48213 + i * 31).toString(36).toUpperCase()}` : null,
       customer_id: i % 3 === 0 ? `cust${(9182 + i * 7).toString(36)}` : null,
       segments  : [[0, maxPct, 1]],
     };
@@ -76,16 +77,18 @@ function generateFakeSessions(n = 12) {
 // ─────────────────────────────────────────────────────────────────────────
 
 function ViewerRow({ session, index }) {
-  const { viewer_num, date, device, browser, country, city, max_watch_pct, play_count, reached_end, segments, customer_id } = session;
+  const { viewer_num, date, device, browser, country, city, max_watch_pct, play_count, reached_end, segments, customer_id, viewer_token } = session;
 
   const deviceIcon  = DEVICE_ICON[device] ?? DEVICE_ICON.desktop;
   const geo         = [city, country].filter(Boolean).join(', ') || null;
+  const hasId       = viewer_token || customer_id;
 
   return (
     <div className="flex items-center gap-3 py-2.5 group hover:bg-gray-800/40 px-4 -mx-4 rounded-lg transition-colors duration-100">
 
-      {/* Viewer label — full timestamp + customer id (cid) mapped to this view */}
-      <div className="flex items-start gap-1.5 flex-shrink-0" style={{ minWidth: '160px' }}>
+      {/* Viewer label — full timestamp + the assessment token and cid, one below
+          the other, so either can be used to reconcile back to the assessment. */}
+      <div className="flex items-start gap-1.5 flex-shrink-0" style={{ minWidth: '190px' }}>
         <span className="text-gray-500 group-hover:text-gray-400 transition-colors mt-0.5"
           style={{ color: 'currentColor' }}>
           {deviceIcon}
@@ -94,12 +97,19 @@ function ViewerRow({ session, index }) {
           <span className="text-[11px] text-gray-300 font-mono whitespace-nowrap" title={formatDateTime(date)}>
             {formatDateTime(date)}
           </span>
-          {customer_id ? (
-            <span className="text-[10px] text-indigo-300/80 font-mono truncate" title={`Customer ID: ${customer_id}`}>
-              cid: {customer_id}
-            </span>
+          {hasId ? (
+            <>
+              <span className="text-[10px] text-emerald-300/80 font-mono whitespace-nowrap"
+                    title={viewer_token ? `Assessment token: ${viewer_token}` : 'No token on this session'}>
+                token: {viewer_token || '—'}
+              </span>
+              <span className="text-[10px] text-indigo-300/80 font-mono whitespace-nowrap"
+                    title={customer_id ? `Customer ID: ${customer_id}` : 'No cid on this session'}>
+                cid: {customer_id || '—'}
+              </span>
+            </>
           ) : (
-            <span className="text-[10px] text-gray-600 font-mono">no cid</span>
+            <span className="text-[10px] text-gray-600 font-mono">no id</span>
           )}
         </div>
       </div>
@@ -272,7 +282,7 @@ function ProViewerContent({ status, data, onRetry }) {
       {/* Column headers */}
       <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-800/60">
         <span className="text-[10px] text-gray-400 uppercase tracking-wider font-medium"
-              style={{ minWidth: '160px' }}>Viewer</span>
+              style={{ minWidth: '190px' }}>Viewer</span>
         <div className="flex-1 flex items-center gap-2">
           {/* Timeline intensity legend */}
           <div className="flex items-center gap-1">
@@ -321,7 +331,7 @@ function FakeViewerGrid() {
   return (
     <div className="bg-gray-900/50 border border-gray-700/50 rounded-2xl overflow-hidden">
       <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-800/60">
-        <span className="text-[10px] text-gray-400 uppercase tracking-wider font-medium" style={{ minWidth: '160px' }}>Viewer</span>
+        <span className="text-[10px] text-gray-400 uppercase tracking-wider font-medium" style={{ minWidth: '190px' }}>Viewer</span>
         <span className="flex-1 text-[10px] text-gray-400 uppercase tracking-wider font-medium">Timeline</span>
         <span className="text-[10px] text-gray-400 uppercase tracking-wider font-medium flex-shrink-0" style={{ minWidth: '60px', textAlign: 'right' }}>Watched</span>
       </div>
