@@ -36,7 +36,11 @@ router.use((req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────
 
 router.get('/:videoId', async (req, res) => {
-  const { videoId } = req.params;
+  // A host page builder's URL-param forwarder can append the token onto our src
+  // as ".../embed/<id>&r=<token>" (it does src + "&r=" + value — a leading & and
+  // no '?'), so the route param may carry a trailing "&...". Strip it to the clean
+  // id for validation + lookup; the player still reads the token from location.href.
+  const videoId = String(req.params.videoId).split(/[&?]/)[0];
 
   // Basic UUID validation
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(videoId)) {
