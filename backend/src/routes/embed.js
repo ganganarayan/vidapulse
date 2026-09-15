@@ -1365,22 +1365,32 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
     var UTM=_getUTM();
     console.log('[VidaPulse] UTM:', JSON.stringify(UTM));
 
-    /* ── Customer id (cid) capture ────────────────────────────────────────
-       The embedding app appends an opaque customer id to the iframe src:
-         /embed/<video-id>?cid=<customer-id>
-       We read it from our own URL (the iframe's location) and, as a fallback,
-       from the referrer if the snippet forwarded it onto the parent. Opaque id
-       only — it just maps this session back to the app's customer record. */
+    /* ── Customer id capture (token is the source of truth) ───────────────
+       The embedding app (assessment/VSL) identifies a viewer by an opaque id.
+       We read it from our OWN iframe URL first, then the parent referrer:
+         - t   = the assessment RESULT TOKEN. Primary identifier: present on
+                 EVERY VSL URL (fresh completions AND every email/WhatsApp
+                 nurture link, old or new), so it maps back even for
+                 re-engagement clicks that have no fresh opt-in.
+         - cid = legacy fallback, only for links that still carry ?cid=.
+       Best delivery: the VSL page injects the token straight into THIS iframe's
+       src via a builder merge field (/embed/<id>?t=<token>) - then it sits in
+       our own location and is captured with NO dependency on the referrer, so
+       it survives in-app browsers (Facebook/Instagram webviews) that strip the
+       referrer. The referrer scan stays as a fallback for the referrerpolicy
+       setup. Opaque token only - no PII. Stored in analytics_sessions.customer_id. */
     function _getCID(){
       function scan(url){
         if(!url)return null;
-        try{var v=new URL(url,location.href).searchParams.get('cid');return v||null;}
-        catch(_){return null;}
+        try{
+          var qs=new URL(url,location.href).searchParams;
+          return qs.get('t')||qs.get('cid')||null;   /* token leads; cid fallback */
+        }catch(_){return null;}
       }
       return scan(location.href)||scan(document.referrer)||null;
     }
     var CID=_getCID();
-    console.log('[VidaPulse] cid:', CID);
+    console.log('[VidaPulse] viewer id (token/cid):', CID);
 
     function sess(){
       console.log('[VidaPulse] creating session...');
