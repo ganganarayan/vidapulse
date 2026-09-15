@@ -34,15 +34,19 @@ const DEVICE_ICON = {
   ),
 };
 
-// Full timestamp: dd-mm-yyyy hh:mm:ss (24h, zero-padded, viewer's local zone)
+// Full timestamp: dd-mm-yyyy hh:mm:ss in IST (Asia/Kolkata) — always Indian time,
+// regardless of the viewer's browser timezone, with an explicit "IST" suffix.
+const IST_FMT = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Kolkata',
+  day: '2-digit', month: '2-digit', year: 'numeric',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+});
 function formatDateTime(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   if (isNaN(d)) return '';
-  const p = (n) => String(n).padStart(2, '0');
-  const date = `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()}`;
-  const time = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-  return `${date} ${time}`;
+  const p = IST_FMT.formatToParts(d).reduce((a, x) => ((a[x.type] = x.value), a), {});
+  return `${p.day}-${p.month}-${p.year} ${p.hour}:${p.minute}:${p.second} IST`;
 }
 
 function formatPct(p) {

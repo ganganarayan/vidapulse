@@ -18,6 +18,12 @@
  * host page's own policy for every other resource (its pixels/analytics) is
  * unchanged. This is what lets a plain, script-free iframe pick up the assessment
  * `?cid=<id>` (and utm_*) when the page URL carries it.
+ *
+ * NO loading="lazy": the player records a viewer session as soon as it loads, so
+ * lazy-loading would defer that until the iframe is scrolled INTO VIEW — meaning a
+ * VSL placed far down a long page records nothing for viewers who load the page but
+ * never scroll to the video. Eager load = a session (impression) on every page load,
+ * matching the host page's own page-view count.
  */
 
 export function generateEmbedSnippet(videoId, origin = window.location.origin) {
@@ -28,7 +34,7 @@ export function generateEmbedSnippet(videoId, origin = window.location.origin) {
       style="position:absolute;top:0;left:0;width:100%;height:100%;border:0"
       allow="autoplay; fullscreen; picture-in-picture"
       referrerpolicy="unsafe-url"
-      allowfullscreen loading="lazy" title="VidaPulse video"></iframe>
+      allowfullscreen title="VidaPulse video"></iframe>
   </div>
 </div>`;
 }
