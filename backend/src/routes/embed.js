@@ -21,6 +21,7 @@ const router  = express.Router();
 const { pool }  = require('../config/database');
 const logger    = require('../config/logger');
 const env       = require('../config/env');
+const { parseMetaEvents, STANDARD_EVENTS } = require('../tracking/metaEvents');
 
 // ── Allow this route to be framed by any domain ───────────────────────────
 router.use((req, res, next) => {
@@ -96,15 +97,17 @@ router.get('/:videoId', async (req, res) => {
       if (ps) playerSettings = { ...DEFAULTS, ...ps };
     } catch (_) { /* use defaults */ }
 
-    // Resolve viewer-tracking config. The owner's pixel fires ONLY when the
-    // owner is Pro+, enabled tracking, and set a pixel id. map = event → Meta
-    // event name (from the per-video destination mapping).
+    // Resolve viewer-tracking config. THIS video's pixel fires ONLY when the
+    // owner is Pro+, enabled tracking, and set a pixel id — a different video
+    // can carry a different pixel id entirely. map = event → the LIST of Meta
+    // event names for that event (the mapping cell is comma-separated).
     const ownerPro     = video.owner_plan === 'pro' || video.owner_plan === 'admin_lifetime';
     const trackEnabled = ownerPro && video.track_enabled === true && !!video.track_pixel_id;
     const trackMap     = {};
     if (trackEnabled && video.track_mapping && typeof video.track_mapping === 'object') {
       for (const [k, v] of Object.entries(video.track_mapping)) {
-        if (v && typeof v.meta === 'string' && v.meta) trackMap[k] = v.meta;
+        const names = parseMetaEvents(v?.meta);
+        if (names.length) trackMap[k] = names;
       }
     }
     const tracking = { enabled: trackEnabled, pixelId: trackEnabled ? video.track_pixel_id : null, map: trackMap };
@@ -1318,20 +1321,45 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
       if(b>furthestSec){var fa=Math.max(a,furthestSec);if(b>fa)ivs.push([fa,b,1]);furthestSec=b;}
     }
 
-    /* ── Viewer tracking (owner pixel + /api/track) ──────────────────────
+    /* ── Viewer tracking (this video's pixel + /api/track) ───────────────
        Gated by TRACK_ENABLED (server already verified Pro + enabled + pixel).
-       trackEvent fires the owner's Meta event (every occurrence) and POSTs to
-       /api/track (server dedups once_per_session for the CRM webhook + counter).
-       Thresholds fire at most once per page-load via _vpFired. */
+       PIXEL_MAP[name] is a LIST of Meta events — one VidaPulse event can fan
+       out to several ("vsl_view, ViewContent"), each fired back to back as its
+       own pixel call. Every call carries an eventID; the server fires the SAME
+       name with the SAME id over the Conversions API, so Meta deduplicates the
+       browser and server copies instead of double-counting.
+       Standard names go through fbq('track'), anything else trackCustom.
+       /api/track still receives only the VidaPulse key (the CRM webhook never
+       sees Meta names). Thresholds fire at most once per page-load. */
     var TRACK_ENABLED=${trackEnabled ? 'true' : 'false'};
     var PIXEL_MAP=${JSON.stringify(trackingMap)};
+    var STD_EVENTS=${JSON.stringify([...STANDARD_EVENTS])};
     var _vpFired={};
+    function _rand(){try{return crypto.getRandomValues(new Uint32Array(1))[0].toString(36);}catch(e){return Math.random().toString(36).slice(2);}}
+    /* _fbp / _fbc — set by the pixel on this iframe's own domain, so they are
+       readable here. _fbc is built from ?fbclid= when the cookie is absent. */
+    function _cookie(n){try{var m=document.cookie.match('(^|;)\\\\s*'+n+'\\\\s*=\\\\s*([^;]+)');return m?m.pop():null;}catch(_){return null;}}
+    function _fbc(){
+      var c=_cookie('_fbc'); if(c)return c;
+      var id=_readParam('fbclid'); return id?('fb.1.'+Date.now()+'.'+id):null;
+    }
     function trackEvent(name){
       if(!TRACK_ENABLED)return;
-      try{ if(typeof window.fbq==='function'&&PIXEL_MAP[name]){window.fbq('track',PIXEL_MAP[name]);} }catch(_){}
+      var eid=VID.slice(0,8)+'-'+Date.now().toString(36)+'-'+_rand();
+      var names=PIXEL_MAP[name]||[];
+      try{
+        if(typeof window.fbq==='function'){
+          for(var i=0;i<names.length;i++){
+            var m=names[i];
+            var method=STD_EVENTS.indexOf(m)>=0?'track':'trackCustom';
+            window.fbq(method,m,{video_id:VID,vidapulse_event:name},{eventID:eid+':'+m});
+          }
+        }
+      }catch(_){}
       try{ fetch(API+'/track',{method:'POST',keepalive:true,
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({video_id:VID,event:name,session_id:sid})}).catch(function(){}); }catch(_){}
+        body:JSON.stringify({video_id:VID,event:name,session_id:sid,event_id:eid,
+          fbp:_cookie('_fbp'),fbc:_fbc(),page_url:document.referrer||location.href})}).catch(function(){}); }catch(_){}
     }
     function _checkThresholds(cur,d){
       if(!TRACK_ENABLED)return;

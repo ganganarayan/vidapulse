@@ -8,9 +8,17 @@ import FeatureGate from '../FeatureGate';
  * TrackingSettingsView — per-video "Tracking" panel (viewer plane, Pro only).
  *
  * Lives in the video page's Settings group beside Share & Embed / Player
- * Settings. Configures the video's Meta Pixel + per-event destination mapping,
- * shows live fired-counters, and manages the subscriber's account-level
- * tracking webhooks. All reads/writes go through the Pro-gated tracking API.
+ * Settings — every field here belongs to THIS video: its own Meta Pixel, its
+ * own Conversions API token, its own event mapping. Two videos can fire to two
+ * different pixels in two different ad accounts.
+ *
+ * A mapping cell takes a COMMA-SEPARATED list of Meta events. Each name fires
+ * on its own — browser pixel + Conversions API, back to back, deduplicated by
+ * a shared event id. The Webhook toggle is unrelated to those names: the CRM
+ * only ever receives the VidaPulse event (vsl_50, cta_clicked …).
+ *
+ * Fired-counters are live; the webhook endpoint list is account-level (one CRM
+ * serves every video). All reads/writes go through the Pro-gated tracking API.
  */
 
 const VIEWER_EVENTS = [
@@ -33,6 +41,29 @@ const DEFAULT_MAPPING = {
   cta_clicked: { meta: 'Lead',        webhook: true },
 };
 
+/** Meta's standard events — the rest fire as custom events. Mirrors the server. */
+const STANDARD_EVENTS = new Set([
+  'AddPaymentInfo', 'AddToCart', 'AddToWishlist', 'CompleteRegistration', 'Contact',
+  'CustomizeProduct', 'Donate', 'FindLocation', 'InitiateCheckout', 'Lead', 'PageView',
+  'Purchase', 'Schedule', 'Search', 'StartTrial', 'SubmitApplication', 'Subscribe',
+  'ViewContent',
+]);
+
+const MAX_META_EVENTS = 5;
+
+/** Same parse as backend/src/tracking/metaEvents.js — keeps the preview honest. */
+function parseMetaEvents(raw) {
+  if (!raw) return [];
+  const out = [];
+  for (const part of String(raw).split(',')) {
+    const name = part.trim().replace(/[^A-Za-z0-9_]/g, '').slice(0, 40);
+    if (!name || out.includes(name)) continue;
+    out.push(name);
+    if (out.length >= MAX_META_EVENTS) break;
+  }
+  return out;
+}
+
 export default function TrackingSettingsView({ videoId }) {
   return (
     <FeatureGate required="pro" feature="Video Tracking">
@@ -50,6 +81,13 @@ function TrackingPanel({ videoId }) {
   const [mapping, setMapping] = useState(DEFAULT_MAPPING);
   const [counts,  setCounts]  = useState({});
   const [saving,  setSaving]  = useState(false);
+
+  // CAPI token is write-only: the server returns "set?" + a 4-char hint, never
+  // the token. tokenInput is only sent when the user actually types a new one.
+  const [tokenSet,   setTokenSet]   = useState(false);
+  const [tokenHint,  setTokenHint]  = useState('');
+  const [tokenInput, setTokenInput] = useState('');
+  const [testCode,   setTestCode]   = useState('');
 
   const [webhooks,  setWebhooks]  = useState([]);
   const [newUrl,    setNewUrl]    = useState('');
@@ -70,6 +108,9 @@ function TrackingPanel({ videoId }) {
         setEnabled(!!s.settings?.enabled);
         setPixelId(s.settings?.pixel_id || '');
         setMapping({ ...DEFAULT_MAPPING, ...(s.settings?.event_mapping || {}) });
+        setTokenSet(!!s.settings?.capi_token_set);
+        setTokenHint(s.settings?.capi_token_hint || '');
+        setTestCode(s.settings?.capi_test_event_code || '');
         setCounts(s.counts || {});
         setWebhooks(w.webhooks || []);
       } catch {
@@ -94,17 +135,49 @@ function TrackingPanel({ videoId }) {
     }
     setSaving(true);
     try {
-      const { data } = await api.put(`/videos/${videoId}/tracking-settings`, {
+      const body = {
         enabled,
         pixel_id: pid || null,
         event_mapping: mapping,
-      });
+        capi_test_event_code: testCode.trim(),
+      };
+      // Omit the token entirely unless it changed — the server keeps the stored
+      // one. Sending null (via Remove) is what clears it.
+      if (tokenInput.trim()) body.capi_token = tokenInput.trim();
+
+      const { data } = await api.put(`/videos/${videoId}/tracking-settings`, body);
       setEnabled(!!data.settings.enabled);
       setPixelId(data.settings.pixel_id || '');
       setMapping({ ...DEFAULT_MAPPING, ...(data.settings.event_mapping || {}) });
+      setTokenSet(!!data.settings.capi_token_set);
+      setTokenHint(data.settings.capi_token_hint || '');
+      setTestCode(data.settings.capi_test_event_code || '');
+      setTokenInput('');
       showToast('Tracking settings saved');
     } catch (err) {
       showToast(err.response?.data?.message || 'Failed to save', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Clear the stored CAPI token for this video (server-side fires stop). */
+  async function removeToken() {
+    setSaving(true);
+    try {
+      const { data } = await api.put(`/videos/${videoId}/tracking-settings`, {
+        enabled,
+        pixel_id: pixelId.trim() || null,
+        event_mapping: mapping,
+        capi_test_event_code: testCode.trim(),
+        capi_token: null,
+      });
+      setTokenSet(!!data.settings.capi_token_set);
+      setTokenHint(data.settings.capi_token_hint || '');
+      setTokenInput('');
+      showToast('Conversions API token removed');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to remove token', 'error');
     } finally {
       setSaving(false);
     }
@@ -179,12 +252,74 @@ function TrackingPanel({ videoId }) {
           className="w-full sm:w-80 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2.5 text-base text-gray-50
                      placeholder-gray-500 focus:outline-none focus:border-amber-500"
         />
-        <p className="text-xs text-gray-400 mt-1.5">Digits only — find it in Meta Events Manager.</p>
+        <p className="text-xs text-gray-400 mt-1.5">
+          Digits only — find it in Meta Events Manager. This pixel is used for <strong>this video only</strong>;
+          another video can point at a different pixel.
+        </p>
+      </div>
+
+      {/* Conversions API (server-side) */}
+      <div className="mt-5 bg-gray-800/40 border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center justify-between gap-3 mb-1">
+          <p className="text-sm font-medium text-gray-200">Conversions API</p>
+          <span className={`text-[11px] px-2 py-0.5 rounded-md border ${
+            tokenSet
+              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25'
+              : 'bg-gray-700/40 text-gray-400 border-gray-600/40'}`}>
+            {tokenSet ? `Token set ${tokenHint}` : 'Not set'}
+          </span>
+        </div>
+        <p className="text-sm text-gray-400 mb-3">
+          Sends the same events to this pixel from our server — so they still arrive when the browser
+          pixel is blocked, and CTA clicks (which redirect away) get counted. Both copies share an event
+          id, so Meta deduplicates them. Generate the token in Events Manager → your dataset → Settings
+          → Conversions API → Generate access token.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="password"
+            value={tokenInput}
+            onChange={e => setTokenInput(e.target.value)}
+            placeholder={tokenSet ? 'Paste a new token to replace it' : 'EAAG… (CAPI access token)'}
+            spellCheck="false"
+            autoComplete="off"
+            className="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-50
+                       placeholder-gray-500 focus:outline-none focus:border-amber-500"
+          />
+          {tokenSet && (
+            <button
+              type="button"
+              onClick={removeToken}
+              disabled={saving}
+              className="px-3 py-2 text-sm text-red-400 hover:text-red-300 border border-red-500/30 rounded-lg disabled:opacity-50"
+            >
+              Remove
+            </button>
+          )}
+        </div>
+        <div className="mt-3">
+          <label className="block text-xs font-medium text-gray-400 mb-1">Test event code (optional)</label>
+          <input
+            value={testCode}
+            onChange={e => setTestCode(e.target.value.replace(/[^A-Za-z0-9_-]/g, ''))}
+            placeholder="TEST12345"
+            className="w-full sm:w-56 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-50
+                       placeholder-gray-500 focus:outline-none focus:border-amber-500"
+          />
+          <p className="text-xs text-gray-500 mt-1.5">
+            While set, server fires land in Events Manager → Test Events. Clear it once you've verified.
+          </p>
+        </div>
       </div>
 
       {/* Pixel Setup table */}
       <div className="mt-6">
-        <p className="text-sm font-semibold text-gray-300 mb-2">Pixel Setup</p>
+        <p className="text-sm font-semibold text-gray-300 mb-1">Pixel Setup</p>
+        <p className="text-xs text-gray-400 mb-2">
+          Separate several Meta events with commas — each one fires on its own, back to back
+          (max {MAX_META_EVENTS}). The <strong>Webhook</strong> toggle is independent: your CRM receives the
+          VidaPulse event only, never these Meta names.
+        </p>
         <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-800/70 text-xs uppercase tracking-wider text-gray-300 font-semibold">
@@ -207,9 +342,12 @@ function TrackingPanel({ videoId }) {
                       list="vp-meta-events"
                       value={mapping[ev.key]?.meta || ''}
                       onChange={e => setMeta(ev.key, e.target.value)}
-                      className="w-44 bg-gray-900 border border-gray-600 rounded px-2.5 py-1.5 text-sm text-gray-50
-                                 focus:outline-none focus:border-amber-500"
+                      placeholder="ViewContent, vsl_view"
+                      spellCheck="false"
+                      className="w-full min-w-[14rem] bg-gray-900 border border-gray-600 rounded px-2.5 py-1.5 text-sm text-gray-50
+                                 placeholder-gray-600 focus:outline-none focus:border-amber-500"
                     />
+                    <MetaEventChips value={mapping[ev.key]?.meta} />
                   </td>
                   <td className="px-4 py-3 text-center">
                     <Toggle on={!!mapping[ev.key]?.webhook} onClick={() => toggleHook(ev.key)} small />
@@ -242,7 +380,9 @@ function TrackingPanel({ videoId }) {
       <div className="mt-8">
         <p className="text-sm font-semibold text-gray-300 mb-1">Tracking Webhooks</p>
         <p className="text-sm text-gray-400 mb-3">
-          Your CRM endpoint(s). They receive the events toggled "Webhook" above, across all your videos.
+          Your CRM endpoint(s) — account-level, shared by every video. They receive the events toggled
+          "Webhook" above, carrying the VidaPulse event key only (vsl_50, cta_clicked …). Meta event
+          names never go to your CRM.
         </p>
         <form onSubmit={addWebhook} className="flex gap-2 mb-3">
           <input
@@ -278,6 +418,31 @@ function TrackingPanel({ videoId }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Shows exactly what the comma list will fire: one chip per event, marked
+ * standard (fbq track) or custom (trackCustom), in order.
+ */
+function MetaEventChips({ value }) {
+  const names = parseMetaEvents(value);
+  if (names.length < 2 && names.every(n => STANDARD_EVENTS.has(n))) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-1.5">
+      {names.map(n => (
+        <span
+          key={n}
+          title={STANDARD_EVENTS.has(n) ? 'Standard Meta event' : 'Custom event'}
+          className={`text-[10px] px-1.5 py-0.5 rounded border ${
+            STANDARD_EVENTS.has(n)
+              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
+              : 'bg-gray-700/40 text-gray-300 border-gray-600/50'}`}
+        >
+          {n}
+        </span>
+      ))}
     </div>
   );
 }

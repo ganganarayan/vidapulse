@@ -85,8 +85,9 @@ function LogRow({ row, showOwner, colCount }) {
   const when = row.created_at ? new Date(row.created_at) : null;
   const payload = row.payload && typeof row.payload === 'object' ? row.payload : null;
 
-  // Destination: pixel → Meta event; webhook → endpoint URL
-  const destination = row.kind === 'pixel'
+  // Destination: pixel/CAPI → Meta event; webhook → endpoint URL
+  const isMeta = row.kind === 'pixel' || row.kind === 'capi';
+  const destination = isMeta
     ? (row.meta_event || '—')
     : (row.url ? shortenUrl(row.url) : '—');
 
@@ -127,7 +128,7 @@ function LogRow({ row, showOwner, colCount }) {
 
         {/* Destination */}
         <td className="px-4 py-3 align-top hidden lg:table-cell">
-          <span className="text-gray-400 text-xs font-mono truncate max-w-[240px] block" title={row.kind === 'webhook' ? row.url : row.meta_event}>
+          <span className="text-gray-400 text-xs font-mono truncate max-w-[240px] block" title={isMeta ? row.meta_event : row.url}>
             {destination}
           </span>
         </td>
@@ -160,11 +161,10 @@ function LogRow({ row, showOwner, colCount }) {
                   <DetailRow label="Time"   value={when ? when.toLocaleString('en-GB') : '—'} />
                   <DetailRow label="Type"   value={row.kind} mono />
                   <DetailRow label="Event"  value={row.event_key} mono />
-                  {row.kind === 'pixel' ? (
+                  {isMeta ? (
                     <DetailRow label="Meta event" value={row.meta_event || '—'} mono />
-                  ) : (
-                    <DetailRow label="URL" value={row.url || '—'} mono />
-                  )}
+                  ) : null}
+                  {row.url && <DetailRow label="URL" value={row.url} mono />}
                   <DetailRow label="Status" value={row.status} />
                   {row.response_status != null && row.response_status > 0 && (
                     <DetailRow label="HTTP" value={String(row.response_status)} mono />
@@ -183,7 +183,9 @@ function LogRow({ row, showOwner, colCount }) {
               {/* Payload */}
               <div className="bg-gray-900/60 border border-gray-700/50 rounded-lg p-4">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">
-                  {row.kind === 'pixel' ? 'Pixel payload' : 'Webhook payload'}
+                  {row.kind === 'pixel' ? 'Pixel payload'
+                    : row.kind === 'capi' ? 'Conversions API payload'
+                    : 'Webhook payload'}
                 </p>
                 {payload ? (
                   <pre className="text-[11px] text-gray-300 font-mono leading-relaxed whitespace-pre-wrap break-all max-h-64 overflow-y-auto">
@@ -205,13 +207,17 @@ function LogRow({ row, showOwner, colCount }) {
 // ─── Badges & helpers ───────────────────────────────────────────────────────
 
 function KindBadge({ kind }) {
-  const isPixel = kind === 'pixel';
+  // pixel  = fired in the viewer's browser · capi = sent server-side to Meta
+  // webhook = POSTed to the owner's CRM endpoint
+  const styles = {
+    pixel  : ['bg-violet-500/15 text-violet-300 border-violet-500/25', '◆ Pixel'],
+    capi   : ['bg-blue-500/15 text-blue-300 border-blue-500/25',       '⇡ CAPI'],
+    webhook: ['bg-cyan-500/15 text-cyan-300 border-cyan-500/25',       '➜ Webhook'],
+  };
+  const [cls, label] = styles[kind] || styles.webhook;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border
-      ${isPixel
-        ? 'bg-violet-500/15 text-violet-300 border-violet-500/25'
-        : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/25'}`}>
-      {isPixel ? '◆ Pixel' : '➜ Webhook'}
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${cls}`}>
+      {label}
     </span>
   );
 }

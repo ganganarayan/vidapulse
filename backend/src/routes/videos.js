@@ -20,6 +20,7 @@ const { planGate, videoLimitGate } = require('../middleware/planGate');
 const { emitEvent }              = require('../services/behavioralEventService');
 const { fetchDuration }          = require('../services/durationService');
 const { DEFAULT_EVENT_MAPPING }  = require('../tracking/trackingService');
+const { normalizeMetaEvents }    = require('../tracking/metaEvents');
 const trackingRegistry           = require('../events/registry');
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1674,14 +1675,32 @@ router.get('/:id/tracking-settings', requireAuth, async (req, res, next) => {
     if (!video) return res.status(404).json({ error: 'Video not found' });
 
     const [{ rows: [ts] }, { rows: counts }] = await Promise.all([
-      pool.query(`SELECT enabled, pixel_id, event_mapping FROM video_tracking_settings WHERE video_id = $1`, [req.params.id]),
+      pool.query(
+        `SELECT enabled, pixel_id, event_mapping, capi_token, capi_test_event_code
+           FROM video_tracking_settings WHERE video_id = $1`,
+        [req.params.id]
+      ),
       pool.query(`SELECT event_key, count FROM tracking_event_counts WHERE video_id = $1`, [req.params.id]),
     ]);
 
+    // The CAPI token is write-only: the UI gets a "set / not set" flag and the
+    // last 4 characters to recognise which token is in place, never the token.
+    const token = ts?.capi_token || null;
+
     return res.json({
       settings: ts
-        ? { enabled: ts.enabled, pixel_id: ts.pixel_id, event_mapping: ts.event_mapping }
-        : { enabled: false, pixel_id: null, event_mapping: DEFAULT_EVENT_MAPPING },
+        ? {
+            enabled              : ts.enabled,
+            pixel_id             : ts.pixel_id,
+            event_mapping        : ts.event_mapping,
+            capi_token_set       : !!token,
+            capi_token_hint      : token ? `••••${token.slice(-4)}` : null,
+            capi_test_event_code : ts.capi_test_event_code || '',
+          }
+        : {
+            enabled: false, pixel_id: null, event_mapping: DEFAULT_EVENT_MAPPING,
+            capi_token_set: false, capi_token_hint: null, capi_test_event_code: '',
+          },
       counts: Object.fromEntries(counts.map(c => [c.event_key, Number(c.count)])),
       plan: req.user.plan,
     });
@@ -1719,27 +1738,59 @@ router.put('/:id/tracking-settings', requireAuth, planGate('video_tracking'), as
       for (const [k, v] of Object.entries(m)) {
         if (!VIEWER_EVENT_KEYS.has(k)) continue; // ignore unknown keys
         clean[k] = {
-          meta   : typeof v?.meta === 'string' ? v.meta.trim().slice(0, 64) : '',
+          // A cell may name SEVERAL Meta events, comma-separated. Stored in
+          // canonical form so the embed and the CAPI sender read one list.
+          meta   : normalizeMetaEvents(v?.meta).slice(0, 255),
           webhook: v?.webhook === true,
         };
       }
       mapping = clean;
     }
 
+    // CAPI token — write-only. Omitted → unchanged; null/'' → cleared.
+    const tokenRaw    = req.body?.capi_token;
+    const clearToken  = tokenRaw === null || tokenRaw === '';
+    const newToken    = (typeof tokenRaw === 'string' && tokenRaw.trim()) ? tokenRaw.trim() : null;
+    if (newToken && newToken.length > 500) {
+      return res.status(400).json({ error: 'Validation Error', message: 'That CAPI token looks too long — paste the token only.' });
+    }
+
+    const testCodeRaw = req.body?.capi_test_event_code;
+    const testCode    = (typeof testCodeRaw === 'string' && testCodeRaw.trim())
+      ? testCodeRaw.trim().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64)
+      : null;
+
+    // COALESCE keeps the stored token when the client sent nothing; the
+    // clear flag forces it to NULL.
     const { rows: [row] } = await pool.query(
-      `INSERT INTO video_tracking_settings (video_id, enabled, pixel_id, event_mapping, updated_at)
-       VALUES ($1, $2, $3, $4, NOW())
+      `INSERT INTO video_tracking_settings
+         (video_id, enabled, pixel_id, event_mapping, capi_token, capi_test_event_code, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
        ON CONFLICT (video_id) DO UPDATE SET
-         enabled       = EXCLUDED.enabled,
-         pixel_id      = EXCLUDED.pixel_id,
-         event_mapping = EXCLUDED.event_mapping,
-         updated_at    = NOW()
-       RETURNING enabled, pixel_id, event_mapping`,
-      [req.params.id, enabled, pixelId, JSON.stringify(mapping)]
+         enabled              = EXCLUDED.enabled,
+         pixel_id             = EXCLUDED.pixel_id,
+         event_mapping        = EXCLUDED.event_mapping,
+         capi_token           = CASE WHEN $7 THEN NULL
+                                     ELSE COALESCE(EXCLUDED.capi_token, video_tracking_settings.capi_token) END,
+         capi_test_event_code = EXCLUDED.capi_test_event_code,
+         updated_at           = NOW()
+       RETURNING enabled, pixel_id, event_mapping, capi_token, capi_test_event_code`,
+      [req.params.id, enabled, pixelId, JSON.stringify(mapping), newToken, testCode, clearToken]
     );
 
-    logger.info(`[videos] tracking settings updated for video ${req.params.id} (enabled=${enabled})`);
-    return res.json({ ok: true, settings: row });
+    const token = clearToken ? null : (row.capi_token || null);
+    logger.info(`[videos] tracking settings updated for video ${req.params.id} (enabled=${enabled}, capi=${token ? 'on' : 'off'})`);
+    return res.json({
+      ok: true,
+      settings: {
+        enabled              : row.enabled,
+        pixel_id             : row.pixel_id,
+        event_mapping        : row.event_mapping,
+        capi_token_set       : !!token,
+        capi_token_hint      : token ? `••••${token.slice(-4)}` : null,
+        capi_test_event_code : row.capi_test_event_code || '',
+      },
+    });
   } catch (err) { next(err); }
 });
 

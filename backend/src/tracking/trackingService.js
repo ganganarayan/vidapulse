@@ -13,14 +13,21 @@
  *   1. Resolve video → owner → owner plan + this video's tracking settings.
  *   2. Gate: owner active, owner Pro/admin_lifetime, tracking enabled.
  *   3. Frequency (from the registry, not hardcoded): 'once_per_session' dedups
- *      via tracking_session_events; 'many' always proceeds.
+ *      via tracking_session_events; 'many' always proceeds. The dedup gates the
+ *      CRM webhook + the funnel counter, NOT the Meta copies.
  *   4. Increment the fired-counter (tracking_event_counts) — funnel display.
- *   5. If the per-video event_mapping marks this event webhook:true, deliver to
+ *   5. Fan the event out to EVERY Meta event named in this video's mapping cell
+ *      (comma-separated) via the Conversions API, one request each, back to
+ *      back, to THIS video's pixel + token.
+ *   6. If the per-video event_mapping marks this event webhook:true, deliver to
  *      the owner's active tracking_webhooks and log each attempt.
  *
- * The Meta Pixel is fired CLIENT-side from the embed (every occurrence). The
- * `meta` value in event_mapping is for the embed; the server uses only the
- * `webhook` flag here.
+ * Meta gets each event twice on purpose: the embed fires the browser pixel and
+ * this module fires CAPI, both with the same (event_name, event_id) pair, so
+ * Meta deduplicates them and keeps whichever arrived with more signal.
+ *
+ * The WEBHOOK payload never carries a Meta event name — the CRM only ever sees
+ * the VidaPulse key (vsl_50, cta_clicked …). Meta names are a pixel concern.
  *
  * Never throws to the caller path that matters — viewer requests must not fail.
  */
@@ -29,6 +36,8 @@ const { pool }   = require('../config/database');
 const logger     = require('../config/logger');
 const registry   = require('../events/registry');
 const { buildEnvelope } = require('../events/envelope');
+const { parseMetaEvents, metaEventId } = require('./metaEvents');
+const { sendCapiEvent, logResult }     = require('./capiService');
 
 const TRACK_TIMEOUT_MS = 8_000;
 
@@ -47,10 +56,27 @@ const DEFAULT_EVENT_MAPPING = {
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * @param {{ videoId:string, eventKey:string, sessionId?:string|null }} args
- * @returns {Promise<{ok:boolean, deduped?:boolean, reason?:string}>}
+ * @param {object}  args
+ * @param {string}  args.videoId
+ * @param {string}  args.eventKey
+ * @param {string} [args.sessionId]  analytics session (drives once_per_session dedup)
+ * @param {string} [args.eventId]    per-fire base id minted by the embed (CAPI dedup)
+ * @param {string} [args.fbp]        _fbp cookie from the viewer's browser
+ * @param {string} [args.fbc]        _fbc cookie (or one built from ?fbclid=)
+ * @param {string} [args.pageUrl]    page the video was embedded on
+ * @param {string} [args.clientIp]   viewer IP (from the /api/track request)
+ * @param {string} [args.userAgent]  viewer UA (from the /api/track request)
+ * @param {boolean}[args.pixelFired] did the BROWSER fire the pixel for this one?
+ *        True for player milestones (the embed fires them). False for a CTA
+ *        click, which redirects away before fbq can run — there CAPI is the
+ *        only copy Meta gets, and logging a browser fire would be a lie.
+ * @returns {Promise<{ok:boolean, deduped?:boolean, reason?:string, meta_events?:string[]}>}
  */
-async function recordViewerEvent({ videoId, eventKey, sessionId = null }) {
+async function recordViewerEvent({
+  videoId, eventKey, sessionId = null, eventId = null,
+  fbp = null, fbc = null, pageUrl = null, clientIp = null, userAgent = null,
+  pixelFired = true,
+}) {
   try {
     // 1. Only known, active VIEWER-scope events are accepted here.
     const ev = registry.getEvent(eventKey);
@@ -65,7 +91,10 @@ async function recordViewerEvent({ videoId, eventKey, sessionId = null }) {
               u.is_active                      AS owner_active,
               COALESCE(p.name::text, 'free')   AS owner_plan,
               ts.enabled                       AS enabled,
-              ts.event_mapping                 AS event_mapping
+              ts.event_mapping                 AS event_mapping,
+              ts.pixel_id                      AS pixel_id,
+              ts.capi_token                    AS capi_token,
+              ts.capi_test_event_code          AS capi_test_event_code
          FROM videos v
          JOIN users u            ON u.id = v.user_id
          LEFT JOIN plans p       ON p.id = u.plan_id
@@ -78,8 +107,12 @@ async function recordViewerEvent({ videoId, eventKey, sessionId = null }) {
     if (!(ctx.owner_plan === 'pro' || ctx.owner_plan === 'admin_lifetime')) return { ok: false, reason: 'not_pro' };
     if (!ctx.enabled)                                      return { ok: false, reason: 'disabled' };
 
-    // 3. Frequency-driven dedup (registry metadata).
+    // 3. Frequency-driven dedup (registry metadata). This gates the CRM webhook
+    //    and the funnel counter ONLY — the Meta copies mirror the browser pixel,
+    //    which fires every occurrence, so CAPI must too or the two halves of the
+    //    same event stop matching.
     const freq = registry.getFrequency(eventKey);
+    let deduped = false;
     if (freq === 'once_per_session') {
       if (!sessionId) return { ok: false, reason: 'no_session' };
       const { rowCount } = await pool.query(
@@ -87,42 +120,122 @@ async function recordViewerEvent({ videoId, eventKey, sessionId = null }) {
          VALUES ($1, $2) ON CONFLICT DO NOTHING`,
         [sessionId, eventKey]
       );
-      if (rowCount === 0) return { ok: true, deduped: true }; // already fired this session
+      deduped = rowCount === 0; // already fired this session
     }
 
-    // 4. Increment the fired-counter (funnel display).
-    await pool.query(
-      `INSERT INTO tracking_event_counts (video_id, event_key, count, updated_at)
-       VALUES ($1, $2, 1, NOW())
-       ON CONFLICT (video_id, event_key)
-       DO UPDATE SET count = tracking_event_counts.count + 1, updated_at = NOW()`,
-      [videoId, eventKey]
-    );
+    // 4. Increment the fired-counter (funnel display — one per session).
+    if (!deduped) {
+      await pool.query(
+        `INSERT INTO tracking_event_counts (video_id, event_key, count, updated_at)
+         VALUES ($1, $2, 1, NOW())
+         ON CONFLICT (video_id, event_key)
+         DO UPDATE SET count = tracking_event_counts.count + 1, updated_at = NOW()`,
+        [videoId, eventKey]
+      );
+    }
 
-    // 5. Resolve the destination mapping for this event.
-    const mapping   = (ctx.event_mapping && typeof ctx.event_mapping === 'object') ? ctx.event_mapping : {};
-    const metaEvent = mapping[eventKey]?.meta || null;
+    // 5. Resolve the destination mapping for this event. One cell can name
+    //    SEVERAL Meta events ("vsl_view, ViewContent") — each is its own fire.
+    const mapping    = (ctx.event_mapping && typeof ctx.event_mapping === 'object') ? ctx.event_mapping : {};
+    const metaEvents = parseMetaEvents(mapping[eventKey]?.meta);
+    const baseId     = eventId || `${videoId.slice(0, 8)}-${sessionId || 'nosess'}-${eventKey}-${Date.now()}`;
 
-    // 5a. Log the pixel fire (the embed fired the owner's pixel for this event).
-    if (metaEvent) {
+    // 5a. Log the browser-pixel fires (the embed fired one per name).
+    for (const metaEvent of (pixelFired ? metaEvents : [])) {
       _logFire({
         kind: 'pixel', ownerId: ctx.owner_id, videoId, eventKey, metaEvent,
         status: 'fired', sessionId,
-        payload: { event: eventKey, video_id: videoId, meta_event: metaEvent, session_id: sessionId },
+        payload: {
+          event: eventKey, video_id: videoId, meta_event: metaEvent,
+          pixel_id: ctx.pixel_id, event_id: metaEventId(baseId, metaEvent), session_id: sessionId,
+        },
       }).catch(() => {});
     }
 
-    // 5b. Webhook delivery — only if the per-video mapping opts this event in.
-    if (mapping[eventKey]?.webhook === true) {
+    // 5b. Conversions API — same names, same event_ids, THIS video's pixel.
+    //     Fire-and-forget: the viewer's request must not wait on Meta.
+    if (metaEvents.length && ctx.pixel_id && ctx.capi_token) {
+      _fireCapiEvents({
+        ownerId: ctx.owner_id, videoId, videoTitle: ctx.video_title, eventKey,
+        metaEvents, baseId, sessionId,
+        pixelId: ctx.pixel_id, token: ctx.capi_token, testEventCode: ctx.capi_test_event_code,
+        fbp, fbc, pageUrl, clientIp, userAgent,
+      }).catch(() => {});
+    }
+
+    // 5c. Webhook delivery — only if the per-video mapping opts this event in,
+    //     and not a second time in the same session. The payload carries the
+    //     VidaPulse key only, never a Meta event name.
+    if (!deduped && mapping[eventKey]?.webhook === true) {
       deliverTrackingWebhooks(ctx.owner_id, eventKey, {
         video_id: videoId, video_title: ctx.video_title, session_id: sessionId,
       }).catch(() => {});
     }
 
-    return { ok: true };
+    return { ok: true, deduped, meta_events: metaEvents };
   } catch (err) {
     logger.error(`[tracking] recordViewerEvent failed (${eventKey}/${videoId}): ${err.message}`);
     return { ok: false, reason: 'error' };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CONVERSIONS API FAN-OUT (per-video pixel + token)
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Send one CAPI event per mapped Meta name, sequentially (back to back), and
+ * log each attempt to tracking_log (kind='capi'). Always resolves.
+ *
+ * Sequential rather than batched on purpose: each name gets its own event_id,
+ * its own HTTP result and its own log row, so a rejected name is visible
+ * instead of hidden inside a partially-accepted batch.
+ */
+async function _fireCapiEvents({
+  ownerId, videoId, videoTitle, eventKey, metaEvents, baseId, sessionId,
+  pixelId, token, testEventCode, fbp, fbc, pageUrl, clientIp, userAgent,
+}) {
+  // Fill the gaps the browser could not supply from the stored session.
+  let src = { page_url: pageUrl || null, user_agent: userAgent || null, ip: clientIp || null };
+  if (sessionId && (!src.page_url || !src.user_agent || !src.ip)) {
+    try {
+      const { rows: [s] } = await pool.query(
+        `SELECT page_url, user_agent, host(ip_address) AS ip
+           FROM analytics_sessions WHERE id = $1`,
+        [sessionId]
+      );
+      if (s) {
+        src.page_url   = src.page_url   || s.page_url;
+        src.user_agent = src.user_agent || s.user_agent;
+        src.ip         = src.ip         || s.ip;
+      }
+    } catch (_) { /* non-uuid / missing session — send what we have */ }
+  }
+
+  const eventTime = Math.floor(Date.now() / 1000);
+
+  for (const metaEvent of metaEvents) {
+    const eventId = metaEventId(baseId, metaEvent);
+    const r = await sendCapiEvent({
+      pixelId, token, testEventCode,
+      eventName: metaEvent, eventId, eventTime,
+      eventSourceUrl: src.page_url,
+      userData : { clientIp: src.ip, userAgent: src.user_agent, fbp, fbc },
+      customData: {
+        vidapulse_event: eventKey,
+        video_id       : videoId,
+        content_name   : videoTitle || '',
+      },
+    });
+    logResult(metaEvent, pixelId, r);
+
+    await _logFire({
+      kind: 'capi', ownerId, videoId, eventKey, metaEvent,
+      url: `graph.facebook.com/${pixelId}/events`,
+      status: r.ok ? 'sent' : 'failed',
+      responseStatus: r.statusCode, responseBody: r.responseBody, errorMessage: r.errorMessage,
+      payload: r.payload, sessionId,
+    }).catch(e => logger.warn(`[capi] log insert failed: ${e.message}`));
   }
 }
 

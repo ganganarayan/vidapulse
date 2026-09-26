@@ -1028,9 +1028,19 @@ router.post('/event', async (req, res) => {
   }
 
   // Viewer-plane: route cta_clicked to the owner's tracking webhooks + counter
-  // (the click redirects away, so the owner's Meta pixel can't fire reliably
-  // here — webhook + counter only). Fire-and-forget, gated server-side.
-  recordViewerEvent({ videoId: video_id, eventKey: 'cta_clicked', sessionId: session_id || null }).catch(() => {});
+  // + the Conversions API. The click redirects away, so the BROWSER pixel can't
+  // fire reliably here (pixelFired:false) — CAPI is the copy that actually
+  // reaches Meta, which is the whole reason it is server-side. Fire-and-forget,
+  // gated server-side.
+  recordViewerEvent({
+    videoId   : video_id,
+    eventKey  : 'cta_clicked',
+    sessionId : session_id || null,
+    pixelFired: false,
+    pageUrl   : req.headers.referer || null,
+    clientIp  : req.ip || null,
+    userAgent : req.headers['user-agent'] ? String(req.headers['user-agent']).slice(0, 500) : null,
+  }).catch(() => {});
 
   try {
     const safePosition = (position !== null && position !== undefined)
