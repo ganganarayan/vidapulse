@@ -151,8 +151,12 @@ const UTM_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm
 
 // Params carried through the CTA redirect onto the destination. utm_* keep
 // campaign attribution; `email` lets the landing opt-in / Thank-You button /
-// registration email prefill the register form (e.g. /register?email=lead@x.com).
-const FORWARD_PARAMS = [...UTM_PARAMS, 'email'];
+// registration email prefill the register form (e.g. /register?email=lead@x.com);
+// t/cid carry the assessment viewer identity one hop further, so a CTA on the
+// DESTINATION page starts out already knowing who the visitor is (the whole
+// chain works off the URL, never the referrer). `vpsrc` is deliberately not
+// forwarded — it describes this hop's carrier, not the next one's.
+const FORWARD_PARAMS = [...UTM_PARAMS, 'email', 't', 'cid'];
 
 function mergeUtmIntoUrl(destUrl, query) {
   if (!destUrl || !query) return destUrl;
@@ -179,6 +183,67 @@ function pickUtm(query) {
     out[k] = (typeof v === 'string' && v) ? v.slice(0, 300) : null;
   }
   return out;
+}
+
+// ── Assessment viewer ids on a CTA click ─────────────────────────────────
+// Mirrors the player's _getCID (routes/embed.js): the assessing app identifies
+// a person with ?t= (result token, on EVERY link it emits) and ?cid= (opaque
+// customer id). ?r= is the same token forwarded by a page builder's URL-param
+// forwarder, which can leave it with a leading & and no '?' — hence the regex
+// scan rather than URLSearchParams.
+//
+// Order matters: the QUERY wins because the id is then part of the navigation
+// itself and survives everything (rel=noreferrer, meta referrer policies,
+// Facebook/Instagram in-app webviews). The Referer header is a last resort —
+// free when it happens to survive, absent exactly when it matters most.
+//
+// Opaque ids only, never PII, so they are safe in a URL and safe to log.
+
+// Carriers /cta.js reports via ?vpsrc= — anything else is ignored, so a
+// stranger cannot write arbitrary text into the column.
+const ID_SOURCES = new Set(['url', 'iframe', 'cache', 'crm', 'referer']);
+
+/** Strip a viewer id to opaque-safe characters; null when nothing survives. */
+function sanitizeViewerId(v) {
+  if (!v) return null;
+  return String(v).replace(/[^a-zA-Z0-9\-_]/g, '').slice(0, 128) || null;
+}
+
+/** Read `name` out of a URL string, tolerating a leading & with no '?'. */
+function scanParam(url, name) {
+  if (!url) return null;
+  try {
+    const m = String(url).match(new RegExp('[?&]' + name + '=([^&#]*)'));
+    return m && m[1] ? decodeURIComponent(m[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve { customerId, viewerToken, idSource } for a CTA click request.
+ * Returns all-null when the click carries no assessment identity at all — a
+ * genuinely anonymous visitor, recorded honestly as such.
+ */
+function readViewerIds(req) {
+  const q = req.query || {};
+  const fromQuery = (name) => (typeof q[name] === 'string' ? q[name] : null);
+
+  let token = sanitizeViewerId(fromQuery('t') || fromQuery('r'));
+  let cid   = sanitizeViewerId(fromQuery('cid'));
+  let source = null;
+
+  if (token || cid) {
+    const hint = typeof q.vpsrc === 'string' ? q.vpsrc.toLowerCase() : null;
+    source = hint && ID_SOURCES.has(hint) ? hint : 'url';
+  } else {
+    const ref = req.headers.referer || req.headers.referrer || null;
+    token = sanitizeViewerId(scanParam(ref, 't') || scanParam(ref, 'r'));
+    cid   = sanitizeViewerId(scanParam(ref, 'cid'));
+    if (token || cid) source = 'referer';
+  }
+
+  return { customerId: cid, viewerToken: token, idSource: source };
 }
 
 /**
@@ -789,9 +854,18 @@ router.get('/cta/link/:ctaId', async (req, res) => {
   // so the Set-Cookie header rides on the 302 response.
   const ctaViewerId = resolveCtaViewerId(req, res);
 
+  // Who is clicking, in assessment terms? Resolved BEFORE the redirect so the
+  // ids can ride onto the destination as well as into the log.
+  const ids = readViewerIds(req);
+
   // Forward any inbound utm_* params (e.g. from the landing page) onto the
-  // destination so the campaign attribution survives the redirect hop.
-  const finalDest = mergeUtmIntoUrl(ctaLink.destination_url, req.query);
+  // destination so the campaign attribution survives the redirect hop, plus
+  // the resolved viewer ids — including ones recovered from the Referer, which
+  // are not in req.query — so the next page inherits the identity.
+  const forward = { ...req.query };
+  if (ids.viewerToken) forward.t = ids.viewerToken;
+  if (ids.customerId)  forward.cid = ids.customerId;
+  const finalDest = mergeUtmIntoUrl(ctaLink.destination_url, forward);
 
   // Redirect immediately — tracking is fire-and-forget
   res.redirect(302, finalDest);
@@ -817,14 +891,16 @@ router.get('/cta/link/:ctaId', async (req, res) => {
       `INSERT INTO cta_click_logs
          (cta_link_id, user_id, video_id, cta_name, page_name, destination_url,
           viewer_id, device, browser, country, country_code, city,
-          utm_source, utm_medium, utm_campaign, utm_term, utm_content)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+          utm_source, utm_medium, utm_campaign, utm_term, utm_content,
+          customer_id, viewer_token, id_source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
       [
         ctaId, ctaLink.user_id, ctaLink.video_id,
         ctaLink.cta_name, ctaLink.page_name || null, ctaLink.destination_url,
         ctaViewerId, clickDevice, clickBrowser,
         clickGeo.name, clickGeo.code, clickGeo.city,
         utm.utm_source, utm.utm_medium, utm.utm_campaign, utm.utm_term, utm.utm_content,
+        ids.customerId, ids.viewerToken, ids.idSource,
       ]
     ).catch(err => logger.warn(`[analytics/cta/link] insert failed: ${err.message}`));
   }
@@ -858,9 +934,16 @@ router.get('/cta/:videoId', async (req, res) => {
     return res.status(400).send('Missing or invalid "to" destination URL. Usage: /api/analytics/cta/VIDEO_ID?to=https://your-page.com');
   }
 
+  // Who is clicking, in assessment terms (query first, Referer as last resort).
+  const ids = readViewerIds(req);
+
   // Forward any inbound utm_* params onto the destination (campaign attribution
-  // survives the redirect). No-op when no utm_* params are present.
-  const finalDest = mergeUtmIntoUrl(safeDest, req.query);
+  // survives the redirect), plus the resolved viewer ids so the destination page
+  // inherits the identity. No-op when none are present.
+  const forward = { ...req.query };
+  if (ids.viewerToken) forward.t = ids.viewerToken;
+  if (ids.customerId)  forward.cid = ids.customerId;
+  const finalDest = mergeUtmIntoUrl(safeDest, forward);
 
   // Validate videoId is UUID-shaped
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(videoId)) {
@@ -895,9 +978,10 @@ router.get('/cta/:videoId', async (req, res) => {
       `INSERT INTO cta_click_logs
          (cta_link_id, user_id, video_id, cta_name, page_name, destination_url,
           viewer_id, device, browser, country, country_code, city,
-          utm_source, utm_medium, utm_campaign, utm_term, utm_content)
+          utm_source, utm_medium, utm_campaign, utm_term, utm_content,
+          customer_id, viewer_token, id_source)
        SELECT NULL, v.user_id, v.id, NULL, NULL, $2,
-              $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+              $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
        FROM   videos v
        JOIN   users u ON u.id = v.user_id
        JOIN   plans p ON p.id = u.plan_id
@@ -908,6 +992,7 @@ router.get('/cta/:videoId', async (req, res) => {
         videoId, safeDest, ctaViewerId, clickDevice, clickBrowser,
         clickGeo.name, clickGeo.code, clickGeo.city,
         utm.utm_source, utm.utm_medium, utm.utm_campaign, utm.utm_term, utm.utm_content,
+        ids.customerId, ids.viewerToken, ids.idSource,
       ]
     ).catch(err => logger.warn(`[analytics/cta] insert failed: ${err.message}`));
   }
@@ -931,7 +1016,8 @@ router.get('/cta/:videoId', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────
 
 router.post('/event', async (req, res) => {
-  const { session_id, video_id, event_type, position, cta_id } = req.body ?? {};
+  const { session_id, video_id, event_type, position, cta_id,
+          customer_id, viewer_token } = req.body ?? {};
   res.json({ ok: true }); // always respond 200 quickly
 
   if (!video_id || event_type !== 'cta_click') {
@@ -978,6 +1064,65 @@ router.post('/event', async (req, res) => {
          FROM   videos
          WHERE  id = $1 AND is_active = TRUE`,
         [video_id, safePosition, metadata]
+      );
+    }
+
+    // ── Also record the overlay click in the CTA Click Log ────────────────
+    // An in-player overlay button used to exist only as an analytics_events
+    // row, so it never appeared in the CTA Click Log alongside link clicks.
+    //
+    // Overlays whose url IS a CTA tracking link are excluded here (the regex
+    // in the WHERE clause): that click also hits /cta/link/:id, which logs it
+    // properly with its own cta_link_id — logging it twice would inflate every
+    // count. So this branch covers exactly the overlays that point straight at
+    // a destination and would otherwise be invisible.
+    //
+    // Identity comes from the player (it resolved ?t=/?cid= from the iframe's
+    // own URL), falling back to the session row for any client that predates
+    // the body fields. Device/browser/geo come from THIS request — it is the
+    // viewer's own browser, so it is as accurate as the redirect's.
+    if (safeCtaId && isLikelyHumanClick(req.headers['user-agent'])) {
+      const clickGeo     = lookupCountry(getClientIp(req));
+      const clickBrowser = parseBrowser(req.headers['user-agent']);
+      const uaStr        = (req.headers['user-agent'] || '').toLowerCase();
+      const clickDevice  = /mobile|android|iphone|ipad/.test(uaStr) ? 'mobile'
+                         : /tablet/.test(uaStr)                      ? 'tablet'
+                         : 'desktop';
+      const safeSession  = (typeof session_id === 'string' && UUID_RE.test(session_id))
+        ? session_id : null;
+      const bodyCid   = sanitizeViewerId(customer_id);
+      const bodyToken = sanitizeViewerId(viewer_token);
+
+      await pool.query(
+        `INSERT INTO cta_click_logs
+           (cta_link_id, user_id, video_id, cta_name, page_name, destination_url,
+            viewer_id, device, browser, country, country_code, city,
+            customer_id, viewer_token, id_source)
+         SELECT NULL, v.user_id, v.id,
+                NULLIF(o->>'label',''), 'Player overlay', o->>'url',
+                $3, $4, $5, $6, $7, $8,
+                COALESCE($9, s.customer_id),
+                COALESCE($10, s.viewer_token),
+                CASE WHEN COALESCE($9, s.customer_id, $10, s.viewer_token) IS NULL
+                     THEN NULL ELSE 'iframe' END
+         FROM   videos v
+         JOIN   users u  ON u.id = v.user_id
+         JOIN   plans p  ON p.id = u.plan_id
+         JOIN   video_player_settings ps ON ps.video_id = v.id
+         CROSS  JOIN LATERAL jsonb_array_elements(ps.cta_overlays) o
+         LEFT   JOIN analytics_sessions s ON s.id = $11::uuid
+         WHERE  v.id = $1
+           AND  o->>'id' = $2
+           AND  v.is_active = TRUE
+           AND  ps.cta_enabled = TRUE
+           AND  p.name IN ('pro', 'admin_lifetime')
+           AND  COALESCE(o->>'url', '') !~* '/api/analytics/cta/'`,
+        [
+          video_id, safeCtaId,
+          readCookie(req, CTA_VID_COOKIE), clickDevice, clickBrowser,
+          clickGeo.name, clickGeo.code, clickGeo.city,
+          bodyCid, bodyToken, safeSession,
+        ]
       );
     }
   } catch (err) {

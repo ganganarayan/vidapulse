@@ -33,6 +33,17 @@ export default function CTATrackingPage() {
   const [editId,      setEditId]      = useState(null);
   const [editForm,    setEditForm]    = useState({ cta_name: '', page_name: '' });
   const [editSaving,  setEditSaving]  = useState(false);
+  const [snippetCopied, setSnippetCopied] = useState(false);
+
+  // One-line install for the CTA id stamper (served at /cta.js).
+  const ctaSnippet = `<script src="${origin}/cta.js" async></script>`;
+
+  function copySnippet() {
+    navigator.clipboard
+      .writeText(ctaSnippet)
+      .then(() => { setSnippetCopied(true); setTimeout(() => setSnippetCopied(false), 2500); })
+      .catch(() => {});
+  }
 
   function startEdit(link) {
     setEditId(link.id);
@@ -68,7 +79,10 @@ export default function CTATrackingPage() {
   }, [isPro]);
 
   function exportClicksCsv() {
-    const header = ['#', 'Timestamp', 'Button', 'Page', 'Device', 'Browser', 'Country', 'Clicker ID'];
+    // Token and Cid are separate columns here (the table stacks them in one
+    // cell) — a spreadsheet cell holding two values can't be filtered on.
+    const header = ['#', 'Timestamp', 'Button', 'Page', 'Device', 'Browser', 'Country',
+                    'Token', 'Customer ID', 'ID Source', 'Clicker ID'];
     const rows = clicks.map((c, i) => [
       clicks.length - i,
       new Date(c.occurred_at).toISOString(),
@@ -77,6 +91,9 @@ export default function CTATrackingPage() {
       c.device || '',
       c.browser || '',
       c.country || '',
+      c.viewer_token || '',
+      c.customer_id || '',
+      c.id_source || '',
       c.viewer_id || '',
     ]);
     const csv = [header, ...rows]
@@ -412,6 +429,35 @@ export default function CTATrackingPage() {
                         Deleting a link does not remove its past events from the Events log.
                       </span>
                     </p>
+
+                    {/* Identity snippet — how a click learns WHO clicked it. */}
+                    <div className="mt-3 pt-3 border-t border-gray-700/40">
+                      <p className="text-[11px] text-gray-500 leading-relaxed">
+                        <strong className="text-gray-400">Know who clicked.</strong>{' '}
+                        A click already carries the visitor&apos;s id when the link sits on a page that has
+                        one — your assessment result page, or any page with a VidaPulse video on it.
+                        For every other page, add this once and its CTA links start carrying it too:
+                      </p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <code className="flex-1 px-2.5 py-2 rounded bg-gray-900/60 border border-gray-700/50
+                                         font-mono text-[10px] text-gray-300 break-all">
+                          {ctaSnippet}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={copySnippet}
+                          className="shrink-0 px-2.5 py-2 rounded bg-gray-800 hover:bg-gray-700
+                                     border border-gray-700/50 text-[10px] text-gray-300 transition-colors"
+                        >
+                          {snippetCopied ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                      <p className="mt-1.5 text-[10px] text-gray-600 leading-relaxed">
+                        It only rewrites VidaPulse tracking links — every other link on the page is left
+                        untouched. The id lands in the <strong className="text-gray-500">Customer ID</strong>{' '}
+                        column of the Click Log below; hover a value to see which source supplied it.
+                      </p>
+                    </div>
                   </div>
                 </div>
               ) : null}
@@ -462,6 +508,7 @@ export default function CTATrackingPage() {
                             <th className="px-3 py-2.5 font-semibold">Device</th>
                             <th className="px-3 py-2.5 font-semibold">Browser</th>
                             <th className="px-3 py-2.5 font-semibold">Country</th>
+                            <th className="px-3 py-2.5 font-semibold">Customer ID</th>
                             <th className="px-3 py-2.5 font-semibold">Clicker ID</th>
                           </tr>
                         </thead>
@@ -477,6 +524,20 @@ export default function CTATrackingPage() {
                               <td className="px-3 py-2 capitalize">{c.device || '—'}</td>
                               <td className="px-3 py-2">{c.browser || '—'}</td>
                               <td className="px-3 py-2">{c.country || '—'}</td>
+                              {/* Who this is in the assessing app: the result token on top
+                                  (present on every link it emits), the customer id beneath.
+                                  Hover shows which carrier supplied them. */}
+                              <td className="px-3 py-2 font-mono text-[10px] whitespace-nowrap"
+                                  title={c.id_source ? `Captured from: ${c.id_source}` : 'No assessment id on this click'}>
+                                {(c.viewer_token || c.customer_id) ? (
+                                  <>
+                                    <div className="text-gray-300">{c.viewer_token || '—'}</div>
+                                    <div className="text-gray-500">{c.customer_id || '—'}</div>
+                                  </>
+                                ) : (
+                                  <span className="text-gray-600">—</span>
+                                )}
+                              </td>
                               <td className="px-3 py-2 font-mono text-[10px] text-gray-500">
                                 {c.viewer_id ? c.viewer_id.slice(0, 8) : '—'}
                               </td>

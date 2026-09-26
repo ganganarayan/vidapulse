@@ -33,6 +33,7 @@ const { testConnection } = require('./config/database');
 const { runMigrations  } = require('./db/migrate');
 const routes             = require('./routes');
 const embedRoutes        = require('./routes/embed');
+const { serveCtaScript } = require('./routes/ctaScript');
 const { errorHandler   } = require('./middleware/errorHandler');
 const webhookSender      = require('./services/webhookSender');
 const scheduledJobs      = require('./services/scheduledJobs');
@@ -146,6 +147,16 @@ app.use(crawlerLogger);
 // ─────────────────────────────────────────────────────────────
 
 app.use('/embed', embedRoutes);
+
+// ─────────────────────────────────────────────────────────────
+// CTA id stamper — public, no auth, cached.
+// GET /cta.js → the one-line snippet site owners paste on any page so its
+// CTA tracking links carry the viewer id in the URL (see routes/ctaScript.js
+// for why a URL param and not the Referer header). Mounted here, ahead of the
+// SPA catch-all, so it is never swallowed by index.html.
+// ─────────────────────────────────────────────────────────────
+
+app.get('/cta.js', serveCtaScript);
 
 // ─────────────────────────────────────────────────────────────
 // API routes (always mounted, on all domains)

@@ -1397,6 +1397,40 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
     var CID=_readParam('cid');                 /* legacy customer id (?cid=) */
     console.log('[VidaPulse] viewer ids — token:', TOK, 'cid:', CID);
 
+    /* ── Stamp the ids onto a VidaPulse CTA tracking link ─────────────────
+       A CTA click must carry the viewer id IN THE URL, because every other
+       channel is unreliable: our own CTA anchors are rel="noreferrer", page
+       builders set referrer policies, and FB/IG in-app webviews strip the
+       Referer outright. A query param survives all three.
+       Only our own tracking links are touched — a plain destination URL is
+       left exactly as the owner typed it. */
+    function _isCtaUrl(u){ return /\\/api\\/analytics\\/cta\\//i.test(u||''); }
+    function _stampCta(u,src){
+      if(!u||!_isCtaUrl(u)||(!TOK&&!CID))return u;
+      try{
+        var x=new URL(u,location.href);
+        if(TOK&&!x.searchParams.get('t'))x.searchParams.set('t',TOK);
+        if(CID&&!x.searchParams.get('cid'))x.searchParams.set('cid',CID);
+        if(!x.searchParams.get('vpsrc'))x.searchParams.set('vpsrc',src||'iframe');
+        return x.toString();
+      }catch(_){return u;}
+    }
+
+    /* Publish the ids to the embedding page so its own CTA buttons can be
+       stamped by /cta.js — the player often knows who the viewer is when the
+       host page URL does not (the id rode in on the iframe's own src). Sent
+       on load, and again on request for a /cta.js that loaded after us. */
+    function _publishIds(){
+      if(window.parent===window)return;
+      try{window.parent.postMessage({type:'vidapulse_ids',t:TOK||null,cid:CID||null},'*');}catch(_){}
+    }
+    _publishIds();
+    try{
+      window.addEventListener('message',function(e){
+        if(e&&e.data&&e.data.type==='vidapulse_request_ids')_publishIds();
+      });
+    }catch(_){}
+
     function sess(){
       console.log('[VidaPulse] creating session...');
       fetch(API+'/analytics/session',{method:'POST',
@@ -1548,13 +1582,19 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
         var el=layer.querySelector(sel);
         if(!el)return;
         reg.push({cfg:o,el:el,shown:false});
+        /* Stamp the viewer id onto the href up front — the anchor carries
+           rel="noreferrer", so the id has to be in the URL or the click
+           arrives anonymous. Re-stamped on click in case it resolved late. */
+        try{el.href=_stampCta(el.href,'iframe');}catch(_){}
         el.addEventListener('click',function(e){
           e.stopPropagation();
+          try{el.href=_stampCta(el.href,'iframe');}catch(_){}
           try{
             fetch(API+'/analytics/event',{method:'POST',keepalive:true,
               headers:{'Content-Type':'application/json'},
               body:JSON.stringify({video_id:VID,event_type:'cta_click',
                 session_id:sid||null,cta_id:o.id,
+                customer_id:CID||null,viewer_token:TOK||null,
                 position:(typeof curPos==='number'&&curPos>0)?curPos:undefined})}).catch(function(){});
           }catch(_){}
           console.log('[VidaPulse] cta_click →',o.id);

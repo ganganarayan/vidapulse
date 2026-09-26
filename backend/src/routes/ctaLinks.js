@@ -131,7 +131,9 @@ router.post('/', requireAuth, async (req, res, next) => {
 // from the canonical cta_click_logs table (where the redirect handler records
 // every click). Survives link deletion — past clicks stay in the log.
 // Each row: timestamp, button (cta_name), page, device, browser, country, city,
-// destination, and viewer_id (the first-party vp_cta_vid cookie).
+// destination, viewer_id (the first-party vp_cta_vid cookie), and the
+// assessment identity the click carried — viewer_token (?t=) / customer_id
+// (?cid=) plus id_source, which names the carrier that supplied them.
 
 router.get('/clicks', requireAuth, async (req, res, next) => {
   try {
@@ -145,7 +147,10 @@ router.get('/clicks', requireAuth, async (req, res, next) => {
               l.country,
               l.city,
               l.destination_url,
-              l.viewer_id
+              l.viewer_id,
+              l.viewer_token,
+              l.customer_id,
+              l.id_source
        FROM   cta_click_logs l
        WHERE  l.user_id = $1
        ORDER  BY l.occurred_at DESC
