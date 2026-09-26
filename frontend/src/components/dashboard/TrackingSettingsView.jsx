@@ -80,6 +80,8 @@ function TrackingPanel({ videoId }) {
   const [pixelId, setPixelId] = useState('');
   const [mapping, setMapping] = useState(DEFAULT_MAPPING);
   const [counts,  setCounts]  = useState({});
+  // Per-Meta-event fired counts: { vsl_50: { ViewContent: 87, Lead: 12 } }
+  const [metaCounts, setMetaCounts] = useState({});
   const [saving,  setSaving]  = useState(false);
 
   // CAPI token is write-only: the server returns "set?" + a 4-char hint, never
@@ -112,6 +114,7 @@ function TrackingPanel({ videoId }) {
         setTokenHint(s.settings?.capi_token_hint || '');
         setTestCode(s.settings?.capi_test_event_code || '');
         setCounts(s.counts || {});
+        setMetaCounts(s.meta_counts || {});
         setWebhooks(w.webhooks || []);
       } catch {
         if (!cancelled) showToast('Could not load tracking settings', 'error');
@@ -317,8 +320,9 @@ function TrackingPanel({ videoId }) {
         <p className="text-sm font-semibold text-gray-300 mb-1">Pixel Setup</p>
         <p className="text-xs text-gray-400 mb-2">
           Separate several Meta events with commas — each one fires on its own, back to back
-          (max {MAX_META_EVENTS}). The <strong>Webhook</strong> toggle is independent: your CRM receives the
-          VidaPulse event only, never these Meta names.
+          (max {MAX_META_EVENTS}), and <strong>Fired</strong> counts them separately, in the same order.
+          The <strong>Webhook</strong> toggle is independent: your CRM receives the VidaPulse event only,
+          never these Meta names.
         </p>
         <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl overflow-x-auto">
           <table className="w-full text-sm">
@@ -352,8 +356,12 @@ function TrackingPanel({ videoId }) {
                   <td className="px-4 py-3 text-center">
                     <Toggle on={!!mapping[ev.key]?.webhook} onClick={() => toggleHook(ev.key)} small />
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-sm font-semibold text-gray-100">
-                    {(counts[ev.key] || 0).toLocaleString()}
+                  <td className="px-4 py-3 text-right">
+                    <FiredCounts
+                      names={parseMetaEvents(mapping[ev.key]?.meta)}
+                      perName={metaCounts[ev.key]}
+                      total={counts[ev.key] || 0}
+                    />
                   </td>
                 </tr>
               ))}
@@ -418,6 +426,42 @@ function TrackingPanel({ videoId }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Fired counts, one number per Meta event in the cell, comma-separated and in
+ * the same order as the names — "87, 12" reads straight across from
+ * "ViewContent, Lead".
+ *
+ * They diverge when a name is added to the cell later: the newcomer starts at
+ * zero while the original keeps its history. When the VidaPulse event's own
+ * total runs ahead of every name (fires recorded before per-name counting
+ * existed), that total is shown underneath rather than silently dropped.
+ */
+function FiredCounts({ names, perName = {}, total = 0 }) {
+  if (!names.length) {
+    return <span className="tabular-nums text-sm font-semibold text-gray-100">{total.toLocaleString()}</span>;
+  }
+  const each    = names.map(n => perName?.[n] || 0);
+  const highest = Math.max(...each);
+  return (
+    <div className="leading-tight">
+      <span
+        className="tabular-nums text-sm font-semibold text-gray-100"
+        title={names.map((n, i) => `${n}: ${each[i].toLocaleString()}`).join(' · ')}
+      >
+        {each.map(c => c.toLocaleString()).join(', ')}
+      </span>
+      {total > highest && (
+        <div
+          className="text-[10px] text-gray-500 tabular-nums mt-0.5"
+          title="Total fires of this VidaPulse event, including those recorded before per-event counting started."
+        >
+          {total.toLocaleString()} total
+        </div>
+      )}
     </div>
   );
 }

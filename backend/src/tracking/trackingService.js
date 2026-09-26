@@ -15,12 +15,15 @@
  *   3. Frequency (from the registry, not hardcoded): 'once_per_session' dedups
  *      via tracking_session_events; 'many' always proceeds. The dedup gates the
  *      CRM webhook + the funnel counter, NOT the Meta copies.
- *   4. Increment the fired-counter (tracking_event_counts) — funnel display.
- *   5. Fan the event out to EVERY Meta event named in this video's mapping cell
- *      (comma-separated) via the Conversions API, one request each, back to
- *      back, to THIS video's pixel + token.
- *   6. If the per-video event_mapping marks this event webhook:true, deliver to
- *      the owner's active tracking_webhooks and log each attempt.
+ *   4. Parse this video's mapping cell — a comma-separated list of Meta event
+ *      names, so one VidaPulse event can fan out to several.
+ *   5. Increment the fired-counters — the VidaPulse event total
+ *      (tracking_event_counts) plus one per Meta name
+ *      (tracking_meta_event_counts), so the UI can show them separately.
+ *   6. Fan out: log the browser-pixel fires, send one Conversions API request
+ *      per Meta name (back to back, to THIS video's pixel + token), and — when
+ *      the mapping marks the event webhook:true — deliver to the owner's active
+ *      tracking_webhooks, logging every attempt.
  *
  * Meta gets each event twice on purpose: the embed fires the browser pixel and
  * this module fires CAPI, both with the same (event_name, event_id) pair, so
@@ -123,7 +126,16 @@ async function recordViewerEvent({
       deduped = rowCount === 0; // already fired this session
     }
 
-    // 4. Increment the fired-counter (funnel display — one per session).
+    // 4. Resolve the destination mapping for this event. One cell can name
+    //    SEVERAL Meta events ("vsl_view, ViewContent") — each is its own fire.
+    const mapping    = (ctx.event_mapping && typeof ctx.event_mapping === 'object') ? ctx.event_mapping : {};
+    const metaEvents = parseMetaEvents(mapping[eventKey]?.meta);
+    const baseId     = eventId || `${videoId.slice(0, 8)}-${sessionId || 'nosess'}-${eventKey}-${Date.now()}`;
+
+    // 5. Fired-counters (funnel display — one per session): the VidaPulse event
+    //    total, plus one counter per Meta name so the UI can show them
+    //    separately. A name added to the cell later starts from zero, which is
+    //    exactly what makes the per-name numbers worth reading.
     if (!deduped) {
       await pool.query(
         `INSERT INTO tracking_event_counts (video_id, event_key, count, updated_at)
@@ -132,15 +144,19 @@ async function recordViewerEvent({
          DO UPDATE SET count = tracking_event_counts.count + 1, updated_at = NOW()`,
         [videoId, eventKey]
       );
+
+      if (metaEvents.length) {
+        await pool.query(
+          `INSERT INTO tracking_meta_event_counts (video_id, event_key, meta_event, count, updated_at)
+           SELECT $1::uuid, $2::varchar, name, 1, NOW() FROM UNNEST($3::text[]) AS name
+           ON CONFLICT (video_id, event_key, meta_event)
+           DO UPDATE SET count = tracking_meta_event_counts.count + 1, updated_at = NOW()`,
+          [videoId, eventKey, metaEvents]
+        ).catch(e => logger.warn(`[tracking] meta counter failed (${eventKey}): ${e.message}`));
+      }
     }
 
-    // 5. Resolve the destination mapping for this event. One cell can name
-    //    SEVERAL Meta events ("vsl_view, ViewContent") — each is its own fire.
-    const mapping    = (ctx.event_mapping && typeof ctx.event_mapping === 'object') ? ctx.event_mapping : {};
-    const metaEvents = parseMetaEvents(mapping[eventKey]?.meta);
-    const baseId     = eventId || `${videoId.slice(0, 8)}-${sessionId || 'nosess'}-${eventKey}-${Date.now()}`;
-
-    // 5a. Log the browser-pixel fires (the embed fired one per name).
+    // 6a. Log the browser-pixel fires (the embed fired one per name).
     for (const metaEvent of (pixelFired ? metaEvents : [])) {
       _logFire({
         kind: 'pixel', ownerId: ctx.owner_id, videoId, eventKey, metaEvent,
@@ -152,7 +168,7 @@ async function recordViewerEvent({
       }).catch(() => {});
     }
 
-    // 5b. Conversions API — same names, same event_ids, THIS video's pixel.
+    // 6b. Conversions API — same names, same event_ids, THIS video's pixel.
     //     Fire-and-forget: the viewer's request must not wait on Meta.
     if (metaEvents.length && ctx.pixel_id && ctx.capi_token) {
       _fireCapiEvents({
@@ -163,7 +179,7 @@ async function recordViewerEvent({
       }).catch(() => {});
     }
 
-    // 5c. Webhook delivery — only if the per-video mapping opts this event in,
+    // 6c. Webhook delivery — only if the per-video mapping opts this event in,
     //     and not a second time in the same session. The payload carries the
     //     VidaPulse key only, never a Meta event name.
     if (!deduped && mapping[eventKey]?.webhook === true) {

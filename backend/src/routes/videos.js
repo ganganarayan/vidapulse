@@ -1674,14 +1674,25 @@ router.get('/:id/tracking-settings', requireAuth, async (req, res, next) => {
     );
     if (!video) return res.status(404).json({ error: 'Video not found' });
 
-    const [{ rows: [ts] }, { rows: counts }] = await Promise.all([
+    const [{ rows: [ts] }, { rows: counts }, { rows: metaCounts }] = await Promise.all([
       pool.query(
         `SELECT enabled, pixel_id, event_mapping, capi_token, capi_test_event_code
            FROM video_tracking_settings WHERE video_id = $1`,
         [req.params.id]
       ),
       pool.query(`SELECT event_key, count FROM tracking_event_counts WHERE video_id = $1`, [req.params.id]),
+      pool.query(
+        `SELECT event_key, meta_event, count FROM tracking_meta_event_counts WHERE video_id = $1`,
+        [req.params.id]
+      ),
     ]);
+
+    // Per-Meta-event fired counts, nested by VidaPulse event:
+    //   { vsl_50: { ViewContent: 87, Lead: 12 } }
+    const metaCountsByEvent = {};
+    for (const r of metaCounts) {
+      (metaCountsByEvent[r.event_key] ||= {})[r.meta_event] = Number(r.count);
+    }
 
     // The CAPI token is write-only: the UI gets a "set / not set" flag and the
     // last 4 characters to recognise which token is in place, never the token.
@@ -1701,8 +1712,9 @@ router.get('/:id/tracking-settings', requireAuth, async (req, res, next) => {
             enabled: false, pixel_id: null, event_mapping: DEFAULT_EVENT_MAPPING,
             capi_token_set: false, capi_token_hint: null, capi_test_event_code: '',
           },
-      counts: Object.fromEntries(counts.map(c => [c.event_key, Number(c.count)])),
-      plan: req.user.plan,
+      counts     : Object.fromEntries(counts.map(c => [c.event_key, Number(c.count)])),
+      meta_counts: metaCountsByEvent,
+      plan       : req.user.plan,
     });
   } catch (err) { next(err); }
 });
