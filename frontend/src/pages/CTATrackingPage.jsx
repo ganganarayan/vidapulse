@@ -15,6 +15,11 @@ import FeatureGate  from '../components/FeatureGate';
 
 const MAX_LINKS = 20;
 
+// Click Log page size. The log is paginated in the browser: the endpoint
+// already returns the account's clicks in one capped batch (newest first), so
+// slicing here costs nothing and keeps CSV export over the FULL set.
+const CLICKS_PER_PAGE = 50;
+
 export default function CTATrackingPage() {
   const { user }       = useAuth();
   const { showToast }  = useToast();
@@ -34,6 +39,7 @@ export default function CTATrackingPage() {
   const [editForm,    setEditForm]    = useState({ cta_name: '', page_name: '' });
   const [editSaving,  setEditSaving]  = useState(false);
   const [snippetCopied, setSnippetCopied] = useState(false);
+  const [clickPage,   setClickPage]   = useState(1);
 
   // One-line install for the CTA id stamper (served at /cta.js).
   const ctaSnippet = `<script src="${origin}/cta.js" async></script>`;
@@ -74,7 +80,9 @@ export default function CTATrackingPage() {
     setLoading(true);
     Promise.all([
       api.get('/cta-links').then(r => setLinks(r.data.cta_links ?? [])).catch(() => setLinks([])),
-      api.get('/cta-links/clicks').then(r => setClicks(r.data.clicks ?? [])).catch(() => setClicks([])),
+      api.get('/cta-links/clicks')
+        .then(r => { setClicks(r.data.clicks ?? []); setClickPage(1); })
+        .catch(() => { setClicks([]); setClickPage(1); }),
     ]).finally(() => setLoading(false));
   }, [isPro]);
 
@@ -154,6 +162,12 @@ export default function CTATrackingPage() {
   }
 
   const atLimit = links.length >= MAX_LINKS;
+
+  // Click Log paging — derived, so nothing can drift out of sync with clicks.
+  const clickPages  = Math.max(1, Math.ceil(clicks.length / CLICKS_PER_PAGE));
+  const safePage    = Math.min(clickPage, clickPages);
+  const firstOnPage = (safePage - 1) * CLICKS_PER_PAGE;
+  const pageClicks  = clicks.slice(firstOnPage, firstOnPage + CLICKS_PER_PAGE);
 
   return (
     <AppLayout>
@@ -478,7 +492,7 @@ export default function CTATrackingPage() {
                     <div>
                       <h3 className="text-sm font-bold text-gray-200">Click Log</h3>
                       <p className="text-[11px] text-gray-500 mt-0.5">
-                        Every recorded CTA click, newest first.
+                        Every recorded CTA click, newest first. Export CSV covers all of them, not just this page.
                       </p>
                     </div>
                     {clicks.length > 0 && (
@@ -513,9 +527,9 @@ export default function CTATrackingPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-700/30">
-                          {clicks.map((c, i) => (
-                            <tr key={i} className="text-gray-300 hover:bg-gray-800/40">
-                              <td className="px-3 py-2 text-gray-500">{clicks.length - i}</td>
+                          {pageClicks.map((c, i) => (
+                            <tr key={firstOnPage + i} className="text-gray-300 hover:bg-gray-800/40">
+                              <td className="px-3 py-2 text-gray-500">{clicks.length - (firstOnPage + i)}</td>
                               <td className="px-3 py-2 whitespace-nowrap text-gray-400">
                                 {new Date(c.occurred_at).toLocaleString()}
                               </td>
@@ -545,6 +559,37 @@ export default function CTATrackingPage() {
                           ))}
                         </tbody>
                       </table>
+
+                      {clickPages > 1 && (
+                        <div className="flex items-center justify-between gap-3 px-3 py-2.5 border-t border-gray-700/50">
+                          <span className="text-[11px] text-gray-500 tabular-nums">
+                            Showing {(firstOnPage + 1).toLocaleString()}–{(firstOnPage + pageClicks.length).toLocaleString()} of {clicks.length.toLocaleString()}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setClickPage(pg => Math.max(1, pg - 1))}
+                              disabled={safePage <= 1}
+                              className="px-2.5 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-40
+                                         disabled:hover:bg-gray-700 border border-gray-600 text-[11px]
+                                         text-gray-200 rounded-md transition-colors"
+                            >
+                              Prev
+                            </button>
+                            <span className="text-[11px] text-gray-400 tabular-nums">
+                              Page {safePage} / {clickPages}
+                            </span>
+                            <button
+                              onClick={() => setClickPage(pg => Math.min(clickPages, pg + 1))}
+                              disabled={safePage >= clickPages}
+                              className="px-2.5 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-40
+                                         disabled:hover:bg-gray-700 border border-gray-600 text-[11px]
+                                         text-gray-200 rounded-md transition-colors"
+                            >
+                              Next
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
