@@ -1,6 +1,6 @@
 'use strict';
 import React, { useEffect, useState } from 'react';
-import api from '../../lib/api';
+import api, { apiErrorMessage } from '../../lib/api';
 import { useToast } from '../../contexts/ToastContext';
 import FeatureGate from '../FeatureGate';
 
@@ -125,9 +125,7 @@ function TrackingPanel({ videoId }) {
         setWebhooks(w.webhooks || []);
       } catch (err) {
         if (!cancelled) {
-          setLoadError(err.response?.data?.message
-            || (err.response?.status === 404 ? 'Video not found, or not yours to edit.' : '')
-            || 'Could not load tracking settings.');
+          setLoadError(apiErrorMessage(err, "Couldn't read this video's tracking settings."));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -169,7 +167,7 @@ function TrackingPanel({ videoId }) {
       setTokenInput('');
       showToast('Tracking settings saved');
     } catch (err) {
-      showToast(err.response?.data?.message || 'Failed to save', 'error');
+      showToast(apiErrorMessage(err, 'Tracking settings were not saved.'), 'error');
     } finally {
       setSaving(false);
     }
@@ -191,7 +189,7 @@ function TrackingPanel({ videoId }) {
       setTokenInput('');
       showToast('Conversions API token removed');
     } catch (err) {
-      showToast(err.response?.data?.message || 'Failed to remove token', 'error');
+      showToast(apiErrorMessage(err, 'The token was not removed.'), 'error');
     } finally {
       setSaving(false);
     }
@@ -206,13 +204,13 @@ function TrackingPanel({ videoId }) {
       setWebhooks(w => [...w, data.webhook]);
       setNewUrl('');
     } catch (err) {
-      setHookMsg(err.response?.data?.message || 'Could not add webhook');
+      setHookMsg(apiErrorMessage(err, 'The webhook was not added.'));
     } finally { setAddingHook(false); }
   }
 
   async function removeWebhook(id) {
     try { await api.delete(`/tracking-webhooks/${id}`); setWebhooks(w => w.filter(x => x.id !== id)); }
-    catch { showToast('Could not remove webhook', 'error'); }
+    catch (err) { showToast(apiErrorMessage(err, 'The webhook was not removed.'), 'error'); }
   }
 
   if (loading) {

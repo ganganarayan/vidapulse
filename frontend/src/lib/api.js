@@ -66,5 +66,29 @@ api.interceptors.response.use(
   }
 );
 
+/**
+ * Turn an axios failure into a message worth showing a human.
+ *
+ * Generic strings like "Failed to save" hide which of several very different
+ * things went wrong. The server does not always send `message` — plenty of
+ * routes reply `{ error: 'Not found' }` and nothing else — so read `message`,
+ * then `error`, and always keep the HTTP status, which is what actually tells
+ * a 404 (wrong/not-yours record) apart from a 403 (plan gate) or a 500.
+ *
+ * @param {object} err      the axios error
+ * @param {string} fallback wording for "we got nothing useful back"
+ * @returns {string}
+ */
+export function apiErrorMessage(err, fallback = 'Something went wrong.') {
+  const res = err?.response;
+
+  // No response at all — offline, DNS, CORS, or the request never completed.
+  if (!res) return `${fallback} No response from the server${err?.message ? ` (${err.message})` : ''}.`;
+
+  const body = (res.data && typeof res.data === 'object') ? res.data : {};
+  const text = body.message || body.error;
+  return text ? `${text} (HTTP ${res.status})` : `${fallback} HTTP ${res.status}.`;
+}
+
 export { IMPERSONATION_KEY };
 export default api;
