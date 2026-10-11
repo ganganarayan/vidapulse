@@ -96,11 +96,18 @@ function TrackingPanel({ videoId }) {
   const [addingHook, setAddingHook] = useState(false);
   const [hookMsg,   setHookMsg]   = useState('');
 
+  // When the read fails, the form must NOT be shown: it would display
+  // DEFAULT_MAPPING as if it were this video's saved config, and a Save would
+  // overwrite the real settings with those defaults.
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+
   useEffect(() => {
     if (!videoId) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
+      setLoadError('');
       try {
         const [{ data: s }, { data: w }] = await Promise.all([
           api.get(`/videos/${videoId}/tracking-settings`),
@@ -116,14 +123,18 @@ function TrackingPanel({ videoId }) {
         setCounts(s.counts || {});
         setMetaCounts(s.meta_counts || {});
         setWebhooks(w.webhooks || []);
-      } catch {
-        if (!cancelled) showToast('Could not load tracking settings', 'error');
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError(err.response?.data?.message
+            || (err.response?.status === 404 ? 'Video not found, or not yours to edit.' : '')
+            || 'Could not load tracking settings.');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [videoId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [videoId, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setMeta    = (key, val) => setMapping(m => ({ ...m, [key]: { ...m[key], meta: val } }));
   const toggleHook = (key)      => setMapping(m => ({ ...m, [key]: { ...m[key], webhook: !m[key]?.webhook } }));
@@ -209,6 +220,30 @@ function TrackingPanel({ videoId }) {
       <div className="px-6 py-10 flex items-center gap-2 text-sm text-gray-500">
         <span className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
         Loading tracking settings…
+      </div>
+    );
+  }
+
+  // Failed read → say so. Showing the form here would present DEFAULT_MAPPING
+  // as this video's settings, and saving it would overwrite the real ones.
+  if (loadError) {
+    return (
+      <div className="px-6 py-6 min-w-0 max-w-3xl">
+        <div className="mb-6">
+          <p className="text-xs text-gray-400 uppercase tracking-widest font-semibold mb-1">Settings</p>
+          <h2 className="text-2xl font-bold text-gray-50">Tracking</h2>
+        </div>
+        <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-5 py-4">
+          <p className="text-sm font-medium text-red-200">Couldn't load this video's tracking settings</p>
+          <p className="text-sm text-red-100/80 mt-1">{loadError}</p>
+          <button
+            onClick={() => setReloadKey(k => k + 1)}
+            className="mt-3 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 border border-gray-600
+                       text-xs text-gray-100 rounded-lg transition-colors"
+          >
+            Try again
+          </button>
+        </div>
       </div>
     );
   }

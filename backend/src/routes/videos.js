@@ -1665,12 +1665,16 @@ const VIEWER_EVENT_KEYS = new Set(
   trackingRegistry.listEvents({ scope: 'viewer', includeReserved: false }).map(e => e.key)
 );
 
-// GET /api/videos/:id/tracking-settings — owner reads config + fired counts.
+// GET /api/videos/:id/tracking-settings — owner (or admin) reads config + fired counts.
 router.get('/:id/tracking-settings', requireAuth, async (req, res, next) => {
   try {
+    // Owner OR admin — admins manage promotion videos they don't own, and the
+    // video page already shows them this panel (VideoAnalyticsView lets an
+    // admin past the is_promo gate). Without the bypass the read 404s and the
+    // panel silently renders defaults that aren't this video's settings.
     const { rows: [video] } = await pool.query(
-      `SELECT id FROM videos WHERE id = $1 AND user_id = $2 AND is_active = TRUE`,
-      [req.params.id, req.user.id]
+      `SELECT id FROM videos WHERE id = $1 AND (user_id = $2 OR $3::boolean) AND is_active = TRUE`,
+      [req.params.id, req.user.id, isAdminUser(req)]
     );
     if (!video) return res.status(404).json({ error: 'Video not found' });
 
@@ -1719,14 +1723,17 @@ router.get('/:id/tracking-settings', requireAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// PUT /api/videos/:id/tracking-settings — owner (Pro) upserts config.
+// PUT /api/videos/:id/tracking-settings — owner (Pro) or admin upserts config.
 router.put('/:id/tracking-settings', requireAuth, planGate('video_tracking'), async (req, res, next) => {
   try {
+    // Same owner-OR-admin rule as the read above (and as player-settings).
     const { rows: [video] } = await pool.query(
-      `SELECT id FROM videos WHERE id = $1 AND user_id = $2 AND is_active = TRUE`,
-      [req.params.id, req.user.id]
+      `SELECT id FROM videos WHERE id = $1 AND (user_id = $2 OR $3::boolean) AND is_active = TRUE`,
+      [req.params.id, req.user.id, isAdminUser(req)]
     );
-    if (!video) return res.status(404).json({ error: 'Video not found' });
+    if (!video) {
+      return res.status(404).json({ error: 'Video not found', message: 'Video not found, or not yours to edit.' });
+    }
 
     const enabled  = req.body?.enabled === true;
     const pixelRaw = req.body?.pixel_id;
