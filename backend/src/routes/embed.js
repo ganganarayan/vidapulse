@@ -1558,6 +1558,18 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
         position:curPos>0?curPos:undefined});
       console.log('[VidaPulse] ping →',ev,'| sid:',sid.slice(0,8),'| maxPct:',maxP.toFixed(1),'| secs:',secs.toFixed(1),'| ivs:',toSend.length);
       _publishProgress();
+      /* 🔴 Re-publish the finished figure once the receiver's throttle lapses.
+         Browsers fire 'pause' immediately before 'ended', so two progress
+         messages leave here milliseconds apart — and the listener on the other
+         side drops any report arriving within five seconds of the last one it
+         wrote (vsl-watch-listener.tsx). The dropped one is precisely the
+         message carrying maxP=100, so the stored percentage would settle just
+         short of complete and stay there: the video was finished and the owner
+         would never see it. A dropped report is not recorded as sent over
+         there, so this later copy reads as new and is written; if the 'end'
+         message did get through, this one dedups against it and costs nothing.
+         Either way exactly one write lands. */
+      if(ev==='end')setTimeout(_publishProgress,5500);
       /* Use fetch+keepalive — works mid-session AND on page unload.
          sendBeacon is NOT used: it returns false silently on failure
          (no exception), so the catch block never runs and pings vanish. */
