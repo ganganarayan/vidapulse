@@ -1459,6 +1459,50 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
       });
     }catch(_){}
 
+    /* ── Publish watch progress to the embedding page ─────────────────────
+       Third message on the pipe that already carries vidapulse_ids and
+       vidapulse_session. The assessment app's result page listens for it so
+       the owner can tell, before a booked call, whether this person actually
+       heard the video. Agreed shape: docs/vidapulse-progress-contract.md in
+       the assessment repo — type/field names are fixed there, so don't rename
+       them here without changing both sides.
+
+       🔴 scope:'session' is the truth and must stay. maxP and secs are
+       declared with the other counters at the top of trackerCore and reset to
+       0 on every page load, and nothing reads prior sessions back from the
+       server — so these are this-visit figures, not lifetime ones. The
+       receiver keys them by session_id and sums across visits; a lifetime
+       total sent under this flag would be added to the visits it already
+       contains (720, then 740 cumulative, stored as 1460). If this ever does
+       start sending a cross-session total, the flag has to change with it.
+
+       Called from ping(), so it inherits that cadence — play, pause, seek,
+       end, the 15-second heartbeat and the unload flush — with no new timer
+       and no second measurement: these are the same numbers that ping sends.
+       The 25/50/75/100 pixel milestones are deliberately NOT a hook:
+       _checkThresholds returns early unless the owner configured a pixel, so
+       hanging progress off it would go silent for everyone else.
+
+       Fires before the ping's fetch, so the parent still gets the figure when
+       the network call fails. Target is '*' per the contract (the parent's
+       origin isn't knowable from in here); the receiver checks event.origin,
+       which is what makes that safe. */
+    function _publishProgress(){
+      if(window.parent===window||!sid)return;
+      try{
+        window.parent.postMessage({
+          type           :'vidapulse_progress',
+          video_id       :VID,
+          session_id     :sid,
+          max_pct        :Math.round(Math.min(100,Math.max(0,maxP))*10)/10,
+          watched_seconds:Math.round(Math.max(0,secs)),
+          duration       :dur>0?dur:null,
+          cid            :CID||null,
+          scope          :'session'
+        },'*');
+      }catch(_){}
+    }
+
     function sess(){
       console.log('[VidaPulse] creating session...');
       fetch(API+'/analytics/session',{method:'POST',
@@ -1513,6 +1557,7 @@ function buildEmbedPage(video, videoUrl, apiBase, ps = {}, tracking = {}) {
         duration_seconds:dur>0?dur:undefined,
         position:curPos>0?curPos:undefined});
       console.log('[VidaPulse] ping →',ev,'| sid:',sid.slice(0,8),'| maxPct:',maxP.toFixed(1),'| secs:',secs.toFixed(1),'| ivs:',toSend.length);
+      _publishProgress();
       /* Use fetch+keepalive — works mid-session AND on page unload.
          sendBeacon is NOT used: it returns false silently on failure
          (no exception), so the catch block never runs and pings vanish. */
