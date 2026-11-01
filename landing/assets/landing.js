@@ -97,6 +97,12 @@
       }).then(function (r) {
         return r.json().then(function (data) { return { status: r.status, data: data }; });
       }).then(function (res) {
+        // DM-link lead attribution: this form is JS-submitted (not a native
+        // submit), so notify the content-engine tracker on a successful lead
+        // (new account 201 or existing 409) before we navigate away.
+        if ((res.status === 201 || res.status === 409) && window.ceLeadForm) {
+          try { window.ceLeadForm({ name: name, email: email, phone: phone }); } catch (e) {}
+        }
         if (res.status === 201 && res.data && res.data.set_password_url) {
           msg.textContent = 'Account created — taking you to set your password…'; msg.className = 'signup-msg ok';
           window.location.href = res.data.set_password_url;

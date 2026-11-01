@@ -230,8 +230,8 @@ if (env.NODE_ENV === 'production') {
   const LANDING_CSP = [
     "default-src 'self'",
     // 'unsafe-inline' for the landing's own inline scripts; clarity.ms for the
-    // Microsoft Clarity tag (the only third-party script the landing loads).
-    "script-src 'self' 'unsafe-inline' https://www.clarity.ms https://*.clarity.ms",
+    // Microsoft Clarity tag; content-engine for the DM-link lead tracker (lead.js).
+    "script-src 'self' 'unsafe-inline' https://www.clarity.ms https://*.clarity.ms https://content-engine-production-230f.up.railway.app",
     "style-src 'self' 'unsafe-inline' https:",
     "img-src 'self' data: https:",
     "font-src 'self' https: data:",
