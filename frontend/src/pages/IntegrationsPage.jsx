@@ -5,6 +5,7 @@ import FeatureGate    from '../components/FeatureGate';
 import { useAuth }   from '../contexts/AuthContext';
 import { useToast }  from '../contexts/ToastContext';
 import api from '../lib/api';
+import SecretInput from '../components/SecretInput';
 
 /**
  * IntegrationsPage — /integrations
@@ -223,24 +224,15 @@ function WebhookCard({ isAdmin }) {
             <label className="block text-xs font-semibold text-gray-300 mb-1.5">
               Secret Key <span className="text-gray-500 font-normal">(optional — sent as X-VP-Signature)</span>
             </label>
-            <div className="flex gap-2">
-              <input
-                type={showSecret ? 'text' : 'password'}
-                autoComplete="new-password"
-                name="webhook_secret_key"
-                value={secret}
-                onChange={e => setSecret(e.target.value)}
-                placeholder="your-hmac-secret"
-                className="flex-1 bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2.5
-                           text-sm text-gray-200 placeholder-gray-600 focus-brand"
-              />
-              <button
-                onClick={() => setShowSecret(s => !s)}
-                className="px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-xs text-gray-400 hover:text-gray-200"
-              >
-                {showSecret ? 'Hide' : 'Show'}
-              </button>
-            </div>
+            <SecretInput
+              generate
+              name="webhook_secret_key"
+              value={secret}
+              onChange={e => setSecret(e.target.value)}
+              placeholder="your-hmac-secret"
+              className="bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2.5
+                         text-sm text-gray-200 placeholder-gray-600 focus-brand"
+            />
           </div>
 
           {/* Active toggle */}

@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import api, { apiErrorMessage } from '../../lib/api';
 import { useToast } from '../../contexts/ToastContext';
 import FeatureGate from '../FeatureGate';
+import SecretInput from '../SecretInput';
 
 /**
  * TrackingSettingsView — per-video "Tracking" panel (viewer plane, Pro only).
@@ -312,16 +313,16 @@ function TrackingPanel({ videoId }) {
           → Conversions API → Generate access token.
         </p>
         <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            type="password"
-            value={tokenInput}
-            onChange={e => setTokenInput(e.target.value)}
-            placeholder={tokenSet ? 'Paste a new token to replace it' : 'EAAG… (CAPI access token)'}
-            spellCheck="false"
-            autoComplete="off"
-            className="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-50
-                       placeholder-gray-500 focus:outline-none focus:border-amber-500"
-          />
+          <div className="flex-1 min-w-0">
+            <SecretInput
+              value={tokenInput}
+              onChange={e => setTokenInput(e.target.value)}
+              placeholder={tokenSet ? 'Paste a new token to replace it' : 'EAAG… (CAPI access token)'}
+              autoComplete="off"
+              className="bg-gray-900 border border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-50
+                         placeholder-gray-500 focus:outline-none focus:border-amber-500"
+            />
+          </div>
           {tokenSet && (
             <button
               type="button"

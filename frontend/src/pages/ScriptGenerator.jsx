@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useCallback } from "react";
+import SecretInput from '../components/SecretInput';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // THEME
@@ -1010,46 +1011,25 @@ export default function VideoScriptGenerator() {
             {/* API Key */}
             <div>
               <FieldLabel>Claude API Key</FieldLabel>
-              <div style={{ position: "relative" }}>
-                <input
-                  type={showKey ? "text" : "password"}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-ant-api03-…"
-                  style={{
-                    width: "100%",
-                    backgroundColor: C.surface,
-                    color: C.text,
-                    border: `1px solid ${apiKey ? C.gold + "66" : C.border}`,
-                    borderRadius: "6px",
-                    padding: "9px 48px 9px 11px",
-                    fontSize: "13px",
-                    outline: "none",
-                    fontFamily: FONTS.body,
-                    boxSizing: "border-box",
-                    transition: "border-color 0.2s",
-                  }}
-                />
-                <button
-                  onClick={() => setShowKey(!showKey)}
-                  style={{
-                    position: "absolute",
-                    right: "10px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: C.textDim,
-                    fontSize: "10px",
-                    letterSpacing: "0.05em",
-                    fontFamily: FONTS.body,
-                    fontWeight: 600,
-                  }}
-                >
-                  {showKey ? "HIDE" : "SHOW"}
-                </button>
-              </div>
+              <SecretInput
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="sk-ant-api03-…"
+                autoComplete="off"
+                style={{
+                  width: "100%",
+                  backgroundColor: C.surface,
+                  color: C.text,
+                  border: `1px solid ${apiKey ? C.gold + "66" : C.border}`,
+                  borderRadius: "6px",
+                  padding: "9px 11px",
+                  fontSize: "13px",
+                  outline: "none",
+                  fontFamily: FONTS.body,
+                  boxSizing: "border-box",
+                  transition: "border-color 0.2s",
+                }}
+              />
               <div style={{ fontSize: "10px", color: C.textVeryDim, marginTop: "5px", lineHeight: 1.4 }}>
                 Used client-side only. Never stored or transmitted elsewhere.
               </div>

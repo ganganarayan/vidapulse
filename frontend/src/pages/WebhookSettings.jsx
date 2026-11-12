@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../lib/api';
 import { useWebhookAlerts } from '../hooks/useWebhookAlerts';
+import SecretInput from '../components/SecretInput';
 
 /**
  * WebhookSettings — /admin/webhook
@@ -327,24 +328,15 @@ export default function WebhookSettings() {
             {/* Secret */}
             <div>
               <label className="block text-xs text-gray-400 mb-1.5">Signing Secret (optional)</label>
-              <div className="relative">
-                <input
-                  type={showSecret ? 'text' : 'password'}
-                  value={secret}
-                  onChange={e => setSecret(e.target.value)}
-                  placeholder="HMAC-SHA256 signing key"
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 pr-10
-                             text-sm text-gray-100 placeholder-gray-600
-                             focus:outline-none focus:border-amber-500/60 transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowSecret(s => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-400"
-                >
-                  {showSecret ? <EyeOffIcon /> : <EyeIcon />}
-                </button>
-              </div>
+              <SecretInput
+                generate
+                value={secret}
+                onChange={e => setSecret(e.target.value)}
+                placeholder="HMAC-SHA256 signing key"
+                className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5
+                           text-sm text-gray-100 placeholder-gray-600
+                           focus:outline-none focus:border-amber-500/60 transition-colors"
+              />
               <p className="text-xs text-gray-400 mt-1">
                 Sent as <code className="text-amber-600 text-[10px]">X-VidaPulse-Signature</code> header with each request.
               </p>
@@ -353,24 +345,14 @@ export default function WebhookSettings() {
             {/* API Token */}
             <div>
               <label className="block text-xs text-gray-400 mb-1.5">API Token (optional)</label>
-              <div className="relative">
-                <input
-                  type={showApiToken ? 'text' : 'password'}
-                  value={apiToken}
-                  onChange={e => setApiToken(e.target.value)}
-                  placeholder="Sent as api_token query param"
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 pr-10
-                             text-sm text-gray-100 placeholder-gray-600
-                             focus:outline-none focus:border-amber-500/60 transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiToken(s => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-400"
-                >
-                  {showApiToken ? <EyeOffIcon /> : <EyeIcon />}
-                </button>
-              </div>
+              <SecretInput
+                value={apiToken}
+                onChange={e => setApiToken(e.target.value)}
+                placeholder="Sent as api_token query param"
+                className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5
+                           text-sm text-gray-100 placeholder-gray-600
+                           focus:outline-none focus:border-amber-500/60 transition-colors"
+              />
               <p className="text-xs text-gray-400 mt-1">
                 Appended as <code className="text-amber-600 text-[10px]">?api_token=…</code> to every contact webhook request.
               </p>
