@@ -91,7 +91,10 @@ router.post('/subscribe', requireAuth, async (req, res, next) => {
       { id: user.id, name: user.name, email: user.email, phone: user.phone },
       plan,
       returnUrl,
-      { founding: isFounding },
+      // Not written onto the user until it is paid (/verify or the
+      // subscription.charged webhook adopts it and cancels the old one), so an
+      // abandoned upgrade checkout never displaces the live subscription.
+      { founding: isFounding, persist: false },
     );
 
     logger.info(`[payments] Subscription ${subscriptionId} created for user ${user.id} (${plan}${isFounding ? ' founding $59' : ''})`);
@@ -149,17 +152,27 @@ router.post('/verify', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'Payment verification failed' });
     }
 
-    // 2. Confirm the subscription belongs to the calling user (set at creation).
+    // 2. Confirm the subscription belongs to the calling user: its notes carry
+    //    the user_id it was created for (older subs: stored on the user row).
     const { rows: uRows } = await pool.query(
       `SELECT u.razorpay_subscription_id, p.name AS current_plan
        FROM users u JOIN plans p ON p.id = u.plan_id
        WHERE u.id = $1`,
       [req.user.id]
     );
-    if (uRows[0]?.razorpay_subscription_id !== razorpay_subscription_id) {
+    let subEntity = null;
+    try { subEntity = await razorpay.fetchSubscription(razorpay_subscription_id); }
+    catch (e) { logger.warn(`[payments] /verify fetchSubscription failed: ${e.message}`); }
+    const ownedByNotes = String(subEntity?.notes?.user_id || '') === String(req.user.id);
+    const ownedByRow   = uRows[0]?.razorpay_subscription_id === razorpay_subscription_id;
+    if (!ownedByNotes && !ownedByRow) {
       logger.warn(`[payments] /verify subscription not owned by user=${req.user.id}`);
       return res.status(403).json({ error: 'Subscription does not belong to this account' });
     }
+
+    // 2b. The paid subscription becomes the account's subscription; on an
+    //     upgrade the previous one is cancelled so the customer is not billed twice.
+    await _reconcileSubscription(req.user.id, razorpay_subscription_id, subEntity?.paid_count ?? 1);
 
     // 3. Idempotency: if the webhook already upgraded this user, just confirm.
     const PLAN_ORDER = { free: 0, starter: 1, pro: 2, admin_lifetime: 3 };
@@ -542,6 +555,16 @@ async function _handleSubscriptionCharged(body, res) {
     });
   }
 
+  // Which subscription is the account's? A first charge adopts the new one
+  // (and cancels the one it replaces); a renewal of a stray old subscription
+  // is cancelled and must not change the plan.
+  if (subscriptionId) {
+    const verdict = await _reconcileSubscription(userId, subscriptionId, subscriptionEntity.paid_count);
+    if (verdict === 'stray') {
+      return res.json({ ok: true, stray: true, cancelled: subscriptionId });
+    }
+  }
+
   // Determine the plan from the subscription if not in notes
   let resolvedPlan = planKey;
   if (!resolvedPlan || !['starter','pro'].includes(resolvedPlan)) {
@@ -563,10 +586,9 @@ async function _handleSubscriptionCharged(body, res) {
     `UPDATE users
      SET plan_expires_at          = GREATEST(COALESCE(plan_expires_at, NOW()), NOW()) + INTERVAL '30 days',
          plan_enrolled_at         = COALESCE(plan_enrolled_at, NOW()),
-         razorpay_subscription_id = COALESCE(razorpay_subscription_id, $2),
          updated_at               = NOW()
      WHERE id = $1`,
-    [userId, subscriptionId]
+    [userId]
   );
 
   // Also ensure the plan itself is set (in case of re-activation after expiry)
@@ -656,7 +678,7 @@ async function _handleSubscriptionEnded(body, eventType, res) {
     // The daily cron job will downgrade them to free when it passes.
     // Only clear it when the ended subscription IS the user's current one, so
     // cancelling an old subscription after an upgrade never wipes the new one.
-    await pool.query(
+    const { rowCount: wasCurrent } = await pool.query(
       `UPDATE users
        SET razorpay_subscription_id = NULL,
            updated_at               = NOW()
@@ -664,9 +686,10 @@ async function _handleSubscriptionEnded(body, eventType, res) {
       [userId, subscriptionId]
     );
 
-    // Admin billing tests emit their own lifecycle events (cancel /
-    // downgrade / upgrade), so the gateway echo must not send a second email.
-    if (notes.test !== '1') {
+    // Only the CURRENT subscription ending is news to the customer: one that
+    // was replaced by an upgrade ends silently. Admin billing tests emit their
+    // own lifecycle events, so their gateway echo is skipped too.
+    if (wasCurrent > 0 && notes.test !== '1') {
       emitEvent(userId, 'subscription_cancelled', null, {
         razorpay_subscription_id: subscriptionId || '',
         event_type               : eventType,
@@ -736,6 +759,55 @@ async function _upgradePlan(userId, planKey, amountPaise, razorpayPaymentId, eve
     razorpay_payment_id: razorpayPaymentId || '',
     amount_inr         : amountPaise ? (amountPaise / 100).toFixed(2) : '',
   });
+}
+
+/**
+ * Make a PAID subscription the account's subscription, retiring the one it
+ * replaces, so a customer is never billed for two plans at once.
+ *
+ *   'current' : it already is the account's subscription (normal renewal)
+ *   'adopted' : it is now; the previous one (if any) was cancelled
+ *   'stray'   : a renewal of an OLD subscription while the account's own is
+ *               still live; the stray one is cancelled, the account untouched
+ *
+ * A first charge (paid_count <= 1) is a new purchase or upgrade, so it always
+ * wins. A later charge on a different subscription only wins when the stored
+ * one is dead (e.g. an unpaid checkout left on the row by older code).
+ */
+async function _reconcileSubscription(userId, subscriptionId, paidCount) {
+  const { rows } = await pool.query(
+    `SELECT razorpay_subscription_id FROM users WHERE id = $1`, [userId]
+  );
+  const stored = rows[0]?.razorpay_subscription_id || null;
+  if (stored === subscriptionId) return 'current';
+
+  const firstCharge = paidCount == null || Number(paidCount) <= 1;
+  if (stored && !firstCharge) {
+    let storedStatus = null;
+    try { storedStatus = (await razorpay.fetchSubscription(stored))?.status || null; }
+    catch (e) { logger.warn(`[payments] reconcile: fetch ${stored} failed: ${e.message}`); }
+    if (['active', 'authenticated', 'pending', 'halted'].includes(storedStatus)) {
+      logger.warn(`[payments] reconcile: stray renewal on ${subscriptionId} for user ${userId} (current ${stored} is ${storedStatus}); cancelling the stray one`);
+      try { await razorpay.cancelSubscription(subscriptionId); }
+      catch (e) { logger.error(`[payments] reconcile: cancel stray ${subscriptionId} failed: ${e.message}`); }
+      return 'stray';
+    }
+  }
+
+  await pool.query(
+    `UPDATE users SET razorpay_subscription_id = $1, updated_at = NOW() WHERE id = $2`,
+    [subscriptionId, userId]
+  );
+  if (stored) {
+    try {
+      await razorpay.cancelSubscription(stored);
+      logger.info(`[payments] reconcile: user ${userId} now on ${subscriptionId}; cancelled previous ${stored}`);
+    } catch (e) {
+      // Already cancelled / never paid: nothing is billing on it, safe to ignore.
+      logger.warn(`[payments] reconcile: cancel previous ${stored} failed: ${e.message}`);
+    }
+  }
+  return 'adopted';
 }
 
 /**
