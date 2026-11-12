@@ -49,6 +49,7 @@ const EVENTS = [
 
   // ── Billing / subscription (platform) ─────────────────────────────────────
   { key: 'plan_upgraded',             display_name: 'Plan Upgraded',           description: 'A payment confirmed a plan change.',                                    category: 'Billing',        scope: 'platform', frequency: 'many', payload_schema: { plan: 'string' } },
+  { key: 'plan_downgraded',           display_name: 'Plan Downgraded',         description: 'A paid plan was moved down to a lower paid plan.',                     category: 'Billing',        scope: 'platform', frequency: 'many', payload_schema: { old_plan: 'string', new_plan: 'string' } },
   { key: 'plan_expired',              display_name: 'Plan Expired',            description: 'A paid plan reached its expiry.',                                       category: 'Billing',        scope: 'platform', frequency: 'many', payload_schema: {} },
   { key: 'subscription_payment_failed', display_name: 'Payment Failed',        description: 'A subscription payment attempt failed.',                                category: 'Billing',        scope: 'platform', frequency: 'many', payload_schema: {} },
   { key: 'subscription_cancelled',    display_name: 'Subscription Cancelled',  description: 'A subscription was cancelled.',                                         category: 'Billing',        scope: 'platform', frequency: 'many', payload_schema: {} },

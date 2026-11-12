@@ -30,6 +30,11 @@ const PLAN_DEFS = {
   // Founding-member price for Growth — first 100 payers lock $59/mo for life.
   // The user's VidaPulse plan stays 'pro'; only the Razorpay plan (price) differs.
   pro_founding: { amount: 5900, displayName: 'VidaPulse Growth (Founding)' },
+  // Super-admin billing tests: real Razorpay subscriptions at Rs 1/month (100
+  // paise, INR) so the whole subscribe / upgrade / cancel path can be exercised
+  // with real money. Only the admin billing-test endpoints ever use these.
+  starter_test: { amount: 100, currency: 'INR', displayName: 'VidaPulse Starter (Rs 1 test)' },
+  pro_test    : { amount: 100, currency: 'INR', displayName: 'VidaPulse Growth (Rs 1 test)'  },
 };
 
 // ─── Low-level HTTP helper ────────────────────────────────────────────────────
@@ -180,7 +185,7 @@ async function getOrCreatePlan(planKey) {
     item    : {
       name    : def.displayName,
       amount  : def.amount,
-      currency: PLAN_CURRENCY,
+      currency: def.currency || PLAN_CURRENCY,
     },
   });
 
@@ -220,8 +225,12 @@ async function createSubscription(user, planKey, returnUrl, options = {}) {
   // Founding members get the $59 'pro_founding' Razorpay plan while keeping
   // their VidaPulse plan key = 'pro'. Because a Razorpay subscription is bound
   // to its plan, every renewal stays $59 — that IS the lifetime price lock.
-  const founding      = options.founding === true && planKey === 'pro';
-  const razorpayPlan  = founding ? 'pro_founding' : planKey;
+  // options.test → the Rs 1 '<plan>_test' Razorpay plan (super-admin billing
+  // tests). options.persist === false → do not write the subscription onto the
+  // user row yet; the caller does that once the payment is verified.
+  const test          = options.test === true;
+  const founding      = !test && options.founding === true && planKey === 'pro';
+  const razorpayPlan  = test ? `${planKey}_test` : (founding ? 'pro_founding' : planKey);
 
   const [customerId, planId] = await Promise.all([
     getOrCreateCustomer(user),
@@ -246,6 +255,7 @@ async function createSubscription(user, planKey, returnUrl, options = {}) {
       user_id : user.id,
       plan    : planKey,               // always the VidaPulse plan key ('pro')
       ...(founding ? { founding: '1' } : {}),
+      ...(test ? { test: '1' } : {}),
     },
   });
 
@@ -253,7 +263,7 @@ async function createSubscription(user, planKey, returnUrl, options = {}) {
   const paymentUrl     = subscription.short_url;
 
   // Store subscription ID on the user so we can cancel/check it later
-  await pool.query(
+  if (options.persist !== false) await pool.query(
     `UPDATE users
      SET    razorpay_subscription_id = $1,
             updated_at               = NOW()
@@ -288,10 +298,16 @@ async function fetchPayment(paymentId) {
   return _razorpayRequest('GET', `/v1/payments/${paymentId}`);
 }
 
+/** Fetch a Razorpay subscription entity (status, plan_id, notes). */
+async function fetchSubscription(subscriptionId) {
+  return _razorpayRequest('GET', `/v1/subscriptions/${subscriptionId}`);
+}
+
 module.exports = {
   getOrCreateCustomer,
   getOrCreatePlan,
   createSubscription,
   cancelSubscription,
   fetchPayment,
+  fetchSubscription,
 };

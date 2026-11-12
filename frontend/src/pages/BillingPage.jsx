@@ -4,6 +4,7 @@ import { useUpgrade } from '../contexts/UpgradeContext';
 import AppLayout      from '../components/AppLayout';
 import api            from '../lib/api';
 import { getLockColor } from '../components/PlanTierBadge';
+import AdminBillingTest from '../components/AdminBillingTest';
 
 /**
  * BillingPage — /billing
@@ -54,6 +55,8 @@ export default function BillingPage() {
         <div className="max-w-3xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-10">
 
           <h1 className="text-xl font-bold text-gray-50 mb-8">Billing</h1>
+
+          {isAdmin && <AdminBillingTest />}
 
           {/* ── Current Plan ─────────────────────────────────────── */}
           <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 mb-8">
