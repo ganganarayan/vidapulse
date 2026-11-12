@@ -5,19 +5,23 @@ import { formatIST } from '../lib/date';
 /**
  * AdminBillingTest: super-admin only, shown at the top of /billing.
  *
- * Runs the REAL billing lifecycle at Rs 1 against a non-admin test account:
- * one row per plan with Subscribe (Rs 1), Upgrade (Rs 1), Downgrade, Cancel.
+ * Runs the REAL billing lifecycle against a non-admin test account at a small,
+ * distinct INR amount per plan (Starter Rs 1.10, Growth Rs 1.20), renewing
+ * monthly until cancelled. One row per plan: Subscribe, Upgrade (both charge
+ * the plan amount now), Downgrade (no charge now: the same subscription
+ * switches plan and renews at the lower amount), Cancel.
  * Payments open real Razorpay Checkout; activation goes through the same
  * server helpers as a customer purchase, so the same CRM emails fire and the
  * same plan gates open/close. Log in as the test account to see the features.
  */
 
 const PLANS = [
-  { key: 'starter', label: 'Starter', rank: 1 },
-  { key: 'pro',     label: 'Growth',  rank: 2 },
+  { key: 'starter', label: 'Starter', rank: 1, price: '₹1.10' },
+  { key: 'pro',     label: 'Growth',  rank: 2, price: '₹1.20' },
 ];
 const RANK = { free: 0, starter: 1, pro: 2 };
 const PLAN_LABEL = { free: 'Free', starter: 'Starter', pro: 'Growth' };
+const PRICE = Object.fromEntries(PLANS.map((p) => [p.key, p.price]));
 
 function loadCheckout() {
   return new Promise((resolve, reject) => {
@@ -55,7 +59,7 @@ export default function AdminBillingTest() {
       const rzp = new window.Razorpay({
         key: data.keyId,
         subscription_id: data.subscriptionId,
-        name: 'VidaPulse (Rs 1 test)',
+        name: 'VidaPulse (test)',
         description: `${PLAN_LABEL[plan]} test subscription for ${target.email}`,
         prefill: { email: target.email, name: target.name || '' },
         theme: { color: '#F59E0B' },
@@ -68,7 +72,7 @@ export default function AdminBillingTest() {
               razorpay_signature: r?.razorpay_signature,
             });
             setTarget(v.user);
-            setMsg({ ok: true, text: `Paid Rs 1. ${target.email} is now on ${PLAN_LABEL[v.plan]}.` +
+            setMsg({ ok: true, text: `Paid ${PRICE[plan]}. ${target.email} is now on ${PLAN_LABEL[v.plan]}, renewing ${PRICE[plan]} a month.` +
               (v.old_subscription !== 'none' ? ` Previous subscription: ${v.old_subscription}.` : '') });
           } catch (e) { setMsg({ ok: false, text: `Paid, but activation failed: ${err(e)}` }); }
           finally { setBusy(''); }
@@ -82,7 +86,7 @@ export default function AdminBillingTest() {
 
   async function change(plan, action) {
     const verb = action === 'cancel' ? `Cancel ${PLAN_LABEL[plan]} and drop ${target.email} to Free now?`
-                                     : `Downgrade ${target.email} to ${PLAN_LABEL[plan]} (no charge, current subscription is cancelled)?`;
+                                     : `Downgrade ${target.email} to ${PLAN_LABEL[plan]}? No charge now; the subscription switches and renews at ${PRICE[plan]} a month until cancelled.`;
     if (!window.confirm(verb)) return;
     setBusy(`${action}:${plan}`); setMsg(null);
     try {
@@ -98,10 +102,11 @@ export default function AdminBillingTest() {
 
   return (
     <div className="bg-gray-800 border border-amber-500/40 rounded-xl p-5 mb-8">
-      <p className="text-xs text-amber-400 uppercase tracking-wider font-semibold mb-1">Super admin: Rs 1 billing tests</p>
+      <p className="text-xs text-amber-400 uppercase tracking-wider font-semibold mb-1">Super admin: billing tests</p>
       <p className="text-xs text-gray-400 mb-4">
-        Real Razorpay payments of Rs 1 against a non-admin test account. Emails, plan gates and
-        cancellations behave exactly as for a customer. Log in as the test account to see features open and close.
+        Real Razorpay payments (Starter ₹1.10, Growth ₹1.20 a month) against a non-admin test account, renewing
+        monthly until cancelled. Emails, plan gates and cancellations behave exactly as for a customer. Log in as
+        the test account to see features open and close. Pay by card: Razorpay only allows Downgrade on card subscriptions.
       </p>
 
       <div className="flex gap-2 mb-4">
@@ -134,12 +139,12 @@ export default function AdminBillingTest() {
           const canCan  = on && target.plan === p.key;
           return (
             <div key={p.key} className="flex items-center justify-between gap-3 px-4 py-3 flex-wrap">
-              <span className="text-sm font-semibold text-gray-100 w-20">{p.label}</span>
+              <span className="text-sm font-semibold text-gray-100 w-32">{p.label} <span className="text-xs font-normal text-gray-400">{p.price}/mo</span></span>
               <div className="flex gap-2 flex-wrap">
                 <button disabled={!canSub || !!busy} onClick={() => pay(p.key, 'subscribe')}
-                  className={`${btn} border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10`}>Subscribe Rs 1</button>
+                  className={`${btn} border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10`}>Subscribe {p.price}</button>
                 <button disabled={!canUp || !!busy} onClick={() => pay(p.key, 'upgrade')}
-                  className={`${btn} border-sky-500/50 text-sky-300 hover:bg-sky-500/10`}>Upgrade Rs 1</button>
+                  className={`${btn} border-sky-500/50 text-sky-300 hover:bg-sky-500/10`}>Upgrade {p.price}</button>
                 <button disabled={!canDown || !!busy} onClick={() => change(p.key, 'downgrade')}
                   className={`${btn} border-amber-500/50 text-amber-300 hover:bg-amber-500/10`}>Downgrade</button>
                 <button disabled={!canCan || !!busy} onClick={() => change(p.key, 'cancel')}

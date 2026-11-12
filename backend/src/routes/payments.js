@@ -496,7 +496,12 @@ async function _handleSubscriptionCharged(body, res) {
 
   // User identification: prefer notes.user_id, fall back to email match
   let userId  = notes.user_id ? String(notes.user_id).trim() : null;
-  const planKey = (notes.plan || '').toLowerCase().trim() || null;
+  // Plan: the subscription's CURRENT Razorpay plan wins over notes.plan, so a
+  // subscription switched to a lower plan renews as that lower plan.
+  let fromPlanId = null;
+  try { fromPlanId = await razorpay.planKeyForRazorpayPlan(subscriptionEntity.plan_id); }
+  catch (e) { logger.warn(`[payments] plan_id lookup failed: ${e.message}`); }
+  const planKey = fromPlanId || (notes.plan || '').toLowerCase().trim() || null;
 
   if (!userId && paymentEntity.email) {
     const { rows } = await pool.query(
@@ -659,7 +664,7 @@ async function _handleSubscriptionEnded(body, eventType, res) {
       [userId, subscriptionId]
     );
 
-    // Rs 1 admin billing tests emit their own lifecycle events (cancel /
+    // Admin billing tests emit their own lifecycle events (cancel /
     // downgrade / upgrade), so the gateway echo must not send a second email.
     if (notes.test !== '1') {
       emitEvent(userId, 'subscription_cancelled', null, {
@@ -783,10 +788,13 @@ async function _logPayment({
 // ─────────────────────────────────────────────────────────────────────────────
 // Super-admin billing tests: /api/payments/admin-test/*   (admin only)
 //
-// Real Razorpay subscriptions at Rs 1/month against a chosen NON-admin test
-// account, so the admin can run the true lifecycle with real money:
-//   subscribe (free -> plan, Rs 1) · upgrade (lower paid -> plan, Rs 1)
-//   downgrade (higher -> plan, no charge) · cancel (plan -> free, immediate)
+// Real Razorpay subscriptions at a distinct small INR amount per plan
+// (Starter Rs 1.10, Growth Rs 1.20) against a chosen NON-admin test account,
+// renewing monthly until cancelled:
+//   subscribe (free -> plan, paid now) · upgrade (lower paid -> plan, paid now,
+//   old subscription cancelled) · downgrade (higher -> plan, no charge now: the
+//   same subscription switches plan and renews at the lower amount)
+//   cancel (plan -> free, immediate)
 // Activation goes through the same _upgradePlan / _logPayment helpers as a
 // real purchase, so the same plan_upgraded event (CRM email) fires and the
 // same plan gates open. Downgrade / cancel emit plan_downgraded /
@@ -844,7 +852,7 @@ adminTest.get('/user', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// Create the Rs 1 subscription. mode 'subscribe' needs the account on free;
+// Create the test subscription. mode 'subscribe' needs the account on free;
 // mode 'upgrade' needs it on a LOWER paid plan. Nothing is written to the user
 // until /verify confirms the payment.
 adminTest.post('/subscribe', async (req, res) => {
@@ -869,7 +877,7 @@ adminTest.post('/subscribe', async (req, res) => {
       { id: target.id, name: target.name, email: target.email, phone: target.phone },
       plan, null, { test: true, persist: false },
     );
-    logger.info(`[payments] admin-test ${mode} ${plan} Rs 1 sub ${subscriptionId} for ${target.email} by admin ${req.user.email}`);
+    logger.info(`[payments] admin-test ${mode} ${plan} test sub ${subscriptionId} for ${target.email} by admin ${req.user.email}`);
     return res.json({ subscriptionId, paymentUrl, keyId: env.RAZORPAY_KEY_ID, user: _publicTarget(target) });
   } catch (err) {
     logger.error(`[payments] admin-test /subscribe error: ${err.message}`);
@@ -897,7 +905,7 @@ adminTest.post('/verify', async (req, res) => {
     const { target, error } = await _loadTestTarget(email);
     if (error) return res.status(error[0]).json({ error: error[1] });
 
-    // The subscription must be a Rs 1 test sub created for THIS account + plan.
+    // The subscription must be a test sub created for THIS account + plan.
     const sub = await razorpay.fetchSubscription(razorpay_subscription_id);
     const n = sub?.notes || {};
     if (n.test !== '1' || String(n.user_id) !== String(target.id) || n.plan !== plan) {
@@ -910,7 +918,7 @@ adminTest.post('/verify', async (req, res) => {
       [razorpay_subscription_id, target.id]
     );
 
-    let amountPaise = 100, currency = 'INR', paymentMethod = null;
+    let amountPaise = razorpay.TEST_AMOUNT_PAISE[plan], currency = 'INR', paymentMethod = null;
     try {
       const pay = await razorpay.fetchPayment(razorpay_payment_id);
       amountPaise   = parseInt(pay.amount || 0, 10) || amountPaise;
@@ -946,8 +954,9 @@ adminTest.post('/verify', async (req, res) => {
   }
 });
 
-// Downgrade to a LOWER paid plan, no charge. The current subscription is
-// cancelled and the account keeps the lower plan until its paid-through date.
+// Downgrade to a LOWER paid plan, no charge now. The SAME Razorpay
+// subscription is switched to the lower test plan (takes effect at cycle end)
+// and keeps renewing at the lower amount until cancelled. Features drop now.
 adminTest.post('/downgrade', async (req, res, next) => {
   try {
     const { email, plan } = req.body || {};
@@ -957,18 +966,28 @@ adminTest.post('/downgrade', async (req, res, next) => {
     if (!((TEST_RANK[target.plan] ?? 0) > TEST_RANK[plan])) {
       return res.status(400).json({ error: `Downgrade needs a higher plan. ${target.email} is on ${target.plan}` });
     }
+    if (!target.razorpay_subscription_id) {
+      return res.status(400).json({ error: `${target.email} has no active subscription to switch. Use Cancel, or Subscribe again` });
+    }
+
+    try {
+      await razorpay.switchSubscriptionPlan(target.razorpay_subscription_id, `${plan}_test`);
+    } catch (e) {
+      logger.warn(`[payments] admin-test downgrade switch failed: ${e.message}`);
+      return res.status(502).json({
+        error: `Razorpay would not switch the subscription (${e.message}). Razorpay only allows plan changes on card-paid subscriptions. Nothing was changed.`,
+      });
+    }
 
     const { rows: [planRow] } = await pool.query(`SELECT id FROM plans WHERE name = $1`, [plan]);
-    const prevSub = target.razorpay_subscription_id;
     const { rows: [u] } = await pool.query(
       `UPDATE users
-       SET plan_id = $1, razorpay_subscription_id = NULL,
+       SET plan_id = $1,
            plan_expires_at = COALESCE(plan_expires_at, NOW() + INTERVAL '30 days'),
            updated_at = NOW()
        WHERE id = $2 RETURNING plan_expires_at`,
       [planRow.id, target.id]
     );
-    const subResult = await _cancelQuietly(prevSub);
 
     emitEvent(target.id, 'plan_downgraded', null, {
       old_plan       : target.plan,
@@ -976,9 +995,9 @@ adminTest.post('/downgrade', async (req, res, next) => {
       plan_expires_at: u?.plan_expires_at ? new Date(u.plan_expires_at).toISOString() : '',
       via            : 'admin_test',
     });
-    logger.info(`[payments] admin-test downgrade ${target.email} ${target.plan} -> ${plan} (sub: ${subResult}) by ${req.user.email}`);
+    logger.info(`[payments] admin-test downgrade ${target.email} ${target.plan} -> ${plan} (sub switched at cycle end) by ${req.user.email}`);
     const { target: after } = await _loadTestTarget(email);
-    return res.json({ ok: true, plan, subscription: subResult, user: _publicTarget(after) });
+    return res.json({ ok: true, plan, subscription: 'switched, renews at the lower amount from the next cycle', user: _publicTarget(after) });
   } catch (err) { next(err); }
 });
 

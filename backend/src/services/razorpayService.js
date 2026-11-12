@@ -30,11 +30,12 @@ const PLAN_DEFS = {
   // Founding-member price for Growth — first 100 payers lock $59/mo for life.
   // The user's VidaPulse plan stays 'pro'; only the Razorpay plan (price) differs.
   pro_founding: { amount: 5900, displayName: 'VidaPulse Growth (Founding)' },
-  // Super-admin billing tests: real Razorpay subscriptions at Rs 1/month (100
-  // paise, INR) so the whole subscribe / upgrade / cancel path can be exercised
-  // with real money. Only the admin billing-test endpoints ever use these.
-  starter_test: { amount: 100, currency: 'INR', displayName: 'VidaPulse Starter (Rs 1 test)' },
-  pro_test    : { amount: 100, currency: 'INR', displayName: 'VidaPulse Growth (Rs 1 test)'  },
+  // Super-admin billing tests: real Razorpay subscriptions in INR at a distinct
+  // small amount per plan (Starter Rs 1.10, Growth Rs 1.20) so each plan is
+  // recognisable on the statement. They renew monthly until cancelled. Only
+  // the admin billing-test endpoints ever use these.
+  starter_test: { amount: 110, currency: 'INR', displayName: 'VidaPulse Starter (Rs 1.10 test)' },
+  pro_test    : { amount: 120, currency: 'INR', displayName: 'VidaPulse Growth (Rs 1.20 test)'  },
 };
 
 // ─── Low-level HTTP helper ────────────────────────────────────────────────────
@@ -169,10 +170,13 @@ async function getOrCreatePlan(planKey) {
 
   // 2. Check DB cache
   const { rows } = await pool.query(
-    `SELECT razorpay_plan_id FROM razorpay_plans WHERE plan_name = $1`,
+    `SELECT razorpay_plan_id, amount_paise FROM razorpay_plans WHERE plan_name = $1`,
     [planKey]
   );
-  if (rows.length > 0) {
+  // Test plans: a cached plan at a different amount is stale (the test price
+  // changed), so fall through and create one at the current amount.
+  const staleTest = planKey.endsWith('_test') && rows.length > 0 && Number(rows[0].amount_paise) !== def.amount;
+  if (rows.length > 0 && !staleTest) {
     logger.debug(`[razorpay] Found cached plan ID ${rows[0].razorpay_plan_id} for ${planKey}`);
     return rows[0].razorpay_plan_id;
   }
@@ -195,7 +199,8 @@ async function getOrCreatePlan(planKey) {
   await pool.query(
     `INSERT INTO razorpay_plans (plan_name, razorpay_plan_id, amount_paise)
      VALUES ($1, $2, $3)
-     ON CONFLICT (plan_name) DO UPDATE SET razorpay_plan_id = EXCLUDED.razorpay_plan_id`,
+     ON CONFLICT (plan_name) DO UPDATE SET razorpay_plan_id = EXCLUDED.razorpay_plan_id,
+                                           amount_paise     = EXCLUDED.amount_paise`,
     [planKey, planId, def.amount]
   );
 
@@ -298,6 +303,35 @@ async function fetchPayment(paymentId) {
   return _razorpayRequest('GET', `/v1/payments/${paymentId}`);
 }
 
+/**
+ * Move a subscription to another plan WITHOUT charging now: the change takes
+ * effect at the end of the current cycle, and every renewal after that bills
+ * the new plan's amount. Razorpay only allows this for card-paid subscriptions.
+ */
+async function switchSubscriptionPlan(subscriptionId, razorpayPlanKey) {
+  const planId = await getOrCreatePlan(razorpayPlanKey);
+  logger.info(`[razorpay] Switching subscription ${subscriptionId} to ${razorpayPlanKey} (${planId}) at cycle end`);
+  return _razorpayRequest('PATCH', `/v1/subscriptions/${subscriptionId}`, {
+    plan_id           : planId,
+    schedule_change_at: 'cycle_end',
+    customer_notify   : 0,
+  });
+}
+
+/** Map a Razorpay plan_id back to the VidaPulse plan key ('starter' | 'pro'), or null. */
+async function planKeyForRazorpayPlan(razorpayPlanId) {
+  if (!razorpayPlanId) return null;
+  if (env.RAZORPAY_PLAN_ID_STARTER && razorpayPlanId === env.RAZORPAY_PLAN_ID_STARTER) return 'starter';
+  if (env.RAZORPAY_PLAN_ID_PRO     && razorpayPlanId === env.RAZORPAY_PLAN_ID_PRO)     return 'pro';
+  const { rows } = await pool.query(
+    `SELECT plan_name FROM razorpay_plans WHERE razorpay_plan_id = $1 LIMIT 1`, [razorpayPlanId]
+  );
+  const name = rows[0]?.plan_name;
+  if (!name) return null;
+  const base = name.replace(/_(test|founding)$/, '');
+  return ['starter', 'pro'].includes(base) ? base : null;
+}
+
 /** Fetch a Razorpay subscription entity (status, plan_id, notes). */
 async function fetchSubscription(subscriptionId) {
   return _razorpayRequest('GET', `/v1/subscriptions/${subscriptionId}`);
@@ -310,4 +344,7 @@ module.exports = {
   cancelSubscription,
   fetchPayment,
   fetchSubscription,
+  switchSubscriptionPlan,
+  planKeyForRazorpayPlan,
+  TEST_AMOUNT_PAISE: { starter: PLAN_DEFS.starter_test.amount, pro: PLAN_DEFS.pro_test.amount },
 };
