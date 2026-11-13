@@ -116,7 +116,7 @@ export default function AdminPlatformKeys({ group, title }) {
                 )}
               </div>
               {it.url && (() => {
-                const full = `${window.location.origin}${it.url}`;
+                const full = /^https?:\/\//.test(it.url) ? it.url : `${window.location.origin}${it.url}`;
                 return (
                   <div className="mt-2 flex items-center gap-2 flex-wrap">
                     <span className="text-[11px] text-gray-400">Webhook URL:</span>
