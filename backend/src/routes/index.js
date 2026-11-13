@@ -202,6 +202,15 @@ router.get('/upgrade', requireAuth, async (req, res, next) => {
   }
 });
 
+// ── GET /api/public-config ───────────────────────────────────────────────
+// Public, non-secret runtime config for the frontend. The platform Meta pixel
+// is managed in the app now, so the SPA reads it here instead of at build time.
+router.get('/public-config', (_req, res) => {
+  const env = require('../config/env');
+  res.set('Cache-Control', 'no-store');
+  res.json({ meta_pixel_id: env.META_PIXEL_ID || null });
+});
+
 // ── GET /api/version ─────────────────────────────────────────────────────
 // Public. Returns the server's startup timestamp.
 // Frontend polls this every 60 s; when startedAt changes (new deploy →

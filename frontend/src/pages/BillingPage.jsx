@@ -5,6 +5,7 @@ import AppLayout      from '../components/AppLayout';
 import api            from '../lib/api';
 import { getLockColor } from '../components/PlanTierBadge';
 import AdminBillingTest from '../components/AdminBillingTest';
+import AdminPlatformKeys from '../components/AdminPlatformKeys';
 
 /**
  * BillingPage — /billing
@@ -56,6 +57,7 @@ export default function BillingPage() {
 
           <h1 className="text-xl font-bold text-gray-50 mb-8">Billing</h1>
 
+          {isAdmin && <AdminPlatformKeys group="billing" title="Super admin: Razorpay keys" />}
           {isAdmin && <AdminBillingTest />}
 
           {/* ── Current Plan ─────────────────────────────────────── */}

@@ -20,6 +20,8 @@
 // env.js MUST be the first import — it validates all required env vars
 // and exits immediately if any are missing, before any other code runs.
 const env    = require('./config/env');
+// App-managed keys (Razorpay, Google OAuth, JWT, ...): installs env getters.
+const platformSettings   = require('./services/platformSettings');
 const logger = require('./config/logger');
 
 const express      = require('express');
@@ -125,6 +127,9 @@ app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 // ── Cookie parsing ────────────────────────────────────────────
 // Required for reading httpOnly JWT cookie (vp_token) and OAuth state cookie
 app.use(cookieParser());
+
+// Hold requests until app-managed keys are loaded (max 15 s; health exempt).
+app.use(platformSettings.gate);
 
 // ── Body parsing ──────────────────────────────────────────────
 // verify captures the raw Buffer so Razorpay webhook signature
@@ -462,6 +467,9 @@ async function initDatabaseAndWorkers(attempt = 1) {
 
     logger.info('[server] Step 3/4 — Running database migrations...');
     await runMigrations();
+
+    // App-managed keys (needs the platform_settings table from migrations).
+    await platformSettings.load();
 
     if (!_workersStarted) {
       logger.info('[server] Step 4/4 — Starting background workers...');

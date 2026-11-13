@@ -14,10 +14,11 @@
 // Load .env file in development (Railway injects vars directly in production)
 require('dotenv').config();
 
+// JWT_SECRET and WEBHOOK_SECRET are no longer required here: they can be
+// managed in the app (services/platformSettings.js), which generates them if
+// they are set nowhere. When the env var is set it is still used as fallback.
 const REQUIRED = [
   'DATABASE_URL',
-  'WEBHOOK_SECRET',
-  'JWT_SECRET',
   'APP_URL',
 ];
 
@@ -47,8 +48,8 @@ module.exports = {
   DATABASE_URL: process.env.DATABASE_URL,
 
   // Security
-  WEBHOOK_SECRET : process.env.WEBHOOK_SECRET,
-  JWT_SECRET     : process.env.JWT_SECRET,
+  WEBHOOK_SECRET : process.env.WEBHOOK_SECRET || null,
+  JWT_SECRET     : process.env.JWT_SECRET     || null,
   JWT_EXPIRES_IN : process.env.JWT_EXPIRES_IN || '7d',
 
   // OAuth — Google login + signup (free plan self-serve entry point)

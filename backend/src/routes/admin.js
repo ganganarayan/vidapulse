@@ -33,6 +33,7 @@ const env             = require('../config/env');
 const logger          = require('../config/logger');
 const { requireAuth, requireAdmin } = require('../middleware/requireAuth');
 const { emitEvent }   = require('../services/behavioralEventService');
+const platformSettings = require('../services/platformSettings');
 const { purgeUsers }  = require('../services/purgeService');
 const { testWebhook } = require('../services/webhookSender');
 const {
@@ -1086,6 +1087,32 @@ router.get('/purged-accounts', async (req, res, next) => {
 //       total_usd (sum of USD payments in cents/100),
 //       last_amount, last_currency, last_payment_at, payment_count
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// App-managed platform keys (services/platformSettings.js)
+//   GET /api/admin/platform-settings?group=billing|settings
+//   PUT /api/admin/platform-settings/:key   { value }   ('' = fall back to env)
+// Values are returned to the admin so the UI can copy them; the UI keeps them
+// masked. Logs record which key changed and who changed it, never the value.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/platform-settings', (req, res) => {
+  const group = ['billing', 'settings'].includes(req.query.group) ? req.query.group : null;
+  res.set('Cache-Control', 'no-store');
+  return res.json({ settings: platformSettings.list(group) });
+});
+
+router.put('/platform-settings/:key', async (req, res, next) => {
+  try {
+    const key = String(req.params.key || '');
+    const item = await platformSettings.set(key, req.body?.value, req.user.id);
+    logger.info(`[admin] platform setting ${key} ${item.source === 'app' ? 'saved' : 'cleared'} by ${req.user.email}`);
+    return res.json({ setting: item, signed_out: key === 'JWT_SECRET' && item.source === 'app' });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+});
 
 router.get('/revenue', async (req, res, next) => {
   try {

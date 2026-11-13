@@ -5,6 +5,7 @@ import { useToast }     from '../contexts/ToastContext';
 import { useUpgrade }   from '../contexts/UpgradeContext';
 import api              from '../lib/api';
 import AppLayout        from '../components/AppLayout';
+import AdminPlatformKeys from '../components/AdminPlatformKeys';
 
 /**
  * AccountSettings
@@ -30,6 +31,8 @@ export default function AccountSettings() {
         <div className="max-w-2xl w-full mx-auto px-6 py-10">
 
           <h1 className="text-xl font-bold text-gray-50 mb-8">Account Settings</h1>
+
+          {isAdmin && <AdminPlatformKeys group="settings" title="Super admin: platform keys" />}
 
           {/* ── Profile ───────────────────────────────────────── */}
           <Section title="Profile">

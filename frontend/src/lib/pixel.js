@@ -1,7 +1,9 @@
 /**
  * pixel.js — Meta Pixel (fbq) helper
  *
- * Reads VITE_META_PIXEL_ID at build time.
+ * The pixel ID is managed in the app (super admin > Settings) and read at
+ * runtime from GET /api/public-config; VITE_META_PIXEL_ID is only a fallback
+ * when that call fails. Events fired before the ID arrives are queued.
  * All functions are silent no-ops when the ID is blank — safe to ship
  * before the pixel ID is configured.
  *
@@ -12,9 +14,37 @@
  *   pixelTrack('Purchase', { value: 999, currency: 'INR' }) ← after paid plan activates
  */
 
-const PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID;
+const FALLBACK_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID;
 
 let initialized = false;
+let started     = false;
+let disabled    = false;   // config says no pixel: drop events
+const pending   = [];      // [method, event, data] fired before init
+
+async function _resolvePixelId() {
+  try {
+    const r = await fetch('/api/public-config', { credentials: 'same-origin' });
+    if (r.ok) {
+      const j = await r.json();
+      return j?.meta_pixel_id || null;
+    }
+  } catch { /* fall through */ }
+  return FALLBACK_PIXEL_ID || null;
+}
+
+function _send(method, event, data) {
+  if (data && Object.keys(data).length > 0) window.fbq(method, event, data);
+  else window.fbq(method, event);
+}
+
+function _fire(method, event, data) {
+  if (disabled) return;
+  if (!initialized || typeof window.fbq !== 'function') {
+    if (pending.length < 50) pending.push([method, event, data]);
+    return;
+  }
+  _send(method, event, data);
+}
 
 /**
  * Injects the Meta Pixel base code and calls fbq('init', PIXEL_ID).
@@ -22,7 +52,17 @@ let initialized = false;
  * No-ops when VITE_META_PIXEL_ID is empty or undefined.
  */
 export function initPixel() {
-  if (!PIXEL_ID || initialized) return;
+  if (started) return;
+  started = true;
+  _resolvePixelId().then((id) => {
+    if (!id) { disabled = true; pending.length = 0; return; }
+    _inject(id);
+    pending.splice(0).forEach(([m, e, d]) => _send(m, e, d));
+  });
+}
+
+function _inject(PIXEL_ID) {
+  if (initialized) return;
 
   // Standard Meta Pixel base snippet (injected dynamically so the pixel
   // ID can come from an env variable rather than being hardcoded in HTML).
@@ -64,12 +104,7 @@ export function initPixel() {
  * @param {object} [data] — optional event parameters
  */
 export function pixelTrack(event, data) {
-  if (!initialized || typeof window.fbq !== 'function') return;
-  if (data && Object.keys(data).length > 0) {
-    window.fbq('track', event, data);
-  } else {
-    window.fbq('track', event);
-  }
+  _fire('track', event, data);
 }
 
 /**
@@ -86,12 +121,7 @@ export function pixelTrack(event, data) {
  * @param {object} [data] — optional event parameters
  */
 export function pixelTrackCustom(event, data) {
-  if (!initialized || typeof window.fbq !== 'function') return;
-  if (data && Object.keys(data).length > 0) {
-    window.fbq('trackCustom', event, data);
-  } else {
-    window.fbq('trackCustom', event);
-  }
+  _fire('trackCustom', event, data);
 }
 
 /** Convenience shorthand: fire a PageView event. */
