@@ -128,6 +128,23 @@ export default function AdminPlatformKeys({ group, title }) {
                   </div>
                 );
               })()}
+              {it.events && (
+                <div className="mt-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] text-gray-400">Tick these events on the webhook:</span>
+                    <button type="button" onClick={() => copyUrl(`${it.key}:events`, it.events.join(', '))}
+                      className={`${btn} border-gray-600 text-gray-300 hover:bg-gray-700`}>
+                      {copied === `${it.key}:events` ? 'Copied' : 'Copy list'}
+                    </button>
+                  </div>
+                  <div className="flex gap-1.5 flex-wrap mt-1.5">
+                    {it.events.map((ev) => (
+                      <code key={ev} className="text-[11px] text-emerald-300 bg-gray-900 border border-gray-700 rounded px-2 py-0.5">{ev}</code>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1">Without these, renewals, cancellations and failed payments never reach the app. Leave the other events unticked.</p>
+                </div>
+              )}
               <p className="text-[11px] text-gray-500 mt-1">{it.help}</p>
             </div>
           );

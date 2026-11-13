@@ -30,7 +30,9 @@ const MANAGED = {
   // ── Billing (Razorpay) ─────────────────────────────────────────────────
   RAZORPAY_KEY_ID         : { group: 'billing',  label: 'Razorpay Key ID',            secret: false, help: 'Razorpay Dashboard > Account & Settings > API Keys (rzp_live_... or rzp_test_...).' },
   RAZORPAY_KEY_SECRET     : { group: 'billing',  label: 'Razorpay Key Secret',        secret: true,  help: 'Shown once by Razorpay when the key is generated.' },
-  RAZORPAY_WEBHOOK_SECRET : { group: 'billing',  label: 'Razorpay Webhook Secret',    secret: true,  generate: true, url: '/api/payments/razorpay', help: 'Must match the secret on the Razorpay webhook that calls the URL above. If you generate a new one here, paste it into Razorpay too.' },
+  RAZORPAY_WEBHOOK_SECRET : { group: 'billing',  label: 'Razorpay Webhook Secret',    secret: true,  generate: true, url: '/api/payments/razorpay',
+                              events: ['subscription.charged', 'subscription.cancelled', 'subscription.completed', 'subscription.halted'],
+                              help: 'Must match the secret on the Razorpay webhook that calls the URL above. If you generate a new one here, paste it into Razorpay too.' },
   RAZORPAY_PLAN_ID_STARTER: { group: 'billing',  label: 'Starter plan ID (optional)', secret: false, help: 'Leave blank to let the app create the plan automatically.' },
   RAZORPAY_PLAN_ID_PRO    : { group: 'billing',  label: 'Growth plan ID (optional)',  secret: false, help: 'Leave blank to let the app create the plan automatically.' },
 
@@ -149,6 +151,7 @@ function describe(key) {
     key, group: def.group, label: def.label, help: def.help,
     secret: def.secret, generate: !!def.generate, required: !!def.required,
     url   : def.url || null,
+    events: def.events || null,
     value : env[key] ?? '',
     source: _has(cache[key]) ? 'app' : 'none',
   };
