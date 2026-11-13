@@ -30,7 +30,7 @@ const MANAGED = {
   // ── Billing (Razorpay) ─────────────────────────────────────────────────
   RAZORPAY_KEY_ID         : { group: 'billing',  label: 'Razorpay Key ID',            secret: false, help: 'Razorpay Dashboard > Account & Settings > API Keys (rzp_live_... or rzp_test_...).' },
   RAZORPAY_KEY_SECRET     : { group: 'billing',  label: 'Razorpay Key Secret',        secret: true,  help: 'Shown once by Razorpay when the key is generated.' },
-  RAZORPAY_WEBHOOK_SECRET : { group: 'billing',  label: 'Razorpay Webhook Secret',    secret: true,  generate: true, help: 'Must match the secret on the Razorpay webhook for /api/payments/razorpay. If you generate a new one here, paste it into Razorpay too.' },
+  RAZORPAY_WEBHOOK_SECRET : { group: 'billing',  label: 'Razorpay Webhook Secret',    secret: true,  generate: true, url: '/api/payments/razorpay', help: 'Must match the secret on the Razorpay webhook for /api/payments/razorpay. If you generate a new one here, paste it into Razorpay too.' },
   RAZORPAY_PLAN_ID_STARTER: { group: 'billing',  label: 'Starter plan ID (optional)', secret: false, help: 'Leave blank to let the app create the plan automatically.' },
   RAZORPAY_PLAN_ID_PRO    : { group: 'billing',  label: 'Growth plan ID (optional)',  secret: false, help: 'Leave blank to let the app create the plan automatically.' },
 
@@ -38,7 +38,7 @@ const MANAGED = {
   GOOGLE_CLIENT_ID        : { group: 'settings', label: 'Google OAuth Client ID',     secret: false, help: 'Google Cloud Console > APIs & Services > Credentials.' },
   GOOGLE_CLIENT_SECRET    : { group: 'settings', label: 'Google OAuth Client Secret', secret: true,  help: 'Same OAuth client as the ID above.' },
   META_PIXEL_ID           : { group: 'settings', label: 'VidaPulse Meta Pixel ID',    secret: false, help: 'The platform pixel on the app (signup, purchase). Subscribers set their own pixel and CAPI token per video.' },
-  WEBHOOK_SECRET          : { group: 'settings', label: 'Inbound Webhook Secret',     secret: true,  generate: true, required: true, help: 'Authenticates the CRM webhook that creates accounts. Changing it breaks that webhook until the CRM is updated.' },
+  WEBHOOK_SECRET          : { group: 'settings', label: 'Inbound Webhook Secret',     secret: true,  generate: true, required: true, url: '/api/webhook/create-user', help: 'Authenticates the CRM webhook that creates accounts. Changing it breaks that webhook until the CRM is updated.' },
   JWT_SECRET              : { group: 'settings', label: 'JWT Signing Secret',         secret: true,  generate: true, required: true, help: 'Signs every login session. Changing it signs EVERYONE out, you included.' },
 };
 
@@ -148,6 +148,7 @@ function describe(key) {
   return {
     key, group: def.group, label: def.label, help: def.help,
     secret: def.secret, generate: !!def.generate, required: !!def.required,
+    url   : def.url || null,
     value : env[key] ?? '',
     source: _has(cache[key]) ? 'app' : 'none',
   };

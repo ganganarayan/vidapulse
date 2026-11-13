@@ -19,7 +19,7 @@ export function randomSecret(bytes = 32) {
   return Array.from(a, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function copyText(text) {
+export async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);
     return true;

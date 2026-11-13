@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../lib/api';
-import SecretInput from './SecretInput';
+import SecretInput, { copyText } from './SecretInput';
 
 /**
  * AdminPlatformKeys: super-admin panel for the platform keys that used to be
@@ -22,6 +22,13 @@ export default function AdminPlatformKeys({ group, title }) {
   const [draft,  setDraft]  = useState({});
   const [busy,   setBusy]   = useState('');
   const [msg,    setMsg]    = useState(null);
+  const [copied, setCopied] = useState('');
+
+  async function copyUrl(key, url) {
+    await copyText(url);
+    setCopied(key);
+    setTimeout(() => setCopied(''), 1500);
+  }
 
   async function load() {
     try {
@@ -108,6 +115,19 @@ export default function AdminPlatformKeys({ group, title }) {
                   </button>
                 )}
               </div>
+              {it.url && (() => {
+                const full = `${window.location.origin}${it.url}`;
+                return (
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] text-gray-400">Webhook URL:</span>
+                    <code className="text-[11px] text-gray-200 bg-gray-900 border border-gray-700 rounded px-2 py-1 break-all">{full}</code>
+                    <button type="button" onClick={() => copyUrl(it.key, full)}
+                      className={`${btn} border-gray-600 text-gray-300 hover:bg-gray-700`}>
+                      {copied === it.key ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                );
+              })()}
               <p className="text-[11px] text-gray-500 mt-1">{it.help}</p>
             </div>
           );
