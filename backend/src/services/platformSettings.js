@@ -30,7 +30,7 @@ const MANAGED = {
   // ── Billing (Razorpay) ─────────────────────────────────────────────────
   RAZORPAY_KEY_ID         : { group: 'billing',  label: 'Razorpay Key ID',            secret: false, help: 'Razorpay Dashboard > Account & Settings > API Keys (rzp_live_... or rzp_test_...).' },
   RAZORPAY_KEY_SECRET     : { group: 'billing',  label: 'Razorpay Key Secret',        secret: true,  help: 'Shown once by Razorpay when the key is generated.' },
-  RAZORPAY_WEBHOOK_SECRET : { group: 'billing',  label: 'Razorpay Webhook Secret',    secret: true,  generate: true, url: 'https://vidapulse.divineleads.guru/api/payments/razorpay', help: 'Must match the secret on the Razorpay webhook (the URL above; Razorpay is registered on divineleads.guru, and that subdomain points at this app). If you generate a new one here, paste it into Razorpay too.' },
+  RAZORPAY_WEBHOOK_SECRET : { group: 'billing',  label: 'Razorpay Webhook Secret',    secret: true,  generate: true, url: '/api/payments/razorpay', help: 'Must match the secret on the Razorpay webhook that calls the URL above. If you generate a new one here, paste it into Razorpay too.' },
   RAZORPAY_PLAN_ID_STARTER: { group: 'billing',  label: 'Starter plan ID (optional)', secret: false, help: 'Leave blank to let the app create the plan automatically.' },
   RAZORPAY_PLAN_ID_PRO    : { group: 'billing',  label: 'Growth plan ID (optional)',  secret: false, help: 'Leave blank to let the app create the plan automatically.' },
 
