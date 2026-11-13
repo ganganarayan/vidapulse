@@ -7,14 +7,13 @@ import SecretInput from './SecretInput';
  * Railway env vars (Razorpay keys + webhook secret on Billing; Google OAuth,
  * platform Meta pixel, inbound webhook secret and JWT secret on Settings).
  *
- * Each key shows where its value comes from:
- *   saved in app  (wins)  ·  from Railway env  (fallback)  ·  not set
- * Saving takes effect immediately. Clearing falls back to the env var.
+ * The app is the only source for these keys (existing Railway env vars were
+ * imported once on boot and are ignored after that). Saving takes effect
+ * immediately. Clearing leaves the key empty (not allowed for required keys).
  */
 
 const SOURCE = {
-  app : { dot: '🟢', text: 'saved in app' },
-  env : { dot: '🟡', text: 'from Railway env (save here to manage it in the app)' },
+  app : { dot: '🟢', text: 'set' },
   none: { dot: '🟡', text: 'not set' },
 };
 
@@ -41,7 +40,7 @@ export default function AdminPlatformKeys({ group, title }) {
       'Changing the JWT secret signs EVERYONE out immediately, including you. Continue?')) return;
     if (item.key === 'WEBHOOK_SECRET' && !window.confirm(
       'The CRM webhook that creates accounts will be rejected until it uses the new secret. Continue?')) return;
-    if (clear && !window.confirm(`Clear ${item.label}? It will fall back to the Railway env var${item.env_fallback ? '' : ' (none is set, so it will be empty)'}.`)) return;
+    if (clear && !window.confirm(`Clear ${item.label}? It will be empty and anything that uses it stops working.`)) return;
 
     setBusy(item.key); setMsg(null);
     try {
@@ -65,7 +64,7 @@ export default function AdminPlatformKeys({ group, title }) {
     <div className="bg-gray-800 border border-amber-500/40 rounded-xl p-5 mb-8">
       <p className="text-xs text-amber-400 uppercase tracking-wider font-semibold mb-1">{title}</p>
       <p className="text-xs text-gray-400 mb-4">
-        Managed here instead of Railway. A value saved here wins over the Railway env var and takes effect immediately.
+        Managed here, not in Railway. Changes take effect immediately. Railway env vars for these keys are no longer read and can be deleted.
       </p>
 
       <div className="space-y-5">
@@ -101,9 +100,9 @@ export default function AdminPlatformKeys({ group, title }) {
                   className={`${btn} border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10 mt-1`}>
                   {busy === it.key ? 'Saving...' : 'Save'}
                 </button>
-                {it.source === 'app' && (
-                  <button disabled={!!busy || (it.required && !it.env_fallback)} onClick={() => save(it, true)}
-                    title={it.required && !it.env_fallback ? 'No Railway env var to fall back to' : 'Use the Railway env var again'}
+                {it.source === 'app' && !it.required && (
+                  <button disabled={!!busy} onClick={() => save(it, true)}
+                    title="Remove this value"
                     className={`${btn} border-gray-600 text-gray-300 hover:bg-gray-700 mt-1`}>
                     Clear
                   </button>

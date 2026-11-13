@@ -6,12 +6,15 @@
  *
  * How it plugs in: the fields below are turned into getters on the shared
  * `env` object, so every existing `env.RAZORPAY_KEY_ID`, `env.JWT_SECRET`, ...
- * read keeps working unchanged and now returns:
+ * read keeps working unchanged and now returns the value saved in the app.
+ * The app is the ONLY source: there is no env fallback.
  *
- *     value saved in the app  >  Railway env var  >  null
+ * One-time import: on load, a key with no app value but an env var is copied
+ * into the app once, so deleting the env vars afterwards changes nothing.
+ * After that, env vars for these keys are ignored.
  *
  * Saving a value takes effect immediately (in-memory cache, single instance).
- * Clearing it falls back to the env var again.
+ * Clearing it leaves the key empty (not allowed for required keys).
  *
  * Boot: install() runs at require time (before any route); load() runs after
  * migrations. Requests wait on ready (max 15 s) so auth never verifies tokens
@@ -55,7 +58,9 @@ function install() {
     Object.defineProperty(env, k, {
       configurable: true,
       enumerable  : true,
-      get: () => (_has(cache[k]) ? cache[k] : (_has(original[k]) ? original[k] : null)),
+      // Before the first load the env value bridges the boot window (requests
+      // are held by gate() anyway); after load only the app value counts.
+      get: () => (_has(cache[k]) ? cache[k] : (!loaded && _has(original[k]) ? original[k] : null)),
     });
   }
 }
@@ -67,10 +72,20 @@ async function load() {
     for (const k of Object.keys(cache)) delete cache[k];
     for (const r of rows) if (MANAGED[r.key]) cache[r.key] = r.value;
 
-    // A required secret with neither an app value nor an env var: create one,
-    // so a fresh deploy needs no env var for it at all.
     for (const k of KEYS) {
-      if (MANAGED[k].required && !_has(env[k])) {
+      if (_has(cache[k])) continue;
+      // One-time import of an existing env var, then the app owns it.
+      if (_has(original[k])) {
+        await pool.query(
+          `INSERT INTO platform_settings (key, value) VALUES ($1, $2)
+           ON CONFLICT (key) DO NOTHING`, [k, String(original[k])]
+        );
+        cache[k] = String(original[k]);
+        logger.info(`[platformSettings] imported ${k} from the env var into the app (env no longer read)`);
+        continue;
+      }
+      // A required secret set nowhere: create one.
+      if (MANAGED[k].required) {
         const v = randomSecret();
         await pool.query(
           `INSERT INTO platform_settings (key, value) VALUES ($1, $2)
@@ -108,8 +123,8 @@ async function set(key, value, userId) {
   const v = value == null ? '' : String(value).trim();
 
   if (!v) {
-    if (def.required && !_has(original[key])) {
-      throw Object.assign(new Error(`${def.label} cannot be cleared: there is no env var to fall back to`), { status: 400 });
+    if (def.required) {
+      throw Object.assign(new Error(`${def.label} cannot be empty`), { status: 400 });
     }
     await pool.query(`DELETE FROM platform_settings WHERE key = $1`, [key]);
     delete cache[key];
@@ -130,13 +145,11 @@ async function set(key, value, userId) {
 
 function describe(key) {
   const def = MANAGED[key];
-  const source = _has(cache[key]) ? 'app' : (_has(original[key]) ? 'env' : 'none');
   return {
     key, group: def.group, label: def.label, help: def.help,
     secret: def.secret, generate: !!def.generate, required: !!def.required,
     value : env[key] ?? '',
-    source,
-    env_fallback: _has(original[key]),
+    source: _has(cache[key]) ? 'app' : 'none',
   };
 }
 

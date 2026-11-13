@@ -4,8 +4,8 @@
 -- of Railway env vars: Razorpay keys + webhook secret, Google OAuth, platform
 -- Meta pixel, JWT signing secret, inbound webhook secret.
 --
--- A row here WINS over the env var of the same name; with no row the env var
--- is used, so nothing changes until a value is saved in the app.
+-- The app is the only source for these keys. On first boot any existing env
+-- var is copied in once (services/platformSettings.js), then env is ignored.
 
 CREATE TABLE IF NOT EXISTS platform_settings (
   key        TEXT        PRIMARY KEY,
