@@ -362,6 +362,10 @@
     .plan-price { font-size: 40px; font-weight: 800; color: #0F172A; letter-spacing: -1.5px; line-height: 1; margin-bottom: 2px; }
     .plan-price .cur { font-size: 22px; font-weight: 700; vertical-align: super; }
     .plan-period { font-size: 13px; color: #94A3B8; margin-bottom: 20px; }
+    .billing-toggle { display: inline-flex; gap: 4px; padding: 4px; margin-top: 22px; background: #fff; border: 1.5px solid #E2E8F0; border-radius: 999px; }
+    .bt-opt { border: 0; background: transparent; padding: 8px 18px; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 600; color: #64748B; cursor: pointer; }
+    .bt-opt.active { background: #0F172A; color: #fff; }
+    .bt-save { font-size: 11px; font-weight: 700; color: #16A34A; background: #DCFCE7; border-radius: 999px; padding: 2px 7px; margin-left: 4px; }
     .plan-divider { height: 1px; background: #EEF2F6; margin: 18px 0; }
     .plan-features { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
     .plan-features li { display: flex; align-items: flex-start; gap: 9px; font-size: 13.5px; color: #334155; }
@@ -684,7 +688,12 @@
       <h2 class="heading">One flat price per account</h2>
       <p class="subtext">Gated on capability, not per-seat. Every plan starts on the free plan.</p>
 
-      <div class="founding" id="founding-badge"><% if (foundingClosed) { %>&#128274; Founding-member pricing is closed &mdash; all <%= foundingLimit %> seats are taken.<% } else { %>&#128274; Founding members &mdash; <strong><%= foundingTaken %> of <%= foundingLimit %></strong> seats taken. Lock Growth at $<%= foundingPrice %>/mo for life.<% } %></div>
+      <div class="founding" id="founding-badge"><% if (foundingClosed) { %>&#128274; Founding-member pricing is closed &mdash; all <%= foundingLimit %> seats are taken.<% } else { %>&#128274; Founding members &mdash; <strong><%= foundingTaken %> of <%= foundingLimit %></strong> seats taken. Lock Growth at <%= foundingPrice %>/mo for life.<% } %></div>
+
+      <div class="billing-toggle" role="group" aria-label="Billing period">
+        <button type="button" class="bt-opt active" data-cycle="monthly" aria-pressed="true">Monthly</button>
+        <button type="button" class="bt-opt" data-cycle="yearly" aria-pressed="false">Yearly <span class="bt-save">2 months free</span></button>
+      </div>
 
       <div class="pricing-grid">
 
@@ -692,7 +701,7 @@
         <div class="pricing-card">
           <div class="plan-name">Free</div>
           <p class="plan-desc">Prove it on one video, forever.</p>
-          <div class="plan-price"><span class="cur">$</span>0</div>
+          <div class="plan-price"><span class="cur"><%= prices.symbol %></span>0</div>
           <div class="plan-period">free forever</div>
           <div class="plan-divider"></div>
           <ul class="plan-features">
@@ -710,8 +719,8 @@
         <div class="pricing-card">
           <div class="plan-name">Starter</div>
           <p class="plan-desc">Find the drop-off on your funnel videos.</p>
-          <div class="plan-price"><span class="cur">$</span>29</div>
-          <div class="plan-period">per month</div>
+          <div class="plan-price" data-price-monthly="<%= prices.plans.starter.monthly.label.slice(1) %>" data-price-yearly="<%= prices.plans.starter.yearly.label.slice(1) %>"><span class="cur"><%= prices.symbol %></span><span class="amt"><%= prices.plans.starter.monthly.label.slice(1) %></span></div>
+          <div class="plan-period" data-period>per month</div>
           <div class="plan-divider"></div>
           <ul class="plan-features">
             <li><span class="check">&#10003;</span> Up to 10 videos</li>
@@ -730,8 +739,8 @@
           <div class="popular-badge">Most Popular</div>
           <div class="plan-name">Growth</div>
           <p class="plan-desc">Attribute the traffic that actually converts.</p>
-          <div class="plan-price"><span class="cur">$</span>79</div>
-          <div class="plan-period">per month</div>
+          <div class="plan-price" data-price-monthly="<%= prices.plans.pro.monthly.label.slice(1) %>" data-price-yearly="<%= prices.plans.pro.yearly.label.slice(1) %>"><span class="cur"><%= prices.symbol %></span><span class="amt"><%= prices.plans.pro.monthly.label.slice(1) %></span></div>
+          <div class="plan-period" data-period>per month</div>
           <div class="plan-divider"></div>
           <ul class="plan-features">
             <li><span class="check">&#10003;</span> Up to 20 videos</li>
@@ -749,8 +758,8 @@
         <div class="pricing-card">
           <div class="plan-name">Scale</div>
           <p class="plan-desc">For agencies running many client funnels.</p>
-          <div class="plan-price"><span class="cur">$</span>199</div>
-          <div class="plan-period">per month</div>
+          <div class="plan-price" data-price-monthly="<%= prices.plans.scale.monthly.label.slice(1) %>" data-price-yearly="<%= prices.plans.scale.yearly.label.slice(1) %>"><span class="cur"><%= prices.symbol %></span><span class="amt"><%= prices.plans.scale.monthly.label.slice(1) %></span></div>
+          <div class="plan-period" data-period>per month</div>
           <div class="plan-divider"></div>
           <ul class="plan-features">
             <li><span class="check">&#10003;</span> Everything in Growth</li>

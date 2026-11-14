@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import api from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { startSubscriptionCheckout } from '../../lib/razorpayCheckout';
+import BillingCycleToggle from './BillingCycleToggle';
 import { getLockColor, planDisplayName } from '../PlanTierBadge';
 
 /**
@@ -62,8 +63,10 @@ function defaultUpgradeData(currentPlan) {
     currency       : 'USD',
     upgrade_options: currentPlan === 'starter' ? ['pro'] : ['starter', 'pro'],
     pricing: {
-      starter: { name: 'Starter', price_label: '$29', price: 29, usd: 29, video_limit: 10 },
-      pro    : { name: 'Growth',  price_label: '$79', price: 79, usd: 79, video_limit: 20 },
+      starter: { name: 'Starter', price_label: '$29', price: 29, video_limit: 10,
+                 monthly: { amount: 29, label: '$29' }, yearly: { amount: 290, label: '$290' } },
+      pro    : { name: 'Growth',  price_label: '$79', price: 79, video_limit: 20,
+                 monthly: { amount: 79, label: '$79' }, yearly: { amount: 790, label: '$790' } },
     },
   };
 }
@@ -73,6 +76,7 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
   const [upgradeData,  setUpgradeData]  = useState(() => defaultUpgradeData(currentPlan));
   const [subscribing,  setSubscribing]  = useState(null); // plan key being subscribed
   const [subError,     setSubError]     = useState('');
+  const [cycle,        setCycle]        = useState('monthly'); // 'monthly' | 'yearly'
 
   // Fetch live pricing in background — updates price_label (INR vs USD) without blocking render
   useEffect(() => {
@@ -88,8 +92,7 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
     setSubscribing(plan);
     await startSubscriptionCheckout({
       plan,
-      currency : upgradeData.currency ?? 'USD',
-      value    : upgradeData.pricing?.[plan]?.price ?? (plan === 'starter' ? 29 : 79),
+      cycle,
       user,
       onError  : (msg) => { setSubError(msg); setSubscribing(null); },
       onDismiss: () => setSubscribing(null),
@@ -167,12 +170,17 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
             </div>
           )}
 
+          <div className="flex justify-center mb-3">
+            <BillingCycleToggle cycle={cycle} onChange={setCycle} />
+          </div>
+
           <div className={`${isSingleCard ? 'flex justify-center' : 'grid grid-cols-1 sm:grid-cols-2 gap-4'}`}>
             {options.map(plan => (
               <PlanCard
                 key={plan}
                 plan={plan}
                 pricing={upgradeData.pricing?.[plan]}
+                cycle={cycle}
                 isHighlighted={plan === requiredPlan}
                 features={PLAN_FEATURES[plan] ?? []}
                 singleCard={isSingleCard}
@@ -206,11 +214,12 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
 // PlanCard
 // ─────────────────────────────────────────────────────────────────────────
 
-function PlanCard({ plan, pricing, isHighlighted, features, singleCard, subscribing, onSubscribe }) {
+function PlanCard({ plan, pricing, cycle = 'monthly', isHighlighted, features, singleCard, subscribing, onSubscribe }) {
   const color = getLockColor(plan); // #00FFFF starter, #F59E0B pro
 
   // price_label is set by the backend (USD).
-  const priceLabel = pricing?.price_label ?? pricing?.usd_label ?? `$${pricing?.usd ?? '—'}`;
+  const priceLabel = pricing?.[cycle]?.label
+    ?? pricing?.price_label ?? `${pricing?.usd ?? '-'}`;
 
   return (
     <div
@@ -237,7 +246,7 @@ function PlanCard({ plan, pricing, isHighlighted, features, singleCard, subscrib
         </div>
         <div className="flex items-baseline gap-1">
           <span className="text-2xl font-bold text-gray-100">{priceLabel}</span>
-          <span className="text-sm text-gray-400">/ month</span>
+          <span className="text-sm text-gray-400">/ {cycle === 'yearly' ? 'year' : 'month'}</span>
         </div>
         <p className="text-xs text-gray-500 mt-0.5">
           {pricing?.video_limit === null ? 'Unlimited videos' : `Up to ${pricing?.video_limit} videos`}

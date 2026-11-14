@@ -35,9 +35,33 @@
         b.innerHTML = '🔒 Founding-member pricing is closed — all ' + s.limit + ' seats are taken.';
       } else {
         b.innerHTML = '🔒 Founding members — <strong>' + s.taken + ' of ' + s.limit +
-          '</strong> seats taken. Lock Growth at $' + s.price_usd + '/mo for life.';
+          '</strong> seats taken. Lock Growth at ' + (s.price_label || ('$' + s.price_usd)) + '/mo for life.';
       }
     }).catch(function () {});
+  })();
+
+  // ── 2b. Monthly / yearly pricing toggle ─────────────────────────────────
+  // Prices for both cycles are server-rendered (in the visitor's currency)
+  // into data attributes; this only swaps which one is shown.
+  (function () {
+    var opts = document.querySelectorAll('.billing-toggle .bt-opt');
+    if (!opts.length) return;
+    function show(cycle) {
+      opts.forEach(function (b) {
+        var on = b.getAttribute('data-cycle') === cycle;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      document.querySelectorAll('.plan-price[data-price-monthly]').forEach(function (el) {
+        var amt = el.querySelector('.amt');
+        if (amt) amt.textContent = el.getAttribute(cycle === 'yearly' ? 'data-price-yearly' : 'data-price-monthly');
+        var per = el.parentNode.querySelector('[data-period]');
+        if (per) per.textContent = cycle === 'yearly' ? 'per year' : 'per month';
+      });
+    }
+    opts.forEach(function (b) {
+      b.addEventListener('click', function () { show(b.getAttribute('data-cycle')); });
+    });
   })();
 
   // ── 3. Signup modal + Google sign-in ─────────────────────────────────────

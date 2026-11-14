@@ -380,11 +380,16 @@ if (env.NODE_ENV === 'production') {
       // injected (falls back to an empty cohort if the lookup fails).
       let f = { taken: 0, limit: 100, price_usd: 59, closed: false };
       try { f = await require('./services/foundingService').getStatus(); } catch (e) { /* fall back */ }
+      // Prices in the visitor's currency: INR in India (by IP), USD elsewhere.
+      const pricing = require('./services/pricing');
+      const prices  = pricing.table(pricing.currencyForReq(req));
+      res.setHeader('Cache-Control', 'private, no-cache');
       return res.render('landing', {
         foundingTaken : f.taken,
         foundingLimit : f.limit,
-        foundingPrice : f.price_usd,
+        foundingPrice : prices.plans.pro_founding.monthly.label,
         foundingClosed: f.closed,
+        prices,
       });
     } else {
       // No-cache so users always get the freshest entry point after a deploy

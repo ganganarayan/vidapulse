@@ -3,22 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import AppLayout from '../components/AppLayout';
-import { savePurchaseIntent } from '../lib/pixel';
+import { startSubscriptionCheckout } from '../lib/razorpayCheckout';
+import BillingCycleToggle from '../components/upgrade/BillingCycleToggle';
 import { getLockColor } from '../components/PlanTierBadge';
 
 /**
  * UpgradePage — /upgrade
  *
  * Shows the user their current plan and upgrade options.
- * "Upgrade" buttons redirect to Razorpay payment pages with the user's
- * name, email, and ID pre-filled so the admin can identify who paid.
- *
- * URL format sent to Razorpay:
- *   BASE_URL?name=John+Doe&email=john@example.com&contact=+91999
- *           &notes[user_id]=123&notes[plan]=starter
- *
- * The notes[] params are stored with the payment and included in
- * Razorpay's webhook payload, which VidaPulse uses to auto-upgrade plans.
+ * "Upgrade" opens Razorpay Checkout in-page. The server picks the currency
+ * (INR in India, USD elsewhere) and the amount for the chosen cycle, creates
+ * the subscription, and confirms it after payment. Nothing is configured by
+ * the owner.
  */
 
 const PLAN_ORDER = { free: 0, starter: 1, pro: 2, admin_lifetime: 3 };
@@ -30,6 +26,8 @@ export default function UpgradePage() {
   const [upgradeData,     setUpgradeData]     = useState(null);
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState('');
+  const [cycle,           setCycle]           = useState('monthly');
+  const [busy,            setBusy]            = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -45,39 +43,25 @@ export default function UpgradePage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Build the full Razorpay redirect URL by appending user params to the base URL
-  function buildRazorpayUrl(baseUrl, plan) {
-    if (!baseUrl || !user) return null;
-    try {
-      // Use URLSearchParams for the standard params
-      const params = new URLSearchParams();
-      if (user.name)  params.set('name',    user.name);
-      if (user.email) params.set('email',   user.email);
-      if (user.phone) params.set('contact', user.phone);
-      // notes[user_id] and notes[plan] let Razorpay webhook identify the user
-      // Using manual encoding to preserve bracket notation for Razorpay
-      const paramsStr = params.toString();
-      const notesStr  = `notes%5Buser_id%5D=${encodeURIComponent(user.id)}&notes%5Bplan%5D=${encodeURIComponent(plan)}`;
-      const sep = baseUrl.includes('?') ? '&' : '?';
-      return `${baseUrl}${sep}${paramsStr}${paramsStr ? '&' : ''}${notesStr}`;
-    } catch {
-      return baseUrl;
-    }
+  // In-page Razorpay Checkout; the server sets currency, amount and plan.
+  async function handleUpgrade(plan) {
+    if (busy) return;
+    setError('');
+    setBusy(plan);
+    await startSubscriptionCheckout({
+      plan,
+      cycle,
+      user,
+      onError  : (msg) => { setError(msg); setBusy(null); },
+      onDismiss: () => setBusy(null),
+    });
   }
 
-  // Razorpay payment link — handles both Indian and international cards
-  function handleUpgrade(plan) {
-    if (!upgradeData) return;
-    const baseUrl = upgradeData.razorpay_links?.[plan];
-    if (!baseUrl) return;
-    const url = buildRazorpayUrl(baseUrl, plan);
-    savePurchaseIntent({
-      plan,
-      currency: upgradeData.currency ?? 'INR',
-      value   : upgradeData.pricing?.[plan]?.price ?? (plan === 'starter' ? 999 : 1999),
-    });
-    window.location.href = url;
-  }
+  const yr     = cycle === 'yearly';
+  const suffix = yr ? '/ year' : '/ month';
+  const labelFor = (plan, fallbackMonthly) =>
+    upgradeData?.pricing?.[plan]?.[cycle]?.label
+      ?? `$${yr ? fallbackMonthly * 10 : fallbackMonthly}`;
 
   const currentPlan = user?.plan ?? 'free';
   const upgradeOptions = upgradeData?.upgrade_options ?? [];
@@ -94,6 +78,7 @@ export default function UpgradePage() {
               You're currently on the <CurrentPlanBadge plan={currentPlan} displayName={user?.plan_display_name} /> plan.
               {upgradeOptions.length === 0 && <span className="ml-1 text-gray-500">You're already on the best plan!</span>}
             </p>
+            <BillingCycleToggle cycle={cycle} onChange={setCycle} className="mt-4" />
           </div>
 
           {loading ? (
@@ -111,7 +96,7 @@ export default function UpgradePage() {
                 planKey     = "free"
                 name        = "Free"
                 tagline     = "Forever free — no credit card"
-                price       = {upgradeData?.currency === 'USD' ? '$0' : '₹0'}
+                price       = {upgradeData?.currency === 'INR' ? '₹0' : '$0'}
                 priceSuffix = "forever"
                 features    = {[
                   '3 videos',
@@ -130,8 +115,8 @@ export default function UpgradePage() {
                 planKey          = "starter"
                 name             = "Starter"
                 tagline          = "For creators growing their audience"
-                price            = {upgradeData?.pricing?.starter?.price_label ?? '₹999'}
-                priceSuffix      = "/ month"
+                price            = {labelFor('starter', 29)}
+                priceSuffix      = {suffix}
                 features         = {[
                   '10 videos',
                   'Full analytics dashboard',
@@ -143,7 +128,7 @@ export default function UpgradePage() {
                 current          = {currentPlan === 'starter'}
                 canUpgrade       = {upgradeOptions.includes('starter')}
                 onUpgrade        = {() => handleUpgrade('starter')}
-                noLink           = {!upgradeData?.razorpay_links?.starter}
+                noLink           = {false}
                 accent           = "amber"
               />
 
@@ -152,8 +137,8 @@ export default function UpgradePage() {
                 planKey          = "pro"
                 name             = "Pro"
                 tagline          = "For any serious business, B2B or B2C, to scale through video marketing"
-                price            = {upgradeData?.pricing?.pro?.price_label ?? '₹1,999'}
-                priceSuffix      = "/ month"
+                price            = {labelFor('pro', 79)}
+                priceSuffix      = {suffix}
                 features         = {[
                   '20 videos',
                   'All Starter features',
@@ -166,7 +151,7 @@ export default function UpgradePage() {
                 current          = {currentPlan === 'pro' || currentPlan === 'admin_lifetime'}
                 canUpgrade       = {upgradeOptions.includes('pro')}
                 onUpgrade        = {() => handleUpgrade('pro')}
-                noLink           = {!upgradeData?.razorpay_links?.pro}
+                noLink           = {false}
                 accent           = "indigo"
                 recommended      = {currentPlan === 'free' || currentPlan === 'starter'}
               />

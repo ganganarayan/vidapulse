@@ -46,21 +46,23 @@ function loadRazorpayScript() {
  * @param {'starter'|'pro'} opts.plan
  * @param {number}   [opts.value]      purchase value for the Purchase pixel
  * @param {string}   [opts.currency]   'INR' | 'USD' (default 'INR')
+ * @param {'monthly'|'yearly'} [opts.cycle] billing cycle (default 'monthly')
  * @param {object}   [opts.user]       { name, email, phone } for prefill
  * @param {function} [opts.onError]    (message) => void
  * @param {function} [opts.onDismiss]  () => void — modal closed without paying
  */
-export async function startSubscriptionCheckout({ plan, value, currency, user, onError, onDismiss }) {
+export async function startSubscriptionCheckout({ plan, cycle = 'monthly', value, currency, user, onError, onDismiss }) {
   try {
     await loadRazorpayScript();
 
-    const { data } = await api.post('/payments/subscribe', { plan });
+    const { data } = await api.post('/payments/subscribe', { plan, cycle });
 
-    // Save the purchase intent so the Purchase pixel reports the right currency/value.
+    // Save the purchase intent so the Purchase pixel reports the right
+    // currency/value. The server decides both (INR in India, USD elsewhere).
     savePurchaseIntent({
       plan,
-      currency: currency ?? 'USD',
-      value   : value ?? (plan === 'starter' ? 29 : 79),
+      currency: data.currency ?? currency ?? 'USD',
+      value   : data.amount   ?? value    ?? (plan === 'starter' ? 29 : 79),
     });
 
     // No keyId/subscriptionId (older backend) → fall back to the hosted page.
@@ -73,7 +75,7 @@ export async function startSubscriptionCheckout({ plan, value, currency, user, o
       key            : data.keyId,
       subscription_id: data.subscriptionId,
       name           : 'VidaPulse',
-      description    : `${plan === 'pro' ? 'Growth' : 'Starter'} plan — monthly subscription`,
+      description    : `${plan === 'pro' ? 'Growth' : 'Starter'} plan, ${data.cycle === 'yearly' ? 'yearly' : 'monthly'} subscription`,
       prefill        : {
         name   : user?.name  || '',
         email  : user?.email || '',

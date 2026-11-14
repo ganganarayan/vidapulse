@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useUpgrade }        from '../contexts/UpgradeContext';
 import { useAuth }           from '../contexts/AuthContext';
 import { startSubscriptionCheckout } from '../lib/razorpayCheckout';
+import BillingCycleToggle, { priceLabelFor } from './upgrade/BillingCycleToggle';
 import { getLockColor, planDisplayName } from './PlanTierBadge';
 
 // Plan color: Starter=#00FFFF  Growth=#F59E0B  (single source of truth)
@@ -54,7 +55,8 @@ export default function UpgradeModal() {
   const { user }                       = useAuth();
   const [loading, setLoading]          = useState(null); // 'starter' | 'pro' | null
   const [error,   setError]            = useState('');
-  const [founding, setFounding]        = useState(null); // { taken, remaining, limit, price_usd, closed }
+  const [founding, setFounding]        = useState(null); // { taken, remaining, limit, price_label, pricing, closed }
+  const [cycle, setCycle]              = useState('monthly'); // 'monthly' | 'yearly'
 
   // Founding-member pricing: while slots remain, Growth is $59/mo for life.
   // Public endpoint, no auth; falls back to standard $79 on any failure.
@@ -69,8 +71,16 @@ export default function UpgradeModal() {
   }, [upgradeTarget]);
 
   const foundingActive = !!(founding && !founding.closed);
-  const proValue       = foundingActive ? founding.price_usd : 79;
-  const proPrice       = `$${proValue}`;
+  // Prices come from the server in the visitor's currency (INR in India, USD
+  // elsewhere); the USD figures are only a fallback while it loads.
+  const prices         = founding?.pricing;
+  const proKey         = foundingActive ? 'pro_founding' : 'pro';
+  const yr             = cycle === 'yearly';
+  const usd            = (m) => `$${yr ? m * 10 : m}`;
+  const starterPrice   = priceLabelFor(prices, 'starter', cycle, usd(29));
+  const proPrice       = priceLabelFor(prices, proKey, cycle, usd(foundingActive ? 59 : 79));
+  const scalePrice     = priceLabelFor(prices, 'scale', cycle, usd(199));
+  const period         = yr ? 'year' : 'month';
 
   // Close on Escape key
   useEffect(() => {
@@ -97,13 +107,12 @@ export default function UpgradeModal() {
     // user to /payment/:plan, which polls until the webhook activates the plan.
     await startSubscriptionCheckout({
       plan,
-      currency : 'USD',
-      value    : plan === 'starter' ? 29 : proValue,
+      cycle,
       user,
       onError  : (msg) => { setError(msg); setLoading(null); },
       onDismiss: () => setLoading(null),
     });
-  }, [user, proValue]);
+  }, [user, cycle]);
 
   if (!upgradeTarget) return null;
 
@@ -130,8 +139,9 @@ export default function UpgradeModal() {
           <div>
             <h2 className="text-lg font-bold text-gray-100">Upgrade your plan</h2>
             <p className="text-sm text-gray-400 mt-0.5">
-              Monthly subscription — cancel anytime. Auto-renews every 30 days.
+              {yr ? 'Yearly subscription, 2 months free. Renews every year.' : 'Monthly subscription. Renews every 30 days.'} Cancel anytime.
             </p>
+            <BillingCycleToggle cycle={cycle} onChange={setCycle} className="mt-3" />
           </div>
           <button
             onClick={hideUpgrade}
@@ -160,7 +170,8 @@ export default function UpgradeModal() {
             planKey     = "starter"
             name        = "Starter"
             tagline     = "Find the drop-off on your funnel videos"
-            price       = "$29"
+            price       = {starterPrice}
+            period      = {period}
             features    = {PLAN_FEATURES.starter}
             current     = {currentPlan === 'starter'}
             isFocused   = {upgradeTarget === 'starter'}
@@ -174,9 +185,10 @@ export default function UpgradeModal() {
             planKey     = "pro"
             name        = "Growth"
             tagline     = {foundingActive
-              ? `🔒 Founding — ${founding.remaining} of ${founding.limit} left at $${founding.price_usd}/mo for life`
+              ? `🔒 Founding: ${founding.remaining} of ${founding.limit} left at ${founding.price_label || '$' + founding.price_usd}/mo for life`
               : "Attribute the traffic that actually converts"}
             price       = {proPrice}
+            period      = {period}
             features    = {PLAN_FEATURES.pro}
             current     = {currentPlan === 'pro' || currentPlan === 'admin_lifetime'}
             isFocused   = {upgradeTarget === 'pro'}
@@ -190,7 +202,8 @@ export default function UpgradeModal() {
           <ContactCard
             name    = "Scale"
             tagline = "For agencies running many client funnels"
-            price   = "$199"
+            price   = {scalePrice}
+            period  = {period}
             features= {PLAN_FEATURES.scale}
           />
 
@@ -199,7 +212,7 @@ export default function UpgradeModal() {
         {/* Fine print */}
         <div className="px-5 pb-3 text-center space-y-0.5">
           <p className="text-xs text-gray-500 font-medium">
-            Every plan starts on the free plan · billed monthly · cancel anytime.
+            Every plan starts on the free plan · billed {yr ? 'yearly' : 'monthly'} · cancel anytime.
           </p>
           <p className="text-xs text-gray-400">
             Payments processed securely by Razorpay · Plan activates within minutes of payment
@@ -220,7 +233,7 @@ export default function UpgradeModal() {
 // ─── Plan Card ────────────────────────────────────────────────────────────────
 
 function PlanCard({
-  planKey, name, tagline, price, features,
+  planKey, name, tagline, price, period = 'month', features,
   current, isFocused, canUpgrade, loading, recommended, onSubscribe,
 }) {
   const color = planColor(planKey); // #00FFFF for starter, #F59E0B for pro
@@ -259,7 +272,7 @@ function PlanCard({
       {/* Price */}
       <div className="mb-5">
         <span className="text-2xl font-bold text-gray-100">{price}</span>
-        <span className="text-xs text-gray-500 ml-1.5">/ month</span>
+        <span className="text-xs text-gray-500 ml-1.5">/ {period}</span>
       </div>
 
       {/* Features */}
@@ -310,7 +323,7 @@ function PlanCard({
 
 // ─── Contact Card (Scale — no self-serve checkout) ──────────────────────────
 
-function ContactCard({ name, tagline, price, features }) {
+function ContactCard({ name, tagline, price, period = 'month', features }) {
   return (
     <div className="relative flex flex-col bg-gray-800/60 border border-gray-700/50 rounded-xl p-5 transition-all">
       <div className="flex items-center justify-between mb-1">
@@ -320,7 +333,7 @@ function ContactCard({ name, tagline, price, features }) {
 
       <div className="mb-5">
         <span className="text-2xl font-bold text-gray-100">{price}</span>
-        <span className="text-xs text-gray-500 ml-1.5">/ month</span>
+        <span className="text-xs text-gray-500 ml-1.5">/ {period}</span>
       </div>
 
       <ul className="flex-1 space-y-2 mb-6">

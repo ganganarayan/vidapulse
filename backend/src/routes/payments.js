@@ -49,6 +49,7 @@ const { emitEvent }      = require('../services/behavioralEventService');
 const { requireAuth, requireAdmin } = require('../middleware/requireAuth');
 const razorpay           = require('../services/razorpayService');
 const founding           = require('../services/foundingService');
+const pricing            = require('../services/pricing');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/payments/subscribe   (authenticated)
@@ -59,6 +60,12 @@ const founding           = require('../services/foundingService');
 router.post('/subscribe', requireAuth, async (req, res, next) => {
   try {
     const { plan } = req.body;
+    const cycle    = pricing.normCycle(req.body?.cycle);
+    // Currency follows the buyer: INR when the request comes from India, USD
+    // otherwise. The IP and country are recorded on the subscription notes.
+    const country  = pricing.countryForReq(req);
+    const currency = country === 'IN' ? 'INR' : 'USD';
+    const ip       = pricing.clientIp(req);
 
     if (!['starter', 'pro'].includes(plan)) {
       return res.status(400).json({ error: 'plan must be "starter" or "pro"' });
@@ -87,24 +94,24 @@ router.post('/subscribe', requireAuth, async (req, res, next) => {
     if (isFounding)            await founding.reserve(user.id);
     else if (plan === 'pro')   await founding.clearReservation(user.id);
 
-    const { subscriptionId, paymentUrl } = await razorpay.createSubscription(
+    const { subscriptionId, paymentUrl, amount } = await razorpay.createSubscription(
       { id: user.id, name: user.name, email: user.email, phone: user.phone },
       plan,
       returnUrl,
       // Not written onto the user until it is paid (/verify or the
       // subscription.charged webhook adopts it and cancels the old one), so an
       // abandoned upgrade checkout never displaces the live subscription.
-      { founding: isFounding, persist: false },
+      { founding: isFounding, persist: false, currency, cycle, meta: { ip, country } },
     );
 
-    logger.info(`[payments] Subscription ${subscriptionId} created for user ${user.id} (${plan}${isFounding ? ' founding $59' : ''})`);
+    logger.info(`[payments] Subscription ${subscriptionId} created for user ${user.id} (${plan}${isFounding ? ' founding' : ''} ${amount} ${currency}/${cycle}, ip=${ip} country=${country || '?'})`);
 
     // keyId is the PUBLIC Razorpay key — safe to expose; the client needs it to
     // open Razorpay Checkout in-page with this subscription_id (same-tab flow).
     return res.json({
       paymentUrl, subscriptionId, keyId: env.RAZORPAY_KEY_ID,
       founding: isFounding,
-      amount_usd: isFounding ? founding.FOUNDING_PRICE_USD : (plan === 'pro' ? 79 : 29),
+      amount, currency, cycle,
     });
 
   } catch (err) {
@@ -202,11 +209,14 @@ router.post('/verify', requireAuth, async (req, res, next) => {
     await _logPayment({
       userId: req.user.id, razorpayPaymentId: razorpay_payment_id, razorpayOrderId: null,
       razorpayLinkId: razorpay_subscription_id, plan, amountPaise, currency,
-      status: 'captured', notes: { user_id: req.user.id, plan },
+      status: 'captured',
+      notes: { user_id: req.user.id, plan, cycle: subEntity?.notes?.cycle || 'monthly',
+               ip: subEntity?.notes?.ip, country: subEntity?.notes?.country },
       eventType: 'subscription.verified', paymentMethod,
     });
 
-    await _upgradePlan(req.user.id, plan, amountPaise, razorpay_payment_id, 'subscription.verified');
+    await _upgradePlan(req.user.id, plan, amountPaise, razorpay_payment_id, 'subscription.verified',
+      pricing.normCycle(subEntity?.notes?.cycle));
 
     // Founding confirmation: flip the flag if this user held a founding
     // reservation (i.e. we created their subscription on the $59 plan).
@@ -243,7 +253,7 @@ router.get('/billing', requireAuth, async (req, res, next) => {
          razorpay_event,
          payment_method,
          created_at,
-         (created_at + INTERVAL '30 days') AS period_end_at
+         (created_at + CASE WHEN notes->>'cycle' = 'yearly' THEN INTERVAL '365 days' ELSE INTERVAL '30 days' END) AS period_end_at
        FROM   payments
        WHERE  user_id = $1
        ORDER  BY created_at DESC
@@ -592,11 +602,11 @@ async function _handleSubscriptionCharged(body, res) {
   // Extend plan by 30 days from now (or from current expires_at if still in future)
   await pool.query(
     `UPDATE users
-     SET plan_expires_at          = GREATEST(COALESCE(plan_expires_at, NOW()), NOW()) + INTERVAL '30 days',
+     SET plan_expires_at          = GREATEST(COALESCE(plan_expires_at, NOW()), NOW()) + ($2 || ' days')::INTERVAL,
          plan_enrolled_at         = COALESCE(plan_enrolled_at, NOW()),
          updated_at               = NOW()
      WHERE id = $1`,
-    [userId]
+    [userId, String(_periodDays(notes.cycle))]
   );
 
   // Also ensure the plan itself is set (in case of re-activation after expiry)
@@ -716,7 +726,10 @@ async function _handleSubscriptionEnded(body, eventType, res) {
  * Upgrade a user's plan: set plan_id, plan_enrolled_at, plan_expires_at (+30 days).
  * Also marks onboarding as converted.
  */
-async function _upgradePlan(userId, planKey, amountPaise, razorpayPaymentId, eventType) {
+/** Days of access one paid cycle buys. */
+function _periodDays(cycle) { return pricing.normCycle(cycle) === 'yearly' ? 365 : 30; }
+
+async function _upgradePlan(userId, planKey, amountPaise, razorpayPaymentId, eventType, cycle = 'monthly') {
   const { rows: planRows } = await pool.query(
     `SELECT id, name FROM plans WHERE name = $1 AND is_active = TRUE LIMIT 1`,
     [planKey]
@@ -742,10 +755,10 @@ async function _upgradePlan(userId, planKey, amountPaise, razorpayPaymentId, eve
     `UPDATE users
      SET plan_id          = $1,
          plan_enrolled_at = COALESCE(plan_enrolled_at, NOW()),
-         plan_expires_at  = NOW() + INTERVAL '30 days',
+         plan_expires_at  = NOW() + ($3 || ' days')::INTERVAL,
          updated_at       = NOW()
      WHERE id = $2`,
-    [planRows[0].id, userId]
+    [planRows[0].id, userId, String(_periodDays(cycle))]
   );
 
   await pool.query(

@@ -26,6 +26,7 @@ const { requireAuth }  = require('../middleware/requireAuth');
 const { emitEvent }    = require('../services/behavioralEventService');
 const { getVisiblePromotionVideos } = require('../services/promotionService');
 const founding         = require('../services/foundingService');
+const pricing          = require('../services/pricing');
 const { startedAt }    = require('../config/serverInfo');
 
 /** Extract real client IP, honouring Cloudflare and reverse-proxy headers */
@@ -103,11 +104,20 @@ router.get('/geo', (req, res) => {
 // Public (no auth). Powers the landing-page "X of 100 taken" counter. Runs on
 // every host (incl. the apex landing) so the fetch is same-origin. Never
 // throws — foundingService.getStatus() fails closed to taken=0.
-router.get('/founding-status', async (_req, res) => {
-  const status = await founding.getStatus();
-  // Small cache: the count changes rarely (only on a paid founding upgrade).
-  res.set('Cache-Control', 'public, max-age=60');
-  return res.json(status);
+router.get('/founding-status', async (req, res) => {
+  const status   = await founding.getStatus();
+  const currency = pricing.currencyForReq(req);
+  const table    = pricing.table(currency);
+  // Small cache, private: the prices differ by the visitor's country.
+  res.set('Cache-Control', 'private, max-age=60');
+  res.set('Vary', 'CF-IPCountry, X-Forwarded-For');
+  return res.json({
+    ...status,
+    currency,
+    price      : table.plans.pro_founding.monthly.amount,
+    price_label: table.plans.pro_founding.monthly.label,
+    pricing    : table,
+  });
 });
 
 // ── GET /api/promotion-videos ─────────────────────────────────────────────
@@ -155,40 +165,39 @@ router.get('/upgrade', requireAuth, async (req, res, next) => {
     }
 
     const env    = require('../config/env');
-    // USD-only pricing (matches the vidapulse.io landing page).
-    const currency = 'USD';
+    // INR for India (by IP), USD everywhere else.
+    const currency = pricing.currencyForReq(req);
+    const table    = pricing.table(currency);
 
     // Founding pricing: while slots remain, Growth is offered at $59/mo for
     // life (locked forever). Only relevant to users who can still take 'pro'.
     const foundingStatus = await founding.getStatus();
     const foundingActive = !foundingStatus.closed && upgrade_options.includes('pro');
-    const proUsd         = foundingActive ? foundingStatus.price_usd : 79;
+    const proKey         = foundingActive ? 'pro_founding' : 'pro';
+    const cyc            = (key) => ({
+      monthly: table.plans[key].monthly, yearly: table.plans[key].yearly,
+      price: table.plans[key].monthly.amount, price_label: table.plans[key].monthly.label,
+    });
 
     return res.json({
       current_plan       : plan,
       videos_count       : parseInt(stats.video_count, 10),
       total_plays_to_date: parseInt(stats.total_plays_to_date, 10),
       upgrade_options,
-      currency,          // 'USD'
+      currency,          // 'INR' | 'USD'
+      yearly_multiplier: table.yearly_multiplier,
       founding: {
         active   : foundingActive,
         price_usd: foundingStatus.price_usd,
+        price_label: table.plans.pro_founding.monthly.label,
         taken    : foundingStatus.taken,
         remaining: foundingStatus.remaining,
         limit    : foundingStatus.limit,
       },
       pricing: {
-        starter: {
-          name: 'Starter', usd: 29, usd_label: '$29', video_limit: 10,
-          price      : 29,
-          price_label: '$29',
-        },
-        pro: {
-          name: 'Growth', usd: proUsd, usd_label: `$${proUsd}`, video_limit: 20,
-          price      : proUsd,
-          price_label: `$${proUsd}`,
-          founding   : foundingActive,
-        },
+        starter: { name: 'Starter', video_limit: 10, ...cyc('starter') },
+        pro    : { name: 'Growth',  video_limit: 20, ...cyc(proKey), founding: foundingActive },
+        scale  : { name: 'Scale', ...cyc('scale') },
       },
       // Razorpay: static payment-link URLs for INR one-time / subscription entry
       razorpay_links: {

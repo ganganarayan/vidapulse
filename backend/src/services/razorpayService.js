@@ -9,34 +9,50 @@
  *   • Creating Subscriptions (returns the hosted payment URL)
  *   • Cancelling Subscriptions
  *
- * Plans created here (USD):
- *   starter — $29/month  (2900 cents)
- *   pro     — $79/month  (7900 cents)   — displayed as "Growth"
+ * Prices come from services/pricing.js (INR for India, USD elsewhere,
+ * monthly or yearly). A Razorpay plan per (plan, currency, cycle) is created
+ * on first use and cached; the owner never enters a plan ID.
  *
  * All network calls use the built-in https module (no extra SDK dependency).
- * Errors are thrown as plain Error objects — callers should handle them.
+ * Errors are thrown as plain Error objects; callers should handle them.
  */
 
 const https   = require('https');
 const { pool }= require('../config/database');
 const env     = require('../config/env');
 const logger  = require('../config/logger');
+const pricing = require('./pricing');
 
-// Plan definitions — amounts in the smallest currency unit (USD cents).
-const PLAN_CURRENCY = 'USD';
-const PLAN_DEFS = {
-  starter     : { amount: 2900, displayName: 'VidaPulse Starter' },
-  pro         : { amount: 7900, displayName: 'VidaPulse Growth'  },
-  // Founding-member price for Growth — first 100 payers lock $59/mo for life.
-  // The user's VidaPulse plan stays 'pro'; only the Razorpay plan (price) differs.
-  pro_founding: { amount: 5900, displayName: 'VidaPulse Growth (Founding)' },
-  // Super-admin billing tests: real Razorpay subscriptions in INR at a distinct
-  // small amount per plan (Starter Rs 1.10, Growth Rs 1.20) so each plan is
-  // recognisable on the statement. They renew monthly until cancelled. Only
-  // the admin billing-test endpoints ever use these.
-  starter_test: { amount: 110, currency: 'INR', displayName: 'VidaPulse Starter (Rs 1.10 test)' },
-  pro_test    : { amount: 120, currency: 'INR', displayName: 'VidaPulse Growth (Rs 1.20 test)'  },
+const DISPLAY = { starter: 'VidaPulse Starter', pro: 'VidaPulse Growth', pro_founding: 'VidaPulse Growth (Founding)' };
+
+// Super-admin billing tests: real Razorpay subscriptions in INR at a distinct
+// small amount per plan (Starter Rs 1.10, Growth Rs 1.20) so each plan is
+// recognisable on the statement. Monthly only. Only the admin billing-test
+// endpoints ever use these.
+const TEST_DEFS = {
+  starter_test: { amount: 110, currency: 'INR', period: 'monthly', displayName: 'VidaPulse Starter (Rs 1.10 test)' },
+  pro_test    : { amount: 120, currency: 'INR', period: 'monthly', displayName: 'VidaPulse Growth (Rs 1.20 test)'  },
 };
+
+/**
+ * Plan spec for a Razorpay plan key ('starter' | 'pro' | 'pro_founding' |
+ * '<plan>_test') in a currency and billing cycle. amount is in the smallest
+ * unit (paise / cents). cacheName is the razorpay_plans row it is cached under.
+ */
+function planSpec(razorpayKey, currency, cycle) {
+  if (TEST_DEFS[razorpayKey]) return { ...TEST_DEFS[razorpayKey], cacheName: razorpayKey, base: razorpayKey.split('_')[0] };
+  if (!DISPLAY[razorpayKey]) throw new Error(`Unknown plan key: ${razorpayKey}`);
+  const cur = pricing.normCurrency(currency);
+  const cyc = pricing.normCycle(cycle);
+  return {
+    amount     : pricing.price(razorpayKey, cur, cyc) * 100,
+    currency   : cur,
+    period     : cyc,
+    displayName: `${DISPLAY[razorpayKey]} (${cyc}, ${cur})`,
+    cacheName  : `${razorpayKey}_${cur.toLowerCase()}_${cyc}`,
+    base       : razorpayKey.split('_')[0],
+  };
+}
 
 // ─── Low-level HTTP helper ────────────────────────────────────────────────────
 
@@ -144,79 +160,58 @@ async function getOrCreateCustomer(user) {
 // ─── Plans ────────────────────────────────────────────────────────────────────
 
 /**
- * Get or create a Razorpay Plan for the given plan key ('starter' | 'pro').
- * The optional plan ID from Settings and the cached ID are used only after a
- * live check against the current keys; otherwise a plan is created and cached.
+ * Get or create the Razorpay Plan for a plan key in a currency and cycle.
+ * The amount comes from services/pricing.js; the owner never enters a plan ID.
+ * A cached ID is used only after a live check against the current keys
+ * (exists, same amount, currency and period); otherwise a plan is created.
  *
- * @param {'starter'|'pro'} planKey
+ * @param {'starter'|'pro'|'pro_founding'|'starter_test'|'pro_test'} razorpayKey
+ * @param {{ currency?: 'USD'|'INR', cycle?: 'monthly'|'yearly' }} [opts]
  * @returns {Promise<string>} Razorpay plan ID (plan_XXXXX)
  */
-async function getOrCreatePlan(planKey) {
-  const def = PLAN_DEFS[planKey];
-  if (!def) throw new Error(`Unknown plan key: ${planKey}`);
+async function getOrCreatePlan(razorpayKey, opts = {}) {
+  const spec = planSpec(razorpayKey, opts.currency, opts.cycle);
 
-  // 1. Check env var override (admin-provided plan ID). Only the standard
-  //    starter/pro plans have env overrides — 'pro_founding' always resolves
-  //    via the DB cache / API so it is never accidentally mapped to the $79 plan.
-  const envPlanId = planKey === 'starter' ? env.RAZORPAY_PLAN_ID_STARTER
-                  : planKey === 'pro'     ? env.RAZORPAY_PLAN_ID_PRO
-                  : null;
-
-  // Payments never depend on a stored plan ID being right. Every candidate
-  // (the optional ID from Settings, then the cached one) is checked live
-  // against the CURRENT Razorpay keys: it must exist there and bill the
-  // amount and currency this app charges for the plan. A wrong, deleted, or
-  // other-mode ID (test plan after switching to live keys) is skipped, and a
-  // fresh plan is created and cached instead.
   const { rows } = await pool.query(
     `SELECT razorpay_plan_id FROM razorpay_plans WHERE plan_name = $1`,
-    [planKey]
+    [spec.cacheName]
   );
-  const candidates = [envPlanId, rows[0]?.razorpay_plan_id].filter(Boolean);
-  for (const id of [...new Set(candidates)]) {
-    if (await _planMatches(id, def)) {
-      logger.debug(`[razorpay] Using verified plan ID ${id} for ${planKey}`);
-      return id;
-    }
-    logger.warn(`[razorpay] Plan ID ${id} for ${planKey} is missing on these keys or bills a different amount; ignoring it`);
+  const cached = rows[0]?.razorpay_plan_id;
+  if (cached) {
+    if (await _planMatches(cached, spec)) return cached;
+    logger.warn(`[razorpay] Cached plan ${cached} (${spec.cacheName}) is missing on these keys or bills a different amount; creating a new one`);
   }
 
-  // Create via API. notes.vidapulse_plan makes the plan self-describing, so a
-  // charge on it maps back to the VidaPulse plan without any stored ID.
-  logger.info(`[razorpay] Creating Razorpay plan for ${planKey} (${def.amount / 100} ${def.currency || PLAN_CURRENCY}/mo)`);
+  // notes.vidapulse_plan makes the plan self-describing, so a charge on it
+  // maps back to the VidaPulse plan without any stored ID.
+  logger.info(`[razorpay] Creating Razorpay plan ${spec.cacheName} (${spec.amount / 100} ${spec.currency}/${spec.period})`);
   const plan = await _razorpayRequest('POST', '/v1/plans', {
-    period  : 'monthly',
+    period  : spec.period,
     interval: 1,
-    item    : {
-      name    : def.displayName,
-      amount  : def.amount,
-      currency: def.currency || PLAN_CURRENCY,
-    },
-    notes   : { vidapulse_plan: planKey },
+    item    : { name: spec.displayName, amount: spec.amount, currency: spec.currency },
+    notes   : { vidapulse_plan: razorpayKey, currency: spec.currency, cycle: spec.period },
   });
 
-  const planId = plan.id;
-
-  // Store in DB so we don't recreate on next call
   await pool.query(
-    `INSERT INTO razorpay_plans (plan_name, razorpay_plan_id, amount_paise)
-     VALUES ($1, $2, $3)
+    `INSERT INTO razorpay_plans (plan_name, razorpay_plan_id, amount_paise, interval_unit)
+     VALUES ($1, $2, $3, $4)
      ON CONFLICT (plan_name) DO UPDATE SET razorpay_plan_id = EXCLUDED.razorpay_plan_id,
-                                           amount_paise     = EXCLUDED.amount_paise`,
-    [planKey, planId, def.amount]
+                                           amount_paise     = EXCLUDED.amount_paise,
+                                           interval_unit    = EXCLUDED.interval_unit`,
+    [spec.cacheName, plan.id, spec.amount, spec.period]
   );
 
-  logger.info(`[razorpay] Created plan ${planId} for ${planKey}`);
-  return planId;
+  logger.info(`[razorpay] Created plan ${plan.id} for ${spec.cacheName}`);
+  return plan.id;
 }
 
-/** True when the plan exists on the current keys and bills def's amount/currency monthly. */
-async function _planMatches(planId, def) {
+/** True when the plan exists on the current keys and bills spec's amount, currency and period. */
+async function _planMatches(planId, spec) {
   try {
     const p = await _razorpayRequest('GET', `/v1/plans/${encodeURIComponent(planId)}`);
-    return Number(p?.item?.amount) === def.amount
-        && String(p?.item?.currency || '').toUpperCase() === (def.currency || PLAN_CURRENCY)
-        && p?.period === 'monthly' && Number(p?.interval) === 1;
+    return Number(p?.item?.amount) === spec.amount
+        && String(p?.item?.currency || '').toUpperCase() === spec.currency
+        && p?.period === spec.period && Number(p?.interval) === 1;
   } catch (e) {
     logger.warn(`[razorpay] Plan lookup ${planId} failed: ${e.message}`);
     return false;
@@ -242,38 +237,50 @@ async function _planMatches(planId, def) {
  * @returns {Promise<{ subscriptionId: string, paymentUrl: string }>}
  */
 async function createSubscription(user, planKey, returnUrl, options = {}) {
-  // Founding members get the $59 'pro_founding' Razorpay plan while keeping
-  // their VidaPulse plan key = 'pro'. Because a Razorpay subscription is bound
-  // to its plan, every renewal stays $59 — that IS the lifetime price lock.
+  // Founding members get the 'pro_founding' Razorpay plan while keeping their
+  // VidaPulse plan key = 'pro'. Because a Razorpay subscription is bound to its
+  // plan, every renewal stays at the founding price: that IS the lifetime lock.
+  // options.currency ('USD'|'INR') and options.cycle ('monthly'|'yearly') pick
+  // the price from services/pricing.js; options.meta (ip, country) is recorded
+  // in the subscription notes.
   // options.test → the Rs 1 '<plan>_test' Razorpay plan (super-admin billing
   // tests). options.persist === false → do not write the subscription onto the
   // user row yet; the caller does that once the payment is verified.
   const test          = options.test === true;
   const founding      = !test && options.founding === true && planKey === 'pro';
   const razorpayPlan  = test ? `${planKey}_test` : (founding ? 'pro_founding' : planKey);
+  const spec          = planSpec(razorpayPlan, options.currency, options.cycle);
 
   const [customerId, planId] = await Promise.all([
     getOrCreateCustomer(user),
-    getOrCreatePlan(razorpayPlan),
+    getOrCreatePlan(razorpayPlan, { currency: spec.currency, cycle: spec.period }),
   ]);
 
   logger.info(
-    `[razorpay] Creating subscription for user ${user.id} — ` +
-    `plan=${planKey}${founding ? ' (founding $59)' : ''} customer=${customerId} razorpay_plan=${planId}`
+    `[razorpay] Creating subscription for user ${user.id}: ` +
+    `plan=${planKey}${founding ? ' (founding)' : ''} ${spec.amount / 100} ${spec.currency}/${spec.period} ` +
+    `customer=${customerId} razorpay_plan=${planId}`
   );
 
+  const meta = options.meta || {};
   const subscription = await _razorpayRequest('POST', '/v1/subscriptions', {
     plan_id          : planId,
     customer_id      : customerId,
     quantity         : 1,
-    total_count      : 120,        // max 120 months (10 years) — effectively perpetual
+    // About 10 years either way: effectively perpetual.
+    total_count      : spec.period === 'yearly' ? 10 : 120,
     customer_notify  : 0,          // we handle comms via DivineLead CRM
-    // NO callback_url / callback_method — the Razorpay Subscriptions API rejects
+    // NO callback_url / callback_method: the Razorpay Subscriptions API rejects
     // them (HTTP 400). Activation is webhook-driven (subscription.charged); the
     // client opens Razorpay Checkout in-page and returns the user to /payment/:plan.
     notes            : {
       user_id : user.id,
       plan    : planKey,               // always the VidaPulse plan key ('pro')
+      amount  : String(spec.amount / 100),
+      currency: spec.currency,
+      cycle   : spec.period,
+      ...(meta.ip      ? { ip: String(meta.ip).slice(0, 64) } : {}),
+      ...(meta.country ? { country: String(meta.country) }    : {}),
       ...(founding ? { founding: '1' } : {}),
       ...(test ? { test: '1' } : {}),
     },
@@ -292,7 +299,7 @@ async function createSubscription(user, planKey, returnUrl, options = {}) {
   );
 
   logger.info(`[razorpay] Created subscription ${subscriptionId} for user ${user.id}`);
-  return { subscriptionId, paymentUrl };
+  return { subscriptionId, paymentUrl, amount: spec.amount / 100, currency: spec.currency, cycle: spec.period };
 }
 
 /**
@@ -311,7 +318,7 @@ async function cancelSubscription(subscriptionId) {
 }
 
 /**
- * Fetch a Razorpay payment entity — used to record accurate amount/currency/
+ * Fetch a Razorpay payment entity: used to record accurate amount/currency/
  * method when activating a plan from the client checkout callback.
  */
 async function fetchPayment(paymentId) {
@@ -323,8 +330,8 @@ async function fetchPayment(paymentId) {
  * effect at the end of the current cycle, and every renewal after that bills
  * the new plan's amount. Razorpay only allows this for card-paid subscriptions.
  */
-async function switchSubscriptionPlan(subscriptionId, razorpayPlanKey) {
-  const planId = await getOrCreatePlan(razorpayPlanKey);
+async function switchSubscriptionPlan(subscriptionId, razorpayPlanKey, opts = {}) {
+  const planId = await getOrCreatePlan(razorpayPlanKey, opts);
   logger.info(`[razorpay] Switching subscription ${subscriptionId} to ${razorpayPlanKey} (${planId}) at cycle end`);
   return _razorpayRequest('PATCH', `/v1/subscriptions/${subscriptionId}`, {
     plan_id           : planId,
@@ -336,8 +343,6 @@ async function switchSubscriptionPlan(subscriptionId, razorpayPlanKey) {
 /** Map a Razorpay plan_id back to the VidaPulse plan key ('starter' | 'pro'), or null. */
 async function planKeyForRazorpayPlan(razorpayPlanId) {
   if (!razorpayPlanId) return null;
-  if (env.RAZORPAY_PLAN_ID_STARTER && razorpayPlanId === env.RAZORPAY_PLAN_ID_STARTER) return 'starter';
-  if (env.RAZORPAY_PLAN_ID_PRO     && razorpayPlanId === env.RAZORPAY_PLAN_ID_PRO)     return 'pro';
   const { rows } = await pool.query(
     `SELECT plan_name FROM razorpay_plans WHERE razorpay_plan_id = $1 LIMIT 1`, [razorpayPlanId]
   );
@@ -345,14 +350,23 @@ async function planKeyForRazorpayPlan(razorpayPlanId) {
   if (!name) {
     // Not a plan we know by ID: ask Razorpay. Plans this app creates carry
     // notes.vidapulse_plan; any other plan is recognised by what it bills.
-    const p = await _razorpayRequest('GET', `/v1/plans/${encodeURIComponent(razorpayPlanId)}`);
-    name = p?.notes?.vidapulse_plan
-        || Object.keys(PLAN_DEFS).find(k =>
-             PLAN_DEFS[k].amount === Number(p?.item?.amount) &&
-             (PLAN_DEFS[k].currency || PLAN_CURRENCY) === String(p?.item?.currency || '').toUpperCase());
+    const p   = await _razorpayRequest('GET', `/v1/plans/${encodeURIComponent(razorpayPlanId)}`);
+    const amt = Number(p?.item?.amount);
+    const cur = String(p?.item?.currency || '').toUpperCase();
+    name = p?.notes?.vidapulse_plan;
+    if (!name) {
+      outer: for (const key of Object.keys(DISPLAY)) {
+        for (const c of pricing.CURRENCIES) {
+          for (const cyc of pricing.CYCLES) {
+            if (c === cur && pricing.price(key, c, cyc) * 100 === amt) { name = key; break outer; }
+          }
+        }
+      }
+    }
+    if (!name) name = Object.keys(TEST_DEFS).find(k => TEST_DEFS[k].amount === amt && TEST_DEFS[k].currency === cur);
   }
   if (!name) return null;
-  const base = String(name).replace(/_(test|founding)$/, '');
+  const base = String(name).split('_')[0];
   return ['starter', 'pro'].includes(base) ? base : null;
 }
 
@@ -370,5 +384,5 @@ module.exports = {
   fetchSubscription,
   switchSubscriptionPlan,
   planKeyForRazorpayPlan,
-  TEST_AMOUNT_PAISE: { starter: PLAN_DEFS.starter_test.amount, pro: PLAN_DEFS.pro_test.amount },
+  TEST_AMOUNT_PAISE: { starter: TEST_DEFS.starter_test.amount, pro: TEST_DEFS.pro_test.amount },
 };

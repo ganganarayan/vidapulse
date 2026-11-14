@@ -73,8 +73,6 @@ module.exports = {
   // Razorpay Plan IDs (optional — if set, these plan IDs are used directly
   // instead of auto-creating plans via API on first subscription).
   // Format: 'plan_XXXXXXXXXXXXXX'
-  RAZORPAY_PLAN_ID_STARTER: process.env.RAZORPAY_PLAN_ID_STARTER || null,
-  RAZORPAY_PLAN_ID_PRO    : process.env.RAZORPAY_PLAN_ID_PRO     || null,
 
   // Meta Pixel ID for the public embed player. The embed fires a
   // 'TrackingActivated' custom event on every play (engagement signal). Same
