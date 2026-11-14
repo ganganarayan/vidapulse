@@ -390,6 +390,8 @@ if (env.NODE_ENV === 'production') {
         foundingPrice : prices.plans.pro_founding.monthly.label,
         foundingClosed: f.closed,
         prices,
+        // Changes every deploy, so browsers fetch the new landing.js instead of a cached one.
+        assetVersion  : encodeURIComponent(require('./config/serverInfo').startedAt),
       });
     } else {
       // No-cache so users always get the freshest entry point after a deploy
