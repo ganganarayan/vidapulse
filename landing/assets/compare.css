@@ -44,6 +44,7 @@ h1 { font-size: clamp(30px, 4.5vw, 44px); line-height: 1.15; letter-spacing: -.5
 .cmp-table tr.tie th { border-left-color: #CBD5E1; }
 .cmp-table tr.them-wins th { border-left-color: #F59E0B; }
 .cmp-table tr.them-wins td:last-child { background: #FFFBEB; }
+.source { font-size: 13px; color: #64748B; margin-top: 12px; margin-bottom: 0; }
 .legend { font-size: 13px; color: #64748B; margin-top: 10px; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
 .dot.us { background: #10B981; } .dot.tie { background: #CBD5E1; } .dot.them { background: #F59E0B; }

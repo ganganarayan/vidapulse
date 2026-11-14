@@ -43,7 +43,7 @@
     <span class="label">Comparison</span>
     <h1>VidaPulse as a <%= c.name %> alternative</h1>
     <p class="lede"><%= c.lede %></p>
-    <p class="meta">Updated <%= updated %>. Competitor features change: check <%= c.name %>'s own site for current plans and prices.</p>
+    <p class="meta">Updated <%= updated %>.<% if (c.factsCheckedOn) { %> <%= c.name %> facts checked on <%= c.factsCheckedOn %>.<% } %> Table prices are in USD. Prices change: confirm on <%= c.name %>'s own pricing page before you buy.</p>
 
     <% c.sections.forEach(function (s) { %>
       <section class="block">
@@ -72,6 +72,7 @@
           </tbody>
         </table>
       </div>
+      <% if (c.source) { %><p class="source"><%= c.name %> figures: <%= c.source %></p><% } %>
       <p class="legend"><span class="dot us"></span> VidaPulse stronger &nbsp; <span class="dot tie"></span> Both do it &nbsp; <span class="dot them"></span> <%= c.name %> stronger</p>
     </section>
 
