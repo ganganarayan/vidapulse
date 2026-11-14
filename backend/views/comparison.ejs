@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="/assets/clarity.js"></script>
+  <title><%= c.title %> | VidaPulse</title>
+  <meta name="description" content="<%= c.description %>" />
+  <meta name="robots" content="index, follow, max-snippet:-1" />
+  <link rel="canonical" href="https://vidapulse.io/<%= c.slug %>" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="VidaPulse" />
+  <meta property="og:title" content="<%= c.title %>" />
+  <meta property="og:description" content="<%= c.description %>" />
+  <meta property="og:url" content="https://vidapulse.io/<%= c.slug %>" />
+  <meta property="og:image" content="https://vidapulse.io/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="stylesheet" href="/assets/compare.css?v=<%= assetVersion %>" />
+  <script type="application/ld+json"><%- jsonLd %></script>
+</head>
+<body>
+  <header>
+  <nav class="nav" aria-label="Main navigation">
+    <div class="container nav-inner">
+      <a href="/" class="nav-logo">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="11" fill="#F59E0B" opacity=".2"/><polygon points="10,8 10,16 16,12" fill="#F59E0B"/></svg>
+        VidaPulse
+      </a>
+      <ul class="nav-links">
+        <li><a href="/#how-it-works">How It Works</a></li>
+        <li><a href="/#compare">Compare</a></li>
+        <li><a href="/#pricing">Pricing</a></li>
+      </ul>
+      <a href="https://app.vidapulse.io/login" class="btn btn-primary">Start free</a>
+    </div>
+  </nav>
+  </header>
+
+  <main class="container cmp">
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="/">VidaPulse</a> <span>/</span> <a href="/#compare">Compare</a> <span>/</span> vs <%= c.name %></nav>
+
+    <span class="label">Comparison</span>
+    <h1>VidaPulse as a <%= c.name %> alternative</h1>
+    <p class="lede"><%= c.lede %></p>
+    <p class="meta">Updated <%= updated %>. Competitor features change: check <%= c.name %>'s own site for current plans and prices.</p>
+
+    <% c.sections.forEach(function (s) { %>
+      <section class="block">
+        <h2><%= s.h2 %></h2>
+        <% (s.p || []).forEach(function (para) { %><p><%= para %></p><% }) %>
+        <% if (s.bullets && s.bullets.length) { %>
+          <ul class="ticks"><% s.bullets.forEach(function (b) { %><li><%= b %></li><% }) %></ul>
+        <% } %>
+      </section>
+    <% }) %>
+
+    <section class="block">
+      <h2>VidaPulse vs <%= c.name %>, side by side</h2>
+      <p>Every row, including the ones where <%= c.name %> is the better tool.</p>
+      <div class="table-wrap">
+        <table class="cmp-table">
+          <thead><tr><th scope="col"></th><th scope="col">VidaPulse</th><th scope="col"><%= c.name %></th></tr></thead>
+          <tbody>
+            <% c.rows.forEach(function (r) { %>
+              <tr class="<%= r.themWins ? 'them-wins' : (r.tie ? 'tie' : 'us-wins') %>">
+                <th scope="row"><%= r.label %></th>
+                <td><%= r.us %></td>
+                <td><%= r.them %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+      <p class="legend"><span class="dot us"></span> VidaPulse stronger &nbsp; <span class="dot tie"></span> Both do it &nbsp; <span class="dot them"></span> <%= c.name %> stronger</p>
+    </section>
+
+    <section class="block better">
+      <h2>When <%= c.name %> is the better choice</h2>
+      <p><%= c.betterWhen %></p>
+    </section>
+
+    <section class="block">
+      <h2>VidaPulse pricing</h2>
+      <p>One flat price per account, not per seat. Every plan starts free.</p>
+      <ul class="ticks">
+        <li><strong>Free, <%= prices.symbol %>0 forever:</strong> 1 video, plays, play rate, unique visitors.</li>
+        <li><strong>Starter, <%= prices.plans.starter.monthly.label %>/mo:</strong> up to 10 videos, drop-off point, heatmap, geo and device.</li>
+        <li><strong>Growth, <%= prices.plans.pro.monthly.label %>/mo:</strong> up to 20 videos, UTM attribution, conversion tracking, server-side pixel forwarding, AI insights.</li>
+        <li><strong>Scale, <%= prices.plans.scale.monthly.label %>/mo:</strong> multi-user, API access, white-label reports.</li>
+      </ul>
+    </section>
+
+    <section class="block">
+      <h2>Questions</h2>
+      <% c.faqs.forEach(function (f) { %>
+        <details class="faq"><summary><%= f.q %></summary><p><%= f.a %></p></details>
+      <% }) %>
+      <% if (c.kb) { %>
+        <p class="more">Longer write-up: <a href="https://app.vidapulse.io/video-analytics-guide/comparisons/<%= c.kb %>">VidaPulse vs <%= c.name %> in the video analytics guide</a>.</p>
+      <% } %>
+    </section>
+
+    <section class="cta">
+      <h2>See where buyers leave your video</h2>
+      <p>Free forever on 1 video. No card. Works with the video you already have.</p>
+      <a href="https://app.vidapulse.io/login" class="btn btn-primary btn-lg">Show my drop-off point &rarr;</a>
+    </section>
+
+    <section class="block others">
+      <h2>Other comparisons</h2>
+      <ul class="other-list">
+        <% others.forEach(function (o) { %><li><a href="/<%= o.slug %>">VidaPulse vs <%= o.name %></a></li><% }) %>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>&copy; 2026 VidaPulse &middot; <a href="/">Home</a> &middot; <a href="/#compare">Comparisons</a> &middot; <a href="/privacy-policy">Privacy</a> &middot; <a href="/terms-of-use">Terms</a> &middot; <a href="mailto:support@vidapulse.io">support@vidapulse.io</a></p>
+    </div>
+  </footer>
+</body>
+</html>

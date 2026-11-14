@@ -376,6 +376,46 @@ if (env.NODE_ENV === 'production') {
   // index.html so client-side routing works (e.g. /login, /dashboard/videos).
   app.get('*', async (req, res) => {
     if (landingDomains.has(req.hostname)) {
+      // Competitor comparison pages: vidapulse.io/<brand>-alternative.
+      // Content lives in src/content/comparisons.js; one shared view.
+      const cmp = require('./content/comparisons');
+      const cmpSlug = req.path.replace(/^\/+|\/+$/g, '').toLowerCase();
+      const c = cmp.BY_SLUG.get(cmpSlug);
+      if (c) {
+        const pricing = require('./services/pricing');
+        const prices  = pricing.table(pricing.currencyForReq(req));
+        const url = `https://vidapulse.io/${c.slug}`;
+        const jsonLd = JSON.stringify({
+          '@context': 'https://schema.org',
+          '@graph': [
+            {
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                { '@type': 'ListItem', position: 1, name: 'VidaPulse', item: 'https://vidapulse.io/' },
+                { '@type': 'ListItem', position: 2, name: 'Compare', item: 'https://vidapulse.io/#compare' },
+                { '@type': 'ListItem', position: 3, name: `VidaPulse vs ${c.name}`, item: url },
+              ],
+            },
+            {
+              '@type': 'FAQPage',
+              mainEntity: c.faqs.map((f) => ({
+                '@type': 'Question', name: f.q,
+                acceptedAnswer: { '@type': 'Answer', text: f.a },
+              })),
+            },
+          ],
+        }).replace(/</g, '\\u003c');
+        res.setHeader('Cache-Control', 'private, no-cache');
+        return res.render('comparison', {
+          c,
+          others: cmp.COMPARISONS.filter((o) => o.slug !== c.slug),
+          updated: cmp.UPDATED,
+          prices,
+          jsonLd,
+          assetVersion: encodeURIComponent(require('./config/serverInfo').startedAt),
+        });
+      }
+
       // Server-render the landing view with the live founding-members count
       // injected (falls back to an empty cohort if the lookup fails).
       let f = { taken: 0, limit: 100, price_usd: 59, closed: false };
@@ -390,6 +430,7 @@ if (env.NODE_ENV === 'production') {
         foundingPrice : prices.plans.pro_founding.monthly.label,
         foundingClosed: f.closed,
         prices,
+        comparisons   : require('./content/comparisons').COMPARISONS,
         // Changes every deploy, so browsers fetch the new landing.js instead of a cached one.
         assetVersion  : encodeURIComponent(require('./config/serverInfo').startedAt),
       });

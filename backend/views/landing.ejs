@@ -444,6 +444,15 @@
       .hero-actions .btn { width: 100%; justify-content: center; }
     }
 
+    /* ══════════════════════════════════════════════ COMPARE ══════════ */
+    .compare { background: #F8FAFC; text-align: center; }
+    .compare-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; margin-top: 40px; text-align: left; }
+    .compare-card { display: flex; flex-direction: column; background: #ffffff; border: 1px solid #E2E8F0; border-radius: 14px; padding: 22px; transition: border-color .15s, transform .15s, box-shadow .15s; }
+    .compare-card:hover { border-color: #F59E0B; transform: translateY(-2px); box-shadow: 0 8px 22px rgba(15,23,42,.06); }
+    .compare-card h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+    .compare-card p { font-size: 14px; color: #64748B; flex: 1; margin-bottom: 14px; }
+    .compare-more { font-size: 13.5px; font-weight: 600; color: #B45309; }
+
     /* ══════════════════════════════════════════════ SIGNUP MODAL ══════════ */
     .signup-overlay {
       position: fixed; inset: 0; z-index: 300; display: none;
@@ -501,6 +510,7 @@
         <li><a href="#why">Why It's Different</a></li>
         <li><a href="#features">What You See</a></li>
         <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#compare">Compare</a></li>
       </ul>
       <div class="nav-cta">
         <a href="https://app.vidapulse.io/login" class="nav-login">Log in</a>
@@ -777,6 +787,24 @@
     </div>
   </section>
 
+  <!-- ═══════════════════════════════════════ COMPARE ═══════════ -->
+  <section class="section compare" id="compare" aria-labelledby="compare-heading">
+    <div class="container">
+      <span class="label">Compare</span>
+      <h2 class="heading" id="compare-heading">VidaPulse vs the tools you are looking at</h2>
+      <p class="subtext">An honest page for each: where we win, where we tie, and where the other tool is the better buy.</p>
+      <div class="compare-grid">
+        <% comparisons.forEach(function (c) { %>
+        <a class="compare-card" href="/<%= c.slug %>">
+          <h3>VidaPulse vs <%= c.name %></h3>
+          <p><%= c.card %></p>
+          <span class="compare-more">Read the comparison &rarr;</span>
+        </a>
+        <% }) %>
+      </div>
+    </div>
+  </section>
+
   <!-- ═══════════════════════════════════════ FAQ ═══════════ -->
   <section class="section faq" id="faq" aria-labelledby="faq-heading">
     <div class="container">
@@ -867,6 +895,12 @@
               <li><a href="#features">What You See</a></li>
               <li><a href="#pricing">Pricing</a></li>
               <li><a href="https://app.vidapulse.io/login">Log In</a></li>
+            </ul>
+          </div>
+          <div class="footer-col">
+            <h4>Compare</h4>
+            <ul>
+              <% comparisons.forEach(function (c) { %><li><a href="/<%= c.slug %>">vs <%= c.name %></a></li><% }) %>
             </ul>
           </div>
           <div class="footer-col">

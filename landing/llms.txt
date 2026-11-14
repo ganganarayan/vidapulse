@@ -68,6 +68,18 @@ No video migration, no storage costs, no platform lock-in.
 - What you see: https://vidapulse.io/#features
 - Support: support@vidapulse.io
 
+## Comparisons
+
+One honest page per tool, including the rows where the other tool wins:
+
+- VidaPulse vs Vidalytics: https://vidapulse.io/vidalytics-alternative
+- VidaPulse vs Wistia: https://vidapulse.io/wistia-alternative
+- VidaPulse vs Vidyard: https://vidapulse.io/vidyard-alternative
+- VidaPulse vs Vimeo: https://vidapulse.io/vimeo-analytics-alternative
+- VidaPulse vs YouTube Analytics: https://vidapulse.io/youtube-analytics-alternative
+- VidaPulse vs Hotjar: https://vidapulse.io/hotjar-alternative
+- VidaPulse vs Google Analytics: https://vidapulse.io/google-analytics-video-alternative
+
 ## Frequently asked questions
 
 **What is VidaPulse?**
