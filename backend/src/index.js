@@ -30,6 +30,7 @@ const helmet       = require('helmet');
 const morgan       = require('morgan');
 const cookieParser = require('cookie-parser');
 const path         = require('path');
+const fs           = require('fs');
 
 const { testConnection } = require('./config/database');
 const { runMigrations  } = require('./db/migrate');
@@ -343,6 +344,18 @@ if (env.NODE_ENV === 'production') {
     next();
   });
 
+  // Landing sitemap: the static file plus the comparison pages, whose <lastmod>
+  // comes from each page's updatedOn in src/content/comparisons.js, so bumping
+  // a page's date there updates the sitemap too. Must run before the static handler.
+  app.get('/sitemap.xml', (req, res, next) => {
+    if (!landingDomains.has(req.hostname)) return next();
+    fs.readFile(path.join(landingDir, 'sitemap.xml'), 'utf8', (err, xml) => {
+      if (err) return next();
+      const entries = require('./content/comparisons').sitemapEntries();
+      res.type('application/xml').send(xml.replace(/^.*<!-- COMPARISONS:.*-->\r?\n/m, (m) => m + entries));
+    });
+  });
+
   // Serve landing page static assets (CSS, images, favicon, etc.)
   // Only for requests on the marketing domain
   app.use((req, res, next) => {
@@ -389,6 +402,14 @@ if (env.NODE_ENV === 'production') {
           '@context': 'https://schema.org',
           '@graph': [
             {
+              '@type': 'WebPage',
+              '@id': url,
+              url,
+              name: c.title,
+              description: c.description,
+              dateModified: c.updatedOn,
+            },
+            {
               '@type': 'BreadcrumbList',
               itemListElement: [
                 { '@type': 'ListItem', position: 1, name: 'VidaPulse', item: 'https://vidapulse.io/' },
@@ -409,7 +430,6 @@ if (env.NODE_ENV === 'production') {
         return res.render('comparison', {
           c,
           others: cmp.COMPARISONS.filter((o) => o.slug !== c.slug),
-          updated: cmp.UPDATED,
           prices,
           jsonLd,
           assetVersion: encodeURIComponent(require('./config/serverInfo').startedAt),

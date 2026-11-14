@@ -19,15 +19,23 @@
  * Writing rules: no em dashes; dates DD-MM-YYYY.
  */
 
-const UPDATED = '14-11-2026';           // what a person reads
-const UPDATED_ISO = '2026-11-14';       // what the sitemap reads
+// Every page carries updatedOn (ISO YYYY-MM-DD). It is the ONE place a page's
+// date lives: the "Last updated" badge on the page, the date on its landing
+// card, the JSON-LD dateModified and the sitemap <lastmod> all read it.
+// When you revise a page (prices, features, copy), set its updatedOn to today.
+
+/** ISO 'YYYY-MM-DD' -> 'DD-MM-YYYY' for people. Pure string work: no timezone involved. */
+function displayDate(iso) {
+  const [y, m, d] = String(iso).split('-');
+  return `${d}-${m}-${y}`;
+}
 
 const COMPARISONS = [
   {
     slug: 'vidalytics-alternative',
     name: 'Vidalytics',
     kb: null,
-    factsCheckedOn: '14-11-2026',
+    updatedOn: '2026-11-14',
     source: "read from the Vidalytics help centre plans page on 14-11-2026 (their pricing page would not load for us). Annual prices are the per-month figure billed yearly.",
     card: 'A VSL host with a conversion player. VidaPulse reads the VSL where it already lives.',
     title: 'Vidalytics Alternative for VSL Analytics Without Re-hosting',
@@ -75,7 +83,7 @@ const COMPARISONS = [
     slug: 'wistia-alternative',
     name: 'Wistia',
     kb: 'vidapulse-vs-wistia',
-    factsCheckedOn: '14-11-2026',
+    updatedOn: '2026-11-14',
     source: 'read from wistia.com/pricing on 14-11-2026, which shows prices billed annually. Monthly billing costs more.',
     card: 'An all-in-one video host and marketing suite. VidaPulse is only the analytics, on video you host anywhere.',
     title: 'Wistia Alternative for Sales-Video Analytics',
@@ -125,7 +133,7 @@ const COMPARISONS = [
     slug: 'vidyard-alternative',
     name: 'Vidyard',
     kb: 'vidapulse-vs-vidyard',
-    factsCheckedOn: '14-11-2026',
+    updatedOn: '2026-11-14',
     source: 'read from vidyard.com/pricing and the plain-text pricing file Vidyard publishes, on 14-11-2026.',
     card: 'A sales-team video platform billed per seat. VidaPulse is one flat price for the whole account.',
     title: 'Vidyard Alternative for VSL and Demo Analytics',
@@ -172,7 +180,7 @@ const COMPARISONS = [
     slug: 'vimeo-analytics-alternative',
     name: 'Vimeo',
     kb: 'vidapulse-vs-vimeo-analytics',
-    factsCheckedOn: '14-11-2026',
+    updatedOn: '2026-11-14',
     source: "read from Vimeo's help centre article on its new plans (Free, Creator, Core, Professional, Studio) on 14-11-2026. Older plan names are being moved onto these at renewal.",
     card: 'A great host with engagement stats on paid tiers. VidaPulse adds funnel analytics on top of Vimeo or anywhere else.',
     title: 'Vimeo Analytics Alternative for Sales Videos',
@@ -216,7 +224,7 @@ const COMPARISONS = [
     slug: 'youtube-analytics-alternative',
     name: 'YouTube Analytics',
     kb: 'vidapulse-vs-youtube-analytics',
-    factsCheckedOn: '14-11-2026',
+    updatedOn: '2026-11-14',
     source: "read from YouTube Help on audience retention and traffic sources on 14-11-2026.",
     card: 'Free and aggregated across all of YouTube. VidaPulse shows what happens on your own sales page.',
     title: 'YouTube Analytics Alternative for Embedded Sales Videos',
@@ -251,7 +259,7 @@ const COMPARISONS = [
     slug: 'hotjar-alternative',
     name: 'Hotjar',
     kb: 'vidapulse-vs-hotjar',
-    factsCheckedOn: '14-11-2026',
+    updatedOn: '2026-11-14',
     source: "hotjar.com/pricing now redirects to contentsquare.com/pricing, read on 14-11-2026. Embedded-video behaviour is from Hotjar's help centre.",
     card: 'Page heatmaps and recordings. VidaPulse sees inside the video, which page tools cannot.',
     title: 'Hotjar Alternative for Video Engagement',
@@ -285,7 +293,7 @@ const COMPARISONS = [
     slug: 'google-analytics-video-alternative',
     name: 'Google Analytics',
     kb: 'vidapulse-vs-google-analytics',
-    factsCheckedOn: '14-11-2026',
+    updatedOn: '2026-11-14',
     source: "read from Google Analytics Help on enhanced measurement events on 14-11-2026.",
     card: 'Free milestone events at 10, 25, 50 and 75 percent. VidaPulse shows every second.',
     title: 'Google Analytics Alternative for Video Tracking',
@@ -316,6 +324,22 @@ const COMPARISONS = [
   },
 ];
 
+COMPARISONS.forEach((c) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(c.updatedOn || '')) throw new Error(`comparisons: ${c.slug} needs updatedOn YYYY-MM-DD`);
+  c.updatedLabel = displayDate(c.updatedOn);
+});
+
 const BY_SLUG = new Map(COMPARISONS.map((c) => [c.slug, c]));
 
-module.exports = { COMPARISONS, BY_SLUG, UPDATED, UPDATED_ISO };
+/** <url> entries for the landing sitemap, lastmod taken from each page's updatedOn. */
+function sitemapEntries() {
+  return COMPARISONS.map((c) => `  <url>
+    <loc>https://vidapulse.io/${c.slug}</loc>
+    <lastmod>${c.updatedOn}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+`).join('');
+}
+
+module.exports = { COMPARISONS, BY_SLUG, sitemapEntries, displayDate };

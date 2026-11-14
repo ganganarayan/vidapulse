@@ -38,49 +38,7 @@
     <priority>0.8</priority>
   </url>
 
-  <!-- Competitor comparisons (backend/src/content/comparisons.js) -->
-  <url>
-    <loc>https://vidapulse.io/vidalytics-alternative</loc>
-    <lastmod>2026-11-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://vidapulse.io/wistia-alternative</loc>
-    <lastmod>2026-11-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://vidapulse.io/vidyard-alternative</loc>
-    <lastmod>2026-11-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://vidapulse.io/vimeo-analytics-alternative</loc>
-    <lastmod>2026-11-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://vidapulse.io/youtube-analytics-alternative</loc>
-    <lastmod>2026-11-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://vidapulse.io/hotjar-alternative</loc>
-    <lastmod>2026-11-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://vidapulse.io/google-analytics-video-alternative</loc>
-    <lastmod>2026-11-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
+  <!-- COMPARISONS: filled at request time from backend/src/content/comparisons.js (lastmod = each page's updatedOn) -->
 
   <!-- Legal pages -->
   <url>

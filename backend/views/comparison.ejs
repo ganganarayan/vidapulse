@@ -42,8 +42,9 @@
 
     <span class="label">Comparison</span>
     <h1>VidaPulse as a <%= c.name %> alternative</h1>
+    <p class="updated"><time datetime="<%= c.updatedOn %>">Last updated <%= c.updatedLabel %></time></p>
     <p class="lede"><%= c.lede %></p>
-    <p class="meta">Updated <%= updated %>.<% if (c.factsCheckedOn) { %> <%= c.name %> facts checked on <%= c.factsCheckedOn %>.<% } %> Table prices are in USD. Prices change: confirm on <%= c.name %>'s own pricing page before you buy.</p>
+    <p class="meta"><%= c.name %> prices and features checked on <%= c.updatedLabel %>. Table prices are in USD. Prices change: confirm on <%= c.name %>'s own pricing page before you buy.</p>
 
     <% c.sections.forEach(function (s) { %>
       <section class="block">
