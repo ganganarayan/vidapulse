@@ -145,9 +145,8 @@ async function getOrCreateCustomer(user) {
 
 /**
  * Get or create a Razorpay Plan for the given plan key ('starter' | 'pro').
- * If RAZORPAY_PLAN_ID_STARTER / RAZORPAY_PLAN_ID_PRO env vars are set,
- * those IDs are used directly (no API call). Otherwise checks the DB first,
- * then creates via API and stores the result.
+ * The optional plan ID from Settings and the cached ID are used only after a
+ * live check against the current keys; otherwise a plan is created and cached.
  *
  * @param {'starter'|'pro'} planKey
  * @returns {Promise<string>} Razorpay plan ID (plan_XXXXX)
@@ -163,26 +162,28 @@ async function getOrCreatePlan(planKey) {
                   : planKey === 'pro'     ? env.RAZORPAY_PLAN_ID_PRO
                   : null;
 
-  if (envPlanId) {
-    logger.debug(`[razorpay] Using env-configured plan ID ${envPlanId} for ${planKey}`);
-    return envPlanId;
-  }
-
-  // 2. Check DB cache
+  // Payments never depend on a stored plan ID being right. Every candidate
+  // (the optional ID from Settings, then the cached one) is checked live
+  // against the CURRENT Razorpay keys: it must exist there and bill the
+  // amount and currency this app charges for the plan. A wrong, deleted, or
+  // other-mode ID (test plan after switching to live keys) is skipped, and a
+  // fresh plan is created and cached instead.
   const { rows } = await pool.query(
-    `SELECT razorpay_plan_id, amount_paise FROM razorpay_plans WHERE plan_name = $1`,
+    `SELECT razorpay_plan_id FROM razorpay_plans WHERE plan_name = $1`,
     [planKey]
   );
-  // Test plans: a cached plan at a different amount is stale (the test price
-  // changed), so fall through and create one at the current amount.
-  const staleTest = planKey.endsWith('_test') && rows.length > 0 && Number(rows[0].amount_paise) !== def.amount;
-  if (rows.length > 0 && !staleTest) {
-    logger.debug(`[razorpay] Found cached plan ID ${rows[0].razorpay_plan_id} for ${planKey}`);
-    return rows[0].razorpay_plan_id;
+  const candidates = [envPlanId, rows[0]?.razorpay_plan_id].filter(Boolean);
+  for (const id of [...new Set(candidates)]) {
+    if (await _planMatches(id, def)) {
+      logger.debug(`[razorpay] Using verified plan ID ${id} for ${planKey}`);
+      return id;
+    }
+    logger.warn(`[razorpay] Plan ID ${id} for ${planKey} is missing on these keys or bills a different amount; ignoring it`);
   }
 
-  // 3. Create via API
-  logger.info(`[razorpay] Creating Razorpay plan for ${planKey} ($${def.amount / 100}/mo)`);
+  // Create via API. notes.vidapulse_plan makes the plan self-describing, so a
+  // charge on it maps back to the VidaPulse plan without any stored ID.
+  logger.info(`[razorpay] Creating Razorpay plan for ${planKey} (${def.amount / 100} ${def.currency || PLAN_CURRENCY}/mo)`);
   const plan = await _razorpayRequest('POST', '/v1/plans', {
     period  : 'monthly',
     interval: 1,
@@ -191,6 +192,7 @@ async function getOrCreatePlan(planKey) {
       amount  : def.amount,
       currency: def.currency || PLAN_CURRENCY,
     },
+    notes   : { vidapulse_plan: planKey },
   });
 
   const planId = plan.id;
@@ -206,6 +208,19 @@ async function getOrCreatePlan(planKey) {
 
   logger.info(`[razorpay] Created plan ${planId} for ${planKey}`);
   return planId;
+}
+
+/** True when the plan exists on the current keys and bills def's amount/currency monthly. */
+async function _planMatches(planId, def) {
+  try {
+    const p = await _razorpayRequest('GET', `/v1/plans/${encodeURIComponent(planId)}`);
+    return Number(p?.item?.amount) === def.amount
+        && String(p?.item?.currency || '').toUpperCase() === (def.currency || PLAN_CURRENCY)
+        && p?.period === 'monthly' && Number(p?.interval) === 1;
+  } catch (e) {
+    logger.warn(`[razorpay] Plan lookup ${planId} failed: ${e.message}`);
+    return false;
+  }
 }
 
 // ─── Subscriptions ────────────────────────────────────────────────────────────
@@ -326,9 +341,18 @@ async function planKeyForRazorpayPlan(razorpayPlanId) {
   const { rows } = await pool.query(
     `SELECT plan_name FROM razorpay_plans WHERE razorpay_plan_id = $1 LIMIT 1`, [razorpayPlanId]
   );
-  const name = rows[0]?.plan_name;
+  let name = rows[0]?.plan_name;
+  if (!name) {
+    // Not a plan we know by ID: ask Razorpay. Plans this app creates carry
+    // notes.vidapulse_plan; any other plan is recognised by what it bills.
+    const p = await _razorpayRequest('GET', `/v1/plans/${encodeURIComponent(razorpayPlanId)}`);
+    name = p?.notes?.vidapulse_plan
+        || Object.keys(PLAN_DEFS).find(k =>
+             PLAN_DEFS[k].amount === Number(p?.item?.amount) &&
+             (PLAN_DEFS[k].currency || PLAN_CURRENCY) === String(p?.item?.currency || '').toUpperCase());
+  }
   if (!name) return null;
-  const base = name.replace(/_(test|founding)$/, '');
+  const base = String(name).replace(/_(test|founding)$/, '');
   return ['starter', 'pro'].includes(base) ? base : null;
 }
 

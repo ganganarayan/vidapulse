@@ -126,7 +126,8 @@ router.post('/subscribe', requireAuth, async (req, res, next) => {
 
 router.post('/verify', requireAuth, async (req, res, next) => {
   try {
-    const { razorpay_payment_id, razorpay_subscription_id, razorpay_signature, plan } = req.body || {};
+    const { razorpay_payment_id, razorpay_subscription_id, razorpay_signature } = req.body || {};
+    let plan = req.body?.plan;
 
     if (!razorpay_payment_id || !razorpay_subscription_id || !razorpay_signature) {
       return res.status(400).json({ error: 'Missing payment verification fields' });
@@ -168,6 +169,13 @@ router.post('/verify', requireAuth, async (req, res, next) => {
     if (!ownedByNotes && !ownedByRow) {
       logger.warn(`[payments] /verify subscription not owned by user=${req.user.id}`);
       return res.status(403).json({ error: 'Subscription does not belong to this account' });
+    }
+    // The plan is confirmed from the subscription Razorpay holds (its notes
+    // carry the VidaPulse plan sent at checkout), not from the browser.
+    const notedPlan = String(subEntity?.notes?.plan || '').toLowerCase().trim();
+    if (['starter', 'pro'].includes(notedPlan) && notedPlan !== plan) {
+      logger.warn(`[payments] /verify plan mismatch: client=${plan} subscription=${notedPlan} user=${req.user.id}; using subscription`);
+      plan = notedPlan;
     }
 
     // 2b. The paid subscription becomes the account's subscription; on an

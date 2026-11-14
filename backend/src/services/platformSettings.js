@@ -33,8 +33,8 @@ const MANAGED = {
   RAZORPAY_WEBHOOK_SECRET : { group: 'billing',  label: 'Razorpay Webhook Secret',    secret: true,  generate: true, url: '/api/payments/razorpay',
                               events: ['subscription.charged', 'subscription.cancelled', 'subscription.completed', 'subscription.halted'],
                               help: 'Must match the secret on the Razorpay webhook that calls the URL above. If you generate a new one here, paste it into Razorpay too.' },
-  RAZORPAY_PLAN_ID_STARTER: { group: 'billing',  label: 'Starter plan ID (optional)', secret: false, help: 'Leave blank to let the app create the plan automatically.' },
-  RAZORPAY_PLAN_ID_PRO    : { group: 'billing',  label: 'Growth plan ID (optional)',  secret: false, help: 'Leave blank to let the app create the plan automatically.' },
+  RAZORPAY_PLAN_ID_STARTER: { group: 'billing',  label: 'Starter plan ID (optional)', secret: false, help: 'Optional. Used only if it exists on the current keys and bills the right amount; otherwise the app creates and uses its own plan.' },
+  RAZORPAY_PLAN_ID_PRO    : { group: 'billing',  label: 'Growth plan ID (optional)',  secret: false, help: 'Optional. Used only if it exists on the current keys and bills the right amount; otherwise the app creates and uses its own plan.' },
 
   // ── Settings (sign-in, tracking, security) ─────────────────────────────
   GOOGLE_CLIENT_ID        : { group: 'settings', label: 'Google OAuth Client ID',     secret: false, help: 'Google Cloud Console > APIs & Services > Credentials.' },
