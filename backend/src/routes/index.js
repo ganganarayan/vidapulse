@@ -25,7 +25,6 @@ const geoip   = require('geoip-lite');
 const { requireAuth }  = require('../middleware/requireAuth');
 const { emitEvent }    = require('../services/behavioralEventService');
 const { getVisiblePromotionVideos } = require('../services/promotionService');
-const founding         = require('../services/foundingService');
 const pricing          = require('../services/pricing');
 const { startedAt }    = require('../config/serverInfo');
 
@@ -100,26 +99,6 @@ router.get('/geo', (req, res) => {
   return res.json({ country });
 });
 
-// ── GET /api/founding-status ───────────────────────────────────────────────
-// Public (no auth). Powers the landing-page "X of 100 taken" counter. Runs on
-// every host (incl. the apex landing) so the fetch is same-origin. Never
-// throws — foundingService.getStatus() fails closed to taken=0.
-router.get('/founding-status', async (req, res) => {
-  const status   = await founding.getStatus();
-  const currency = pricing.currencyForReq(req);
-  const table    = pricing.table(currency);
-  // Small cache, private: the prices differ by the visitor's country.
-  res.set('Cache-Control', 'private, max-age=60');
-  res.set('Vary', 'CF-IPCountry, X-Forwarded-For');
-  return res.json({
-    ...status,
-    currency,
-    price      : table.plans.pro_founding.monthly.amount,
-    price_label: table.plans.pro_founding.monthly.label,
-    pricing    : table,
-  });
-});
-
 // ── GET /api/promotion-videos ─────────────────────────────────────────────
 // Returns promotion videos visible to the current user (plan-filtered, not hidden).
 router.get('/promotion-videos', requireAuth, async (req, res, next) => {
@@ -169,11 +148,6 @@ router.get('/upgrade', requireAuth, async (req, res, next) => {
     const currency = pricing.currencyForReq(req);
     const table    = pricing.table(currency);
 
-    // Founding pricing: while slots remain, Growth is offered at $59/mo for
-    // life (locked forever). Only relevant to users who can still take 'pro'.
-    const foundingStatus = await founding.getStatus();
-    const foundingActive = !foundingStatus.closed && upgrade_options.includes('pro');
-    const proKey         = foundingActive ? 'pro_founding' : 'pro';
     const cyc            = (key) => ({
       monthly: table.plans[key].monthly, yearly: table.plans[key].yearly,
       price: table.plans[key].monthly.amount, price_label: table.plans[key].monthly.label,
@@ -188,17 +162,9 @@ router.get('/upgrade', requireAuth, async (req, res, next) => {
       // { rate: 0.18, label: '+ 18% GST' } for INR (GST added at checkout), null for USD.
       tax: table.tax,
       yearly_multiplier: table.yearly_multiplier,
-      founding: {
-        active   : foundingActive,
-        price_usd: foundingStatus.price_usd,
-        price_label: table.plans.pro_founding.monthly.label,
-        taken    : foundingStatus.taken,
-        remaining: foundingStatus.remaining,
-        limit    : foundingStatus.limit,
-      },
       pricing: {
         starter: { name: 'Starter', video_limit: 10, ...cyc('starter') },
-        pro    : { name: 'Growth',  video_limit: 20, ...cyc(proKey), founding: foundingActive },
+        pro    : { name: 'Growth',  video_limit: 20, ...cyc('pro') },
         scale  : { name: 'Scale', ...cyc('scale') },
       },
       // Razorpay: static payment-link URLs for INR one-time / subscription entry

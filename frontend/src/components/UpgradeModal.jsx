@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useUpgrade }        from '../contexts/UpgradeContext';
 import { useAuth }           from '../contexts/AuthContext';
 import { startSubscriptionCheckout } from '../lib/razorpayCheckout';
+import api                   from '../lib/api';
 import BillingCycleToggle, { priceLabelFor } from './upgrade/BillingCycleToggle';
 import { getLockColor, planDisplayName } from './PlanTierBadge';
 
@@ -55,32 +56,29 @@ export default function UpgradeModal() {
   const { user }                       = useAuth();
   const [loading, setLoading]          = useState(null); // 'starter' | 'pro' | null
   const [error,   setError]            = useState('');
-  const [founding, setFounding]        = useState(null); // { taken, remaining, limit, price_label, pricing, closed }
+  const [upgradeData, setUpgradeData]  = useState(null); // GET /api/upgrade: { pricing, currency, tax }
   const [cycle, setCycle]              = useState('monthly'); // 'monthly' | 'yearly'
 
-  // Founding-member pricing: while slots remain, Growth is $59/mo for life.
-  // Public endpoint, no auth; falls back to standard $79 on any failure.
+  // Prices come from the server in the visitor's currency (INR in India, USD
+  // elsewhere); the USD figures are only a fallback while it loads.
   useEffect(() => {
     if (!upgradeTarget) return;
     let live = true;
-    fetch('/api/founding-status')
-      .then((r) => r.json())
-      .then((s) => { if (live && s && typeof s.taken === 'number') setFounding(s); })
+    api.get('/upgrade')
+      .then(({ data }) => { if (live && data && data.pricing) setUpgradeData(data); })
       .catch(() => {});
     return () => { live = false; };
   }, [upgradeTarget]);
 
-  const foundingActive = !!(founding && !founding.closed);
-  // Prices come from the server in the visitor's currency (INR in India, USD
-  // elsewhere); the USD figures are only a fallback while it loads.
-  const prices         = founding?.pricing;
-  const proKey         = foundingActive ? 'pro_founding' : 'pro';
+  const prices         = upgradeData?.pricing;
   const yr             = cycle === 'yearly';
   const usd            = (m) => `$${yr ? m * 10 : m}`;
   const starterPrice   = priceLabelFor(prices, 'starter', cycle, usd(29));
-  const proPrice       = priceLabelFor(prices, proKey, cycle, usd(foundingActive ? 59 : 79));
+  const proPrice       = priceLabelFor(prices, 'pro', cycle, usd(79));
   const scalePrice     = priceLabelFor(prices, 'scale', cycle, usd(199));
-  const period         = yr ? 'year' : 'month';
+  // INR prices are shown before GST; the server adds 18% GST at checkout.
+  const taxLabel       = upgradeData?.tax?.label;
+  const period         = (yr ? 'year' : 'month') + (taxLabel ? ` ${taxLabel}` : '');
 
   // Close on Escape key
   useEffect(() => {
@@ -184,9 +182,7 @@ export default function UpgradeModal() {
           <PlanCard
             planKey     = "pro"
             name        = "Growth"
-            tagline     = {foundingActive
-              ? `🔒 Founding: ${founding.remaining} of ${founding.limit} left at ${founding.price_label || '$' + founding.price_usd}/mo for life`
-              : "Attribute the traffic that actually converts"}
+            tagline     = "Attribute the traffic that actually converts"
             price       = {proPrice}
             period      = {period}
             features    = {PLAN_FEATURES.pro}

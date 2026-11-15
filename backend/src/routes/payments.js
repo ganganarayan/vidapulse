@@ -86,14 +86,6 @@ router.post('/subscribe', requireAuth, async (req, res, next) => {
 
     const returnUrl = `${env.APP_URL}/payment/${plan}`;
 
-    // Founding-member pricing: the first 100 to pay for Growth lock $59/mo for
-    // life. Offered only for 'pro' while slots remain. Reserve the slot now (so
-    // concurrent subscribers can't oversell); clear any stale reservation when a
-    // user instead takes the standard $79 plan, so their payment isn't mis-tagged.
-    const isFounding = plan === 'pro' && await founding.hasSlot();
-    if (isFounding)            await founding.reserve(user.id);
-    else if (plan === 'pro')   await founding.clearReservation(user.id);
-
     const { subscriptionId, paymentUrl, amount } = await razorpay.createSubscription(
       { id: user.id, name: user.name, email: user.email, phone: user.phone },
       plan,
@@ -101,16 +93,15 @@ router.post('/subscribe', requireAuth, async (req, res, next) => {
       // Not written onto the user until it is paid (/verify or the
       // subscription.charged webhook adopts it and cancels the old one), so an
       // abandoned upgrade checkout never displaces the live subscription.
-      { founding: isFounding, persist: false, currency, cycle, meta: { ip, country } },
+      { persist: false, currency, cycle, meta: { ip, country } },
     );
 
-    logger.info(`[payments] Subscription ${subscriptionId} created for user ${user.id} (${plan}${isFounding ? ' founding' : ''} ${amount} ${currency}/${cycle}, ip=${ip} country=${country || '?'})`);
+    logger.info(`[payments] Subscription ${subscriptionId} created for user ${user.id} (${plan} ${amount} ${currency}/${cycle}, ip=${ip} country=${country || '?'})`);
 
     // keyId is the PUBLIC Razorpay key — safe to expose; the client needs it to
     // open Razorpay Checkout in-page with this subscription_id (same-tab flow).
     return res.json({
       paymentUrl, subscriptionId, keyId: env.RAZORPAY_KEY_ID,
-      founding: isFounding,
       amount, currency, cycle,
     });
 
@@ -218,13 +209,8 @@ router.post('/verify', requireAuth, async (req, res, next) => {
     await _upgradePlan(req.user.id, plan, amountPaise, razorpay_payment_id, 'subscription.verified',
       pricing.normCycle(subEntity?.notes?.cycle));
 
-    // Founding confirmation: flip the flag if this user held a founding
-    // reservation (i.e. we created their subscription on the $59 plan).
-    let isFounding = false;
-    if (plan === 'pro') isFounding = await founding.confirm(req.user.id);
-
-    logger.info(`[payments] ✓ /verify activated ${plan}${isFounding ? ' (founding)' : ''} for user ${req.user.id}`);
-    return res.json({ ok: true, plan, founding: isFounding });
+    logger.info(`[payments] ✓ /verify activated ${plan} for user ${req.user.id}`);
+    return res.json({ ok: true, plan });
 
   } catch (err) {
     logger.error(`[payments] /verify error: ${err.message}`);
@@ -610,9 +596,9 @@ async function _handleOneTimePayment(body, eventType, res) {
 
   await _upgradePlan(userId, planKey, amountPaise, razorpayPaymentId, eventType);
 
-  // Founding confirmation — force when the subscription notes flag it, else fall
-  // back to a live reservation (webhook may arrive after the reservation TTL).
-  if (planKey === 'pro') await founding.confirm(userId, { force: notes.founding === '1' });
+  // Legacy founding offer (closed to new buyers): only a subscription created
+  // under it (notes.founding = '1') still records its member flag.
+  if (planKey === 'pro' && notes.founding === '1') await founding.confirm(userId, { force: true });
 
   return res.json({ ok: true, upgraded: true, plan: planKey });
 }
@@ -719,8 +705,8 @@ async function _handleSubscriptionCharged(body, res) {
   // Also ensure the plan itself is set (in case of re-activation after expiry)
   await _upgradePlanRecord(userId, resolvedPlan);
 
-  // Founding confirmation on the (first) subscription charge.
-  if (resolvedPlan === 'pro') await founding.confirm(userId, { force: notes.founding === '1' });
+  // Legacy founding offer: flag only subscriptions created under it.
+  if (resolvedPlan === 'pro' && notes.founding === '1') await founding.confirm(userId, { force: true });
 
   // Mark converted in onboarding
   await pool.query(

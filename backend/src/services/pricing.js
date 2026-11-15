@@ -19,6 +19,10 @@ const MONTHLY = {
   USD: { starter: 29,   pro: 79,   scale: 199,  pro_founding: 59   },
   INR: { starter: 1499, pro: 3999, scale: 9999, pro_founding: 2999 },
 };
+// pro_founding: legacy price of the closed founding offer. Kept only so
+// renewals of existing founding subscriptions are recognised; never offered,
+// never listed in table().
+const LEGACY_KEYS = new Set(['pro_founding']);
 const YEARLY_MULTIPLIER = 10;          // pay 10 months, get 12
 
 // GST: INR (India) prices are shown exclusive of GST and charged with 18% GST
@@ -103,6 +107,7 @@ function table(currency) {
     plans: {},
   };
   for (const key of Object.keys(MONTHLY[cur])) {
+    if (LEGACY_KEYS.has(key)) continue;
     out.plans[key] = {};
     for (const cycle of CYCLES) {
       const amt = price(key, cur, cycle);

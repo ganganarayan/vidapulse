@@ -3,6 +3,12 @@
 /**
  * foundingService.js
  *
+ * CLOSED TO NEW BUYERS (15-11-2026): the founding offer is no longer sold or
+ * shown anywhere. Only confirm() is still called, by the Razorpay webhook, for
+ * subscriptions created under the offer (notes.founding = '1'), which keep
+ * renewing at their founding price. Nothing calls hasSlot, reserve,
+ * clearReservation or getStatus any more.
+ *
  * "Founding members" — the first 100 accounts to PAY for Growth lock the plan
  * at $59/mo for life (vs the standard $79). A founding upgrade is placed on the
  * Razorpay 'pro_founding' plan ($59), so renewals stay $59 forever.

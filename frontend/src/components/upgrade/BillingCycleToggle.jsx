@@ -28,7 +28,7 @@ export default function BillingCycleToggle({ cycle, onChange, className = '' }) 
   );
 }
 
-/** Price label for a plan from a GET /api/upgrade or /api/founding-status table. */
+/** Price label for a plan from a GET /api/upgrade pricing table. */
 export function priceLabelFor(table, key, cycle, fallback) {
   return table?.plans?.[key]?.[cycle]?.label
       ?? table?.[key]?.[cycle]?.label

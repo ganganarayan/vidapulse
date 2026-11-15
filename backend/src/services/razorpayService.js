@@ -23,6 +23,8 @@ const env     = require('../config/env');
 const logger  = require('../config/logger');
 const pricing = require('./pricing');
 
+// pro_founding is legacy: the founding offer is closed to new buyers, but the
+// key stays so renewals of existing founding subscriptions still map to 'pro'.
 const DISPLAY = { starter: 'VidaPulse Starter', pro: 'VidaPulse Growth', pro_founding: 'VidaPulse Growth (Founding)' };
 
 // Super-admin billing tests: real Razorpay subscriptions in INR at a distinct
@@ -246,9 +248,8 @@ async function _planMatches(planId, spec) {
  * @returns {Promise<{ subscriptionId: string, paymentUrl: string }>}
  */
 async function createSubscription(user, planKey, returnUrl, options = {}) {
-  // Founding members get the 'pro_founding' Razorpay plan while keeping their
-  // VidaPulse plan key = 'pro'. Because a Razorpay subscription is bound to its
-  // plan, every renewal stays at the founding price: that IS the lifetime lock.
+  // Every new subscription is on the standard plan price (the founding offer is
+  // closed; existing founding subscriptions keep renewing on their own plan).
   // options.currency ('USD'|'INR') and options.cycle ('monthly'|'yearly') pick
   // the price from services/pricing.js; options.meta (ip, country) is recorded
   // in the subscription notes.
@@ -256,8 +257,7 @@ async function createSubscription(user, planKey, returnUrl, options = {}) {
   // tests). options.persist === false → do not write the subscription onto the
   // user row yet; the caller does that once the payment is verified.
   const test          = options.test === true;
-  const founding      = !test && options.founding === true && planKey === 'pro';
-  const razorpayPlan  = test ? `${planKey}_test` : (founding ? 'pro_founding' : planKey);
+  const razorpayPlan  = test ? `${planKey}_test` : planKey;
   const spec          = planSpec(razorpayPlan, options.currency, options.cycle);
 
   const [customerId, planId] = await Promise.all([
@@ -267,7 +267,7 @@ async function createSubscription(user, planKey, returnUrl, options = {}) {
 
   logger.info(
     `[razorpay] Creating subscription for user ${user.id}: ` +
-    `plan=${planKey}${founding ? ' (founding)' : ''} ${spec.amount / 100} ${spec.currency}/${spec.period} ` +
+    `plan=${planKey} ${spec.amount / 100} ${spec.currency}/${spec.period} ` +
     `customer=${customerId} razorpay_plan=${planId}`
   );
 
@@ -294,7 +294,6 @@ async function createSubscription(user, planKey, returnUrl, options = {}) {
       cycle   : spec.period,
       ...(meta.ip      ? { ip: String(meta.ip).slice(0, 64) } : {}),
       ...(meta.country ? { country: String(meta.country) }    : {}),
-      ...(founding ? { founding: '1' } : {}),
       ...(test ? { test: '1' } : {}),
     },
   });
