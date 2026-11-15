@@ -59,6 +59,8 @@ export default function UpgradePage() {
 
   const yr     = cycle === 'yearly';
   const suffix = yr ? '/ year' : '/ month';
+  // INR prices are shown before GST; the server adds 18% GST at checkout.
+  const paidSuffix = upgradeData?.tax?.label ? `${suffix} ${upgradeData.tax.label}` : suffix;
   const labelFor = (plan, fallbackMonthly) =>
     upgradeData?.pricing?.[plan]?.[cycle]?.label
       ?? `$${yr ? fallbackMonthly * 10 : fallbackMonthly}`;
@@ -116,7 +118,7 @@ export default function UpgradePage() {
                 name             = "Starter"
                 tagline          = "For creators growing their audience"
                 price            = {labelFor('starter', 29)}
-                priceSuffix      = {suffix}
+                priceSuffix      = {paidSuffix}
                 features         = {[
                   '10 videos',
                   'Full analytics dashboard',
@@ -138,7 +140,7 @@ export default function UpgradePage() {
                 name             = "Pro"
                 tagline          = "For any serious business, B2B or B2C, to scale through video marketing"
                 price            = {labelFor('pro', 79)}
-                priceSuffix      = {suffix}
+                priceSuffix      = {paidSuffix}
                 features         = {[
                   '20 videos',
                   'All Starter features',

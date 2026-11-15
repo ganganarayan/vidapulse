@@ -224,6 +224,8 @@
     .plan-price { font-size: 40px; font-weight: 800; color: #0F172A; letter-spacing: -1.5px; line-height: 1; margin-bottom: 2px; }
     .plan-price .cur { font-size: 22px; font-weight: 700; vertical-align: super; }
     .plan-period { font-size: 13px; color: #94A3B8; margin-bottom: 20px; }
+    .plan-gst { font-size: 12px; font-weight: 600; color: #92400E; margin: -16px 0 20px; }
+    .plan-gst[hidden] { display: none; }
     .billing-toggle { display: inline-flex; gap: 4px; padding: 4px; margin-top: 22px; background: #fff; border: 1.5px solid #E2E8F0; border-radius: 999px; }
     .bt-opt { border: 0; background: transparent; padding: 8px 18px; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 600; color: #64748B; cursor: pointer; }
     .bt-opt.active { background: #0F172A; color: #fff; }
@@ -592,6 +594,7 @@
           <p class="plan-desc">Find the drop-off on your funnel videos.</p>
           <div class="plan-price" <%- priceAttrs('starter') %>><span class="cur js-cur"><%= prices.symbol %></span><span class="amt"><%= prices.plans.starter.monthly.label.slice(1) %></span></div>
           <div class="plan-period" data-period>per month</div>
+          <div class="plan-gst js-gst"<% if (!prices.tax) { %> hidden<% } %>><%= gstLabel %></div>
           <div class="plan-divider"></div>
           <ul class="plan-features">
             <li><span class="check">&#10003;</span> Up to 10 videos</li>
@@ -612,6 +615,7 @@
           <p class="plan-desc">Attribute the traffic that actually converts.</p>
           <div class="plan-price" <%- priceAttrs('pro') %>><span class="cur js-cur"><%= prices.symbol %></span><span class="amt"><%= prices.plans.pro.monthly.label.slice(1) %></span></div>
           <div class="plan-period" data-period>per month</div>
+          <div class="plan-gst js-gst"<% if (!prices.tax) { %> hidden<% } %>><%= gstLabel %></div>
           <div class="plan-divider"></div>
           <ul class="plan-features">
             <li><span class="check">&#10003;</span> Up to 20 videos</li>
@@ -631,6 +635,7 @@
           <p class="plan-desc">For agencies running many client funnels.</p>
           <div class="plan-price" <%- priceAttrs('scale') %>><span class="cur js-cur"><%= prices.symbol %></span><span class="amt"><%= prices.plans.scale.monthly.label.slice(1) %></span></div>
           <div class="plan-period" data-period>per month</div>
+          <div class="plan-gst js-gst"<% if (!prices.tax) { %> hidden<% } %>><%= gstLabel %></div>
           <div class="plan-divider"></div>
           <ul class="plan-features">
             <li><span class="check">&#10003;</span> Everything in Growth</li>
@@ -644,7 +649,7 @@
 
       </div>
 
-      <p class="price-note">Every plan starts on the free plan. No card required. Cancel anytime. &nbsp;·&nbsp; Need more than 20 videos or seats? <a href="mailto:support@vidapulse.io" style="color:#F59E0B;font-weight:600;">support@vidapulse.io</a></p>
+      <p class="price-note">Every plan starts on the free plan. No card required. Cancel anytime.<span class="js-gst"<% if (!prices.tax) { %> hidden<% } %>> &nbsp;·&nbsp; INR prices exclude 18% GST, added at checkout.</span> &nbsp;·&nbsp; Need more than 20 videos or seats? <a href="mailto:support@vidapulse.io" style="color:#F59E0B;font-weight:600;">support@vidapulse.io</a></p>
     </div>
   </section>
 

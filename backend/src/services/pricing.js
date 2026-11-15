@@ -20,6 +20,14 @@ const MONTHLY = {
   INR: { starter: 1499, pro: 3999, scale: 9999, pro_founding: 2999 },
 };
 const YEARLY_MULTIPLIER = 10;          // pay 10 months, get 12
+
+// GST: INR (India) prices are shown exclusive of GST and charged with 18% GST
+// added. USD (customers outside India, export of services) is charged at the
+// plan price. GST_RATE is the only place the rate lives.
+const GST_RATE  = 0.18;
+const GST_LABEL = '+ 18% GST';
+/** Tax rate applied on top of the plan price for a currency (0.18 for INR, 0 for USD). */
+function taxRate(currency) { return normCurrency(currency) === 'INR' ? GST_RATE : 0; }
 const CYCLES     = ['monthly', 'yearly'];
 const CURRENCIES = ['USD', 'INR'];
 
@@ -57,6 +65,15 @@ function price(key, currency, cycle) {
   return normCycle(cycle) === 'yearly' ? m * YEARLY_MULTIPLIER : m;
 }
 
+/**
+ * What the customer is actually charged for a plan, in the smallest unit
+ * (paise / cents): the plan price plus GST for INR. Razorpay plans bill this.
+ */
+function chargeMinor(key, currency, cycle) {
+  const base = price(key, currency, cycle) * 100;
+  return Math.round(base * (1 + taxRate(currency)));
+}
+
 /** Display label: '$29', '$290', '₹1,499', '₹14,990' (Indian digit grouping). */
 function label(amount, currency) {
   if (normCurrency(currency) === 'INR') {
@@ -68,22 +85,36 @@ function label(amount, currency) {
   return '$' + Math.round(amount).toLocaleString('en-US');
 }
 
+/** Label for a charged amount that may carry paise: '₹1,768.82', '$79'. */
+function chargeLabel(amount, currency) {
+  const whole = Math.floor(amount);
+  const frac  = Math.round((amount - whole) * 100);
+  return label(whole, currency) + (frac ? '.' + String(frac).padStart(2, '0') : '');
+}
+
 /** Full price table for one currency, both cycles, with labels. */
 function table(currency) {
   const cur = normCurrency(currency);
-  const out = { currency: cur, symbol: cur === 'INR' ? '₹' : '$', yearly_multiplier: YEARLY_MULTIPLIER, plans: {} };
+  const rate = taxRate(cur);
+  const out = {
+    currency: cur, symbol: cur === 'INR' ? '₹' : '$', yearly_multiplier: YEARLY_MULTIPLIER,
+    // Shown next to INR prices; null when no tax is added (USD).
+    tax: rate ? { rate, label: GST_LABEL } : null,
+    plans: {},
+  };
   for (const key of Object.keys(MONTHLY[cur])) {
     out.plans[key] = {};
     for (const cycle of CYCLES) {
       const amt = price(key, cur, cycle);
-      out.plans[key][cycle] = { amount: amt, label: label(amt, cur) };
+      const charge = chargeMinor(key, cur, cycle) / 100;   // incl. GST for INR
+      out.plans[key][cycle] = { amount: amt, label: label(amt, cur), charge, charge_label: chargeLabel(charge, cur) };
     }
   }
   return out;
 }
 
 module.exports = {
-  MONTHLY, YEARLY_MULTIPLIER, CYCLES, CURRENCIES,
+  MONTHLY, YEARLY_MULTIPLIER, CYCLES, CURRENCIES, GST_RATE, GST_LABEL, taxRate, chargeMinor,
   clientIp, countryForReq, currencyForReq,
   normCycle, normCurrency, price, label, table,
 };

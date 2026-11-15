@@ -434,6 +434,7 @@ if (env.NODE_ENV === 'production') {
     return {
       prices      : pricing.table(pricing.currencyForReq(req)),
       priceAttrs  : (key) => landing.priceAttrs(all, key),
+      gstLabel    : pricing.GST_LABEL,
       currencyAuto: false,
       apiOrigin   : '',
       kbBase      : '',                       // the guide is served on this same host

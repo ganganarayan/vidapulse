@@ -100,8 +100,8 @@ const POLICIES = [
       { h2: '3. Plans and billing', ul: [
         'A Free plan is available and requires no card. Paid plans are billed in advance, monthly or yearly, on a recurring basis until cancelled.',
         'When a paid period ends without renewal, your account moves to the Free plan: your videos and analytics are kept, and features beyond the Free plan stop until you choose a paid plan again.',
-        'Prices are displayed on our pricing page, in INR for customers in India and in USD elsewhere.',
-        'Payments are non-refundable. Cancelling before the renewal date stops the next charge and you keep access until the period you paid for ends. See the <a href="/refund-policy">Refund Policy</a>.',
+        'Prices are displayed on our pricing page, in INR for customers in India and in USD elsewhere. INR prices are exclusive of applicable taxes (including GST): 18% GST is added at checkout for customers in India. USD prices for customers outside India are charged at the plan price.',
+        'You can cancel at any time from the Billing page in the app (Cancel plan), or by emailing support@vidapulse.io. Payments are non-refundable. Cancelling before the renewal date stops the next charge and you keep access until the period you paid for ends. See the <a href="/refund-policy">Refund Policy</a>.',
         'You authorise us and our payment processor (Razorpay) to charge your chosen payment method for each billing period.',
         'Plan limits (such as the number of videos and the features included) apply as described on the pricing page.',
       ] },
@@ -152,12 +152,12 @@ const POLICIES = [
       ] },
       { h2: '2. Paid subscriptions', ul: [
         'Paid plans are billed in advance for the chosen billing period (monthly or yearly). Payments are processed by Razorpay.',
-        'Prices are shown on our pricing page, in INR for customers in India and in USD elsewhere.',
+        'Prices are shown on our pricing page, in INR for customers in India and in USD elsewhere. INR prices are exclusive of applicable taxes, which are added where required: 18% GST is added at checkout for customers in India. USD prices for customers outside India are charged at the plan price.',
         'Your subscription renews automatically on the renewal date until you cancel.',
         'After you cancel, you are not charged again once your current billing period ends. You keep using the paid features until that date.',
       ] },
       { h2: '3. Cancellation and renewal', p: [
-        `You can cancel at any time by emailing ${MAIL} from your account email before the renewal date. You keep full access to everything you have already paid for until the end of the current billing period. Cancelling does not cut your access short.`,
+        `You can cancel at any time from your account: open Billing in the app and choose <strong>Cancel plan</strong>. If you cannot reach the button, email ${MAIL} from your account email before the renewal date and we will cancel for you. You keep full access to everything you have already paid for until the end of the current billing period. Cancelling does not cut your access short.`,
         '<strong>Cancel before the renewal date and you are not charged again.</strong> There are no further charges once the current period ends: the subscription simply stops renewing. This is how you end your billing with us, and it is why there is nothing to refund afterwards.',
         'At the end of that period your account moves to the Free plan. Your videos and analytics are kept and nothing is deleted; features beyond the Free plan stop until you choose a paid plan again, which restores them.',
       ] },
@@ -175,7 +175,7 @@ const POLICIES = [
         'If a genuine mistake on our side caused a charge, you get your money back. That is a correction, not a refund, and it is at our discretion whether a case is genuine, or whether we would rather return a payment and close the account.',
       ] },
       { h2: '6. How to reach us about billing', p: [
-        `To cancel, report a charge made in error or ask a billing question, email ${MAIL} from your account email with your account details and the charge in question.`,
+        `To report a charge made in error or ask a billing question, email ${MAIL} from your account email with your account details and the charge in question. To cancel, use Cancel plan on the Billing page; cancellation does not require emailing us, though email remains available as a fallback.`,
       ] },
       { h2: '7. Contact', p: [
         `${CONTACT_LINE} Billing questions: ${MAIL}.`,

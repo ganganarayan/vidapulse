@@ -180,6 +180,7 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
                 key={plan}
                 plan={plan}
                 pricing={upgradeData.pricing?.[plan]}
+                taxLabel={upgradeData.tax?.label}
                 cycle={cycle}
                 isHighlighted={plan === requiredPlan}
                 features={PLAN_FEATURES[plan] ?? []}
@@ -214,7 +215,7 @@ export default function UpgradeModal({ feature, requiredPlan, currentPlan, onClo
 // PlanCard
 // ─────────────────────────────────────────────────────────────────────────
 
-function PlanCard({ plan, pricing, cycle = 'monthly', isHighlighted, features, singleCard, subscribing, onSubscribe }) {
+function PlanCard({ plan, pricing, taxLabel, cycle = 'monthly', isHighlighted, features, singleCard, subscribing, onSubscribe }) {
   const color = getLockColor(plan); // #00FFFF starter, #F59E0B pro
 
   // price_label is set by the backend (USD).
@@ -247,7 +248,11 @@ function PlanCard({ plan, pricing, cycle = 'monthly', isHighlighted, features, s
         <div className="flex items-baseline gap-1">
           <span className="text-2xl font-bold text-gray-100">{priceLabel}</span>
           <span className="text-sm text-gray-400">/ {cycle === 'yearly' ? 'year' : 'month'}</span>
+          {taxLabel && <span className="text-xs text-gray-400">{taxLabel}</span>}
         </div>
+        {taxLabel && pricing?.[cycle]?.charge_label && (
+          <p className="text-xs text-gray-500 mt-0.5">Charged {pricing[cycle].charge_label} incl. GST</p>
+        )}
         <p className="text-xs text-gray-500 mt-0.5">
           {pricing?.video_limit === null ? 'Unlimited videos' : `Up to ${pricing?.video_limit} videos`}
         </p>

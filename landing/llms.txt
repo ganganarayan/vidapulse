@@ -23,7 +23,7 @@ The wedge: every competitor (Wistia, Vidyard, Vidalytics) is a video host first:
 
 ## Pricing
 
-Priced per account, not per seat. Every plan starts on the free plan. Prices in USD (visitors in India see and pay INR: Starter ₹1,499, Growth ₹3,999, Scale ₹9,999 per month). Yearly billing is 10 times the monthly price (2 months free).
+Priced per account, not per seat. Every plan starts on the free plan. Prices in USD, charged at the plan price. Visitors in India see and pay INR: Starter ₹1,499, Growth ₹3,999, Scale ₹9,999 per month, + 18% GST added at checkout. Yearly billing is 10 times the monthly price (2 months free).
 
 - **Free, $0 forever**: 1 video. Plays, play rate, unique visitors, domain tracking, embed. No credit card, no expiry.
 - **Starter, $29/month**: up to 10 videos. Adds drop-off point, engagement heatmap, average time watched, geographic data, device and browser breakdown, email support.

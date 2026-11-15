@@ -7,7 +7,8 @@
  * in. With <html data-currency-auto> (the static Cloudflare build) the
  * visitor's country is read from Cloudflare's /cdn-cgi/trace and India gets
  * INR, matching what the server does by IP. The monthly / yearly toggle
- * (.billing-toggle .bt-opt) only exists on the home page. */
+ * (.billing-toggle .bt-opt) only exists on the home page. Elements with
+ * .js-gst (the "+ 18% GST" note) are shown for INR only. */
 (function () {
   'use strict';
   var root = document.documentElement;
@@ -26,6 +27,8 @@
       var per = card && card.querySelector('[data-period]');
       if (per) per.textContent = state.cycle === 'yearly' ? 'per year' : 'per month';
     });
+    // GST note: shown with INR prices only (18% GST is added at checkout in India).
+    document.querySelectorAll('.js-gst').forEach(function (el) { el.hidden = state.cur !== 'inr'; });
     document.querySelectorAll('.billing-toggle .bt-opt').forEach(function (b) {
       var on = b.getAttribute('data-cycle') === state.cycle;
       b.classList.toggle('active', on);

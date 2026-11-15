@@ -44,12 +44,18 @@ function planSpec(razorpayKey, currency, cycle) {
   if (!DISPLAY[razorpayKey]) throw new Error(`Unknown plan key: ${razorpayKey}`);
   const cur = pricing.normCurrency(currency);
   const cyc = pricing.normCycle(cycle);
+  // INR plans bill the price plus 18% GST (pricing.chargeMinor); USD bills the
+  // plan price. The _gst cache name keeps GST plans apart from the older
+  // tax-free INR plans that existing subscriptions are still bound to.
+  const gst = pricing.taxRate(cur) > 0;
   return {
-    amount     : pricing.price(razorpayKey, cur, cyc) * 100,
+    amount     : pricing.chargeMinor(razorpayKey, cur, cyc),
+    baseAmount : pricing.price(razorpayKey, cur, cyc) * 100,
     currency   : cur,
     period     : cyc,
-    displayName: `${DISPLAY[razorpayKey]} (${cyc}, ${cur})`,
-    cacheName  : `${razorpayKey}_${cur.toLowerCase()}_${cyc}`,
+    gst,
+    displayName: `${DISPLAY[razorpayKey]} (${cyc}, ${cur}${gst ? ', incl. 18% GST' : ''})`,
+    cacheName  : `${razorpayKey}_${cur.toLowerCase()}_${cyc}${gst ? '_gst' : ''}`,
     base       : razorpayKey.split('_')[0],
   };
 }
@@ -189,7 +195,10 @@ async function getOrCreatePlan(razorpayKey, opts = {}) {
     period  : spec.period,
     interval: 1,
     item    : { name: spec.displayName, amount: spec.amount, currency: spec.currency },
-    notes   : { vidapulse_plan: razorpayKey, currency: spec.currency, cycle: spec.period },
+    notes   : {
+      vidapulse_plan: razorpayKey, currency: spec.currency, cycle: spec.period,
+      ...(spec.gst ? { base_amount: String(spec.baseAmount / 100), gst_rate: String(pricing.GST_RATE) } : {}),
+    },
   });
 
   await pool.query(
@@ -276,7 +285,11 @@ async function createSubscription(user, planKey, returnUrl, options = {}) {
     notes            : {
       user_id : user.id,
       plan    : planKey,               // always the VidaPulse plan key ('pro')
-      amount  : String(spec.amount / 100),
+      amount  : String(spec.amount / 100),             // charged, incl. GST for INR
+      ...(spec.gst && spec.baseAmount ? {
+        base_amount: String(spec.baseAmount / 100),
+        gst_amount : String((spec.amount - spec.baseAmount) / 100),
+      } : {}),
       currency: spec.currency,
       cycle   : spec.period,
       ...(meta.ip      ? { ip: String(meta.ip).slice(0, 64) } : {}),
@@ -300,6 +313,21 @@ async function createSubscription(user, planKey, returnUrl, options = {}) {
 
   logger.info(`[razorpay] Created subscription ${subscriptionId} for user ${user.id}`);
   return { subscriptionId, paymentUrl, amount: spec.amount / 100, currency: spec.currency, cycle: spec.period };
+}
+
+/**
+ * Cancel a Razorpay Subscription at the end of the current billing cycle: no
+ * further charges, and Razorpay ends it (subscription.cancelled) when the
+ * paid cycle is over. Returns the subscription entity (current_end = the
+ * unix time the paid cycle ends).
+ */
+async function cancelSubscriptionAtCycleEnd(subscriptionId) {
+  logger.info(`[razorpay] Cancelling subscription ${subscriptionId} at cycle end`);
+  const sub = await _razorpayRequest('POST', `/v1/subscriptions/${subscriptionId}/cancel`, {
+    cancel_at_cycle_end: 1,
+  });
+  logger.info(`[razorpay] Subscription ${subscriptionId} set to cancel at cycle end`);
+  return sub;
 }
 
 /**
@@ -358,7 +386,7 @@ async function planKeyForRazorpayPlan(razorpayPlanId) {
       outer: for (const key of Object.keys(DISPLAY)) {
         for (const c of pricing.CURRENCIES) {
           for (const cyc of pricing.CYCLES) {
-            if (c === cur && pricing.price(key, c, cyc) * 100 === amt) { name = key; break outer; }
+            if (c === cur && (pricing.price(key, c, cyc) * 100 === amt || pricing.chargeMinor(key, c, cyc) === amt)) { name = key; break outer; }
           }
         }
       }
@@ -376,6 +404,7 @@ async function fetchSubscription(subscriptionId) {
 }
 
 module.exports = {
+  cancelSubscriptionAtCycleEnd,
   getOrCreateCustomer,
   getOrCreatePlan,
   createSubscription,

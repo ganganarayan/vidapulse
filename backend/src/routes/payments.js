@@ -284,6 +284,113 @@ router.get('/billing', requireAuth, async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Self-serve cancel ("Cancel plan" on the Billing page).
+//
+// GET  /api/payments/subscription  what cancelling would do: { can_cancel, ends_at }
+// POST /api/payments/cancel        stop renewal at the end of the paid period
+//
+// Cancelling asks Razorpay to cancel at the END of the current cycle (no
+// further charges), clears the account's subscription and sets
+// plan_expires_at to the end of the period already paid for (never earlier
+// than it was). Access stays until then; the daily plan_expiry_check job then
+// drops the account to Free with all data kept, exactly as for any expired
+// plan. The later subscription.cancelled webhook finds no current
+// subscription and is a no-op, so the CRM event fires once, here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function _cancelState(userId) {
+  const { rows } = await pool.query(
+    `SELECT u.razorpay_subscription_id, u.plan_expires_at, p.name AS plan
+     FROM users u JOIN plans p ON p.id = u.plan_id WHERE u.id = $1`,
+    [userId]
+  );
+  const r = rows[0] || {};
+  return {
+    plan          : r.plan || 'free',
+    subscriptionId: r.razorpay_subscription_id || null,
+    expiresAt     : r.plan_expires_at ? new Date(r.plan_expires_at) : null,
+    canCancel     : ['starter', 'pro'].includes(r.plan) && !!r.razorpay_subscription_id,
+  };
+}
+
+/** The later of two dates (either may be null). */
+function _later(a, b) {
+  if (!a) return b || null;
+  if (!b) return a;
+  return a > b ? a : b;
+}
+
+router.get('/subscription', requireAuth, async (req, res, next) => {
+  try {
+    const st = await _cancelState(req.user.id);
+    let endsAt = st.expiresAt;
+    if (st.canCancel && env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) {
+      try {
+        const sub = await razorpay.fetchSubscription(st.subscriptionId);
+        if (sub?.current_end) endsAt = _later(endsAt, new Date(sub.current_end * 1000));
+      } catch (e) { logger.warn(`[payments] /subscription fetch failed: ${e.message}`); }
+    }
+    return res.json({
+      plan      : st.plan,
+      renews    : !!st.subscriptionId,
+      can_cancel: st.canCancel,
+      ends_at   : endsAt ? endsAt.toISOString() : null,
+    });
+  } catch (err) { next(err); }
+});
+
+router.post('/cancel', requireAuth, async (req, res, next) => {
+  try {
+    const st = await _cancelState(req.user.id);
+    if (!st.canCancel) {
+      return res.status(400).json({ error: 'There is no renewing paid plan on this account to cancel.' });
+    }
+    if (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET) {
+      return res.status(503).json({ error: 'Payment service not configured. Please email support@vidapulse.io to cancel.' });
+    }
+
+    let sub = null;
+    try {
+      sub = await razorpay.cancelSubscriptionAtCycleEnd(st.subscriptionId);
+    } catch (e) {
+      // Some mandates cannot be scheduled for cycle end: cancel now instead.
+      // Access is governed by plan_expires_at, so the customer still keeps the
+      // period they paid for.
+      logger.warn(`[payments] cycle-end cancel failed for ${st.subscriptionId}: ${e.message}; cancelling now`);
+      try {
+        await razorpay.cancelSubscription(st.subscriptionId);
+        try { sub = await razorpay.fetchSubscription(st.subscriptionId); } catch { /* end date falls back below */ }
+      } catch (e2) {
+        logger.error(`[payments] cancel failed for ${st.subscriptionId}: ${e2.message}`);
+        return res.status(502).json({ error: 'We could not cancel with the payment provider. Please try again or email support@vidapulse.io.' });
+      }
+    }
+
+    const cycleEnd = sub?.current_end ? new Date(sub.current_end * 1000) : null;
+    const endsAt   = _later(st.expiresAt, cycleEnd) || new Date();
+    const { rows } = await pool.query(
+      `UPDATE users
+       SET razorpay_subscription_id = NULL,
+           plan_expires_at          = $2,
+           updated_at               = NOW()
+       WHERE id = $1 AND razorpay_subscription_id = $3
+       RETURNING plan_expires_at`,
+      [req.user.id, endsAt, st.subscriptionId]
+    );
+    const finalEnd = rows[0]?.plan_expires_at ? new Date(rows[0].plan_expires_at) : endsAt;
+
+    emitEvent(req.user.id, 'subscription_cancelled', null, {
+      razorpay_subscription_id: st.subscriptionId,
+      event_type              : 'user.cancelled',
+      ends_at                 : finalEnd.toISOString(),
+    });
+    logger.info(`[payments] user ${req.user.id} cancelled ${st.plan} (${st.subscriptionId}); access until ${finalEnd.toISOString()}`);
+
+    return res.json({ ok: true, plan: st.plan, ends_at: finalEnd.toISOString() });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/payments/billing/invoice/:paymentId   (authenticated)
 // Fetches the Razorpay invoice URL for a specific payment and redirects to it.
 // Security: verifies the payment belongs to the calling user before redirecting.

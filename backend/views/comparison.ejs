@@ -87,9 +87,9 @@
       <p>One flat price per account, not per seat. Every plan starts free.</p>
       <ul class="ticks">
         <li><strong>Free, <span class="js-cur"><%= prices.symbol %></span>0 forever:</strong> 1 video, plays, play rate, unique visitors.</li>
-        <li><strong>Starter, <span class="js-cur"><%= prices.symbol %></span><span <%- priceAttrs('starter') %>><%= prices.plans.starter.monthly.label.slice(1) %></span>/mo:</strong> up to 10 videos, drop-off point, heatmap, geo and device.</li>
-        <li><strong>Growth, <span class="js-cur"><%= prices.symbol %></span><span <%- priceAttrs('pro') %>><%= prices.plans.pro.monthly.label.slice(1) %></span>/mo:</strong> up to 20 videos, UTM attribution, conversion tracking, server-side pixel forwarding, AI insights.</li>
-        <li><strong>Scale, <span class="js-cur"><%= prices.symbol %></span><span <%- priceAttrs('scale') %>><%= prices.plans.scale.monthly.label.slice(1) %></span>/mo:</strong> multi-user, API access, white-label reports.</li>
+        <li><strong>Starter, <span class="js-cur"><%= prices.symbol %></span><span <%- priceAttrs('starter') %>><%= prices.plans.starter.monthly.label.slice(1) %></span>/mo<span class="js-gst"<% if (!prices.tax) { %> hidden<% } %>> <%= gstLabel %></span>:</strong> up to 10 videos, drop-off point, heatmap, geo and device.</li>
+        <li><strong>Growth, <span class="js-cur"><%= prices.symbol %></span><span <%- priceAttrs('pro') %>><%= prices.plans.pro.monthly.label.slice(1) %></span>/mo<span class="js-gst"<% if (!prices.tax) { %> hidden<% } %>> <%= gstLabel %></span>:</strong> up to 20 videos, UTM attribution, conversion tracking, server-side pixel forwarding, AI insights.</li>
+        <li><strong>Scale, <span class="js-cur"><%= prices.symbol %></span><span <%- priceAttrs('scale') %>><%= prices.plans.scale.monthly.label.slice(1) %></span>/mo<span class="js-gst"<% if (!prices.tax) { %> hidden<% } %>> <%= gstLabel %></span>:</strong> multi-user, API access, white-label reports.</li>
       </ul>
     </section>
 

@@ -6,6 +6,7 @@ import api            from '../lib/api';
 import { getLockColor } from '../components/PlanTierBadge';
 import AdminBillingTest from '../components/AdminBillingTest';
 import AdminPlatformKeys from '../components/AdminPlatformKeys';
+import { formatIST }  from '../lib/date';
 
 /**
  * BillingPage — /billing
@@ -23,7 +24,7 @@ function planBadgeStyle(planKey) {
 }
 
 export default function BillingPage() {
-  const { user }              = useAuth();
+  const { user, refetch }     = useAuth();
   const { showUpgrade }       = useUpgrade();
   const [payments, setPayments] = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -45,6 +46,37 @@ export default function BillingPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // ── Self-serve cancel: stops renewal at the end of the paid period ──
+  const [cancelInfo, setCancelInfo] = useState(null);   // { ends_at } while the dialog is open
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelMsg,  setCancelMsg]  = useState('');
+
+  async function openCancel() {
+    setCancelMsg('');
+    try {
+      const { data } = await api.get('/payments/subscription');
+      if (!data?.can_cancel) { setCancelMsg('There is no renewing plan to cancel.'); return; }
+      setCancelInfo({ ends_at: data.ends_at });
+    } catch {
+      setCancelMsg('Could not load your subscription. Please try again.');
+    }
+  }
+
+  async function confirmCancel() {
+    setCancelBusy(true);
+    try {
+      const { data } = await api.post('/payments/cancel');
+      setCancelInfo(null);
+      setCancelMsg(`Your plan is cancelled. It will not renew, and you keep access until ${formatDate(data?.ends_at)}.`);
+      refetch?.();
+    } catch (e) {
+      setCancelMsg(e?.response?.data?.error || 'Could not cancel. Please try again or email support@vidapulse.io.');
+      setCancelInfo(null);
+    } finally {
+      setCancelBusy(false);
+    }
+  }
 
   const plan    = user?.plan ?? 'free';
   const isPaid  = plan === 'starter' || plan === 'pro';
@@ -84,9 +116,11 @@ export default function BillingPage() {
                       ? <>Active until <span className="text-gray-200 font-medium">{formatDate(user.plan_expires_at)}</span></>
                       : <span className="text-red-400">Expired {formatDate(user.plan_expires_at)}</span>
                     }
-                    {user.razorpay_subscription_id && (
-                      <span className="ml-2 text-emerald-400/80">· Auto-renews</span>
-                    )}
+                    {user.razorpay_subscription_id
+                      ? <span className="ml-2 text-emerald-400/80">· Auto-renews</span>
+                      : new Date(user.plan_expires_at) > new Date() && (
+                          <span className="ml-2 text-amber-400/90">· Does not renew. Moves to Free on that date, data kept.</span>
+                        )}
                   </p>
                 )}
 
@@ -97,6 +131,16 @@ export default function BillingPage() {
                   </p>
                 )}
               </div>
+
+              {/* Cancel plan: only for a renewing paid subscription */}
+              {isPaid && !isAdmin && user?.razorpay_subscription_id && (
+                <button
+                  onClick={openCancel}
+                  className="flex-shrink-0 px-4 py-2 text-xs font-semibold text-gray-300 rounded-lg border border-gray-600 hover:border-red-400 hover:text-red-300 transition-colors"
+                >
+                  Cancel plan
+                </button>
+              )}
 
               {/* Upgrade / renew CTA */}
               {(plan === 'free' || plan === 'starter') && !isAdmin && (
@@ -112,6 +156,36 @@ export default function BillingPage() {
               )}
             </div>
           </div>
+
+          {cancelMsg && (
+            <p className="-mt-5 mb-6 text-xs text-gray-300" role="status">{cancelMsg}</p>
+          )}
+
+          {cancelInfo && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="cancel-title">
+              <div className="w-full max-w-md rounded-xl border border-gray-700 bg-gray-900 p-6">
+                <h2 id="cancel-title" className="text-base font-bold text-gray-50 mb-2">Cancel your plan?</h2>
+                <p className="text-sm text-gray-300 mb-2">
+                  Your plan will not renew. You keep full access until{' '}
+                  <span className="font-semibold text-gray-50">{formatDate(cancelInfo.ends_at)}</span>,
+                  then your account moves to the Free plan. Your videos and analytics are kept.
+                </p>
+                <p className="text-xs text-gray-500 mb-5">
+                  No further charges. Payments already made are not refunded (see the Refund Policy).
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button onClick={() => setCancelInfo(null)} disabled={cancelBusy}
+                    className="px-4 py-2 text-xs font-semibold text-gray-300 rounded-lg border border-gray-600">
+                    Keep my plan
+                  </button>
+                  <button onClick={confirmCancel} disabled={cancelBusy}
+                    className="px-4 py-2 text-xs font-semibold text-white rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-60">
+                    {cancelBusy ? 'Cancelling…' : 'Cancel plan'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── PayPal recurring reminder ─────────────────────────── */}
           {!loading && hasPaypalPayment && (
@@ -307,13 +381,10 @@ function PaymentMethodBadge({ method }) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// DD-MM-YYYY in IST, never the browser's locale.
 function formatDate(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-IN', {
-    day  : '2-digit',
-    month: 'short',
-    year : 'numeric',
-  });
+  if (!iso) return '-';
+  return formatIST(iso, { time: false }) || '-';
 }
 
 function PlanBadge({ plan, displayName }) {

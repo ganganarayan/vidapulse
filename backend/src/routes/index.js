@@ -185,6 +185,8 @@ router.get('/upgrade', requireAuth, async (req, res, next) => {
       total_plays_to_date: parseInt(stats.total_plays_to_date, 10),
       upgrade_options,
       currency,          // 'INR' | 'USD'
+      // { rate: 0.18, label: '+ 18% GST' } for INR (GST added at checkout), null for USD.
+      tax: table.tax,
       yearly_multiplier: table.yearly_multiplier,
       founding: {
         active   : foundingActive,

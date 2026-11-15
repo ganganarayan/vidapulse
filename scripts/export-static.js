@@ -91,6 +91,7 @@ const ALL_PRICES = landing.allPrices();
 const baseLocals = {
   prices      : pricing.table('USD'),          // default render; India switches to INR in the browser
   priceAttrs  : (key) => landing.priceAttrs(ALL_PRICES, key),
+  gstLabel    : pricing.GST_LABEL,
   currencyAuto: true,
   apiOrigin   : API_ORIGIN,
   kbBase      : '',                            // the guide lives on this host
