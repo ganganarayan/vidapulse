@@ -52,6 +52,7 @@ const ejs         = require('ejs');
 const pricing     = require('../backend/src/services/pricing');
 const landing     = require('../backend/src/content/landing');
 const cmp         = require('../backend/src/content/comparisons');
+const pol         = require('../backend/src/content/policies');
 const chrome      = require('../backend/src/content/siteChrome');
 const { LANDING_CSP } = require('../backend/src/config/landingCsp');
 const kb          = require('../knowledge-base/generate');
@@ -129,6 +130,16 @@ for (const c of cmp.COMPARISONS) {
   }));
 }
 
+// 4b. Legal pages: /privacy-policy, /terms-of-use, /refund-policy, /shipping-policy.
+for (const p of pol.POLICIES) {
+  write(`${p.slug}.html`, render('policy.ejs', {
+    ...baseLocals,
+    p,
+    others: pol.POLICIES.filter((o) => o.slug !== p.slug),
+    jsonLd: pol.jsonLdFor(p),
+  }));
+}
+
 // 5. 404 page (Pages serves it with status 404 for any unknown path).
 write('404.html', `<!DOCTYPE html>
 <html lang="en">
@@ -170,10 +181,11 @@ write('404.html', `<!DOCTYPE html>
 const robots = fs.readFileSync(path.join(ROOT, 'landing', 'robots.txt'), 'utf8');
 write('robots.txt', robots);
 
-// 7. sitemap.xml: vidapulse.io only. Home, comparisons, guide.
+// 7. sitemap.xml: vidapulse.io only. Home, comparisons, policies, guide.
 const sitemapUrls = [
   { loc: `${SITE}/`, mod: '2026-11-15', freq: 'weekly', pri: '1.0' },
   ...cmp.COMPARISONS.map((c) => ({ loc: `${SITE}/${c.slug}`, mod: c.updatedOn, freq: 'monthly', pri: '0.7' })),
+  ...pol.POLICIES.map((p) => ({ loc: `${SITE}/${p.slug}`, mod: p.updatedOn, freq: 'yearly', pri: '0.3' })),
   ...kb.kbSitemapUrls(),
 ];
 write('sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>
@@ -237,7 +249,13 @@ if (landing.SEO.title.length >= 60) problems.push(`home title is ${landing.SEO.t
 if (landing.SEO.description.length >= 155) problems.push(`home description is ${landing.SEO.description.length} chars (need < 155)`);
 if (!home.includes(esc(landing.DEFINITION))) problems.push('home is missing the hero definition sentence');
 if (/founding/i.test(home)) problems.push('home still mentions the founding offer');
-if (/shipping-policy/i.test(home)) problems.push('home footer still links the shipping policy');
+for (const p of pol.POLICIES) {
+  if (!home.includes(`href="/${p.slug}"`)) problems.push(`home footer does not link /${p.slug}`);
+  const html = fs.readFileSync(path.join(OUT, `${p.slug}.html`), 'utf8');
+  if (html.includes('\u2014')) problems.push(`${p.slug} contains an em dash`);
+  if (!/Last updated \d{2}-\d{2}-\d{4}</.test(html)) problems.push(`${p.slug} has no DD-MM-YYYY last-updated date`);
+}
+if (home.includes('\u2014')) problems.push('home contains an em dash');
 for (const key of ['starter', 'pro', 'scale']) {
   const amt = ALL_PRICES.USD.plans[key].monthly.label.slice(1);
   if (!home.includes(`<span class="amt">${amt}</span>`)) problems.push(`home is missing the ${key} price ${amt}`);
@@ -270,7 +288,7 @@ let pages = 0;
 })(OUT);
 
 console.log(`[export] branch=${BRANCH || '(none)'} prod=${IS_PROD} api=${API_ORIGIN} version=${ASSET_VERSION}`);
-console.log(`[export] pages: ${pages} (home 1, comparisons ${cmp.COMPARISONS.length}, guide ${1 + kbStats.categories + kbStats.articles}), sitemap URLs: ${sitemapUrls.length}`);
+console.log(`[export] pages: ${pages} (home 1, comparisons ${cmp.COMPARISONS.length}, policies ${pol.POLICIES.length}, guide ${1 + kbStats.categories + kbStats.articles}), sitemap URLs: ${sitemapUrls.length}`);
 
 if (problems.length) {
   console.error('[export] FAILED checks:\n  - ' + problems.join('\n  - '));

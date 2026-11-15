@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <%- chrome.head() %>
+  <title><%= p.title %> | VidaPulse</title>
+  <meta name="description" content="<%= p.description %>" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://vidapulse.io/<%= p.slug %>" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="VidaPulse" />
+  <meta property="og:title" content="<%= p.title %> | VidaPulse" />
+  <meta property="og:description" content="<%= p.description %>" />
+  <meta property="og:url" content="https://vidapulse.io/<%= p.slug %>" />
+  <link rel="stylesheet" href="/assets/compare.css?v=<%= assetVersion %>" />
+  <script type="application/ld+json"><%- jsonLd %></script>
+</head>
+<body>
+  <header>
+  <nav class="nav" aria-label="Main navigation">
+    <div class="container nav-inner">
+      <a href="/" class="nav-logo">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="11" fill="#F59E0B" opacity=".2"/><polygon points="10,8 10,16 16,12" fill="#F59E0B"/></svg>
+        VidaPulse
+      </a>
+      <ul class="nav-links">
+        <li><a href="/#how-it-works">How It Works</a></li>
+        <li><a href="/#pricing">Pricing</a></li>
+        <li><a href="<%= kbBase %>/video-analytics-guide">Guide</a></li>
+      </ul>
+      <a href="https://app.vidapulse.io/login" class="btn btn-primary">Start free</a>
+    </div>
+  </nav>
+  </header>
+
+  <main class="container cmp">
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="/">VidaPulse</a> <span>/</span> <%= p.title %></nav>
+
+    <span class="label">Legal</span>
+    <h1><%= p.title %></h1>
+    <p class="updated"><time datetime="<%= p.updatedOn %>">Last updated <%= p.updatedLabel %></time></p>
+    <% p.intro.forEach(function (para) { %><p class="lede"><%- para %></p><% }) %>
+
+    <% p.sections.forEach(function (s) { %>
+      <section class="block">
+        <h2><%= s.h2 %></h2>
+        <% (s.p || []).forEach(function (para) { %><p><%- para %></p><% }) %>
+        <% if (s.ul && s.ul.length) { %>
+          <ul class="ticks"><% s.ul.forEach(function (li) { %><li><%- li %></li><% }) %></ul>
+        <% } %>
+        <% (s.after || []).forEach(function (para) { %><p><%- para %></p><% }) %>
+      </section>
+    <% }) %>
+
+    <section class="block others">
+      <h2>Other policies</h2>
+      <ul class="other-list">
+        <% others.forEach(function (o) { %><li><a href="/<%= o.slug %>"><%= o.title %></a></li><% }) %>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>&copy; 2026 VidaPulse &middot; <a href="/">Home</a> &middot; <a href="/privacy-policy">Privacy</a> &middot; <a href="/terms-of-use">Terms</a> &middot; <a href="/refund-policy">Refund</a> &middot; <a href="/shipping-policy">Shipping</a> &middot; <a href="mailto:support@vidapulse.io">support@vidapulse.io</a></p>
+    </div>
+  </footer>
+  <!-- Shared end-of-body snippets: backend/src/content/siteChrome.js -->
+  <%- chrome.bodyEnd({ apiOrigin: apiOrigin, assetVersion: assetVersion }) %>
+</body>
+</html>

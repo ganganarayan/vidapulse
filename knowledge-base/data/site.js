@@ -63,5 +63,9 @@ module.exports = {
     { label: 'Pricing',        href: 'https://vidapulse.io/#pricing' },
     { label: 'Start free',     href: `${APP}/register` },
     { label: 'Log in',         href: `${APP}/login` },
+    { label: 'Privacy',        href: 'https://vidapulse.io/privacy-policy' },
+    { label: 'Terms',          href: 'https://vidapulse.io/terms-of-use' },
+    { label: 'Refund',         href: 'https://vidapulse.io/refund-policy' },
+    { label: 'Shipping',       href: 'https://vidapulse.io/shipping-policy' },
   ],
 };

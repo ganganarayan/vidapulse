@@ -59,5 +59,11 @@
     <changefreq>yearly</changefreq>
     <priority>0.2</priority>
   </url>
+  <url>
+    <loc>https://vidapulse.io/shipping-policy</loc>
+    <lastmod>2026-11-15</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.2</priority>
+  </url>
 
 </urlset>

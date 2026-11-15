@@ -463,6 +463,20 @@ if (env.NODE_ENV === 'production') {
         });
       }
 
+      // Legal pages: /privacy-policy, /terms-of-use, /refund-policy,
+      // /shipping-policy. Content in src/content/policies.js; one shared view.
+      const pol = require('./content/policies');
+      const policy = pol.BY_SLUG.get(cmpSlug);
+      if (policy) {
+        res.setHeader('Cache-Control', 'private, no-cache');
+        return res.render('policy', {
+          ...marketingLocals(req),
+          p: policy,
+          others: pol.POLICIES.filter((o) => o.slug !== policy.slug),
+          jsonLd: pol.jsonLdFor(policy),
+        });
+      }
+
       // Server-render the home page. Prices in the visitor's currency: INR in
       // India (by IP), USD elsewhere. SEO, FAQ and JSON-LD: content/landing.js.
       const landing = require('./content/landing');

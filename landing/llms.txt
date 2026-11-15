@@ -65,6 +65,10 @@ No video migration, no storage costs, no platform lock-in.
 - Why it's different: https://vidapulse.io/#why
 - What you see: https://vidapulse.io/#features
 - Video analytics guide: https://vidapulse.io/video-analytics-guide
+- Privacy Policy: https://vidapulse.io/privacy-policy
+- Terms of Use: https://vidapulse.io/terms-of-use
+- Refund and Cancellation Policy: https://vidapulse.io/refund-policy
+- Shipping and Delivery Policy: https://vidapulse.io/shipping-policy
 - Support: support@vidapulse.io
 
 ## Comparisons
