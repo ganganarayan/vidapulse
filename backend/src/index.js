@@ -271,7 +271,11 @@ if (env.NODE_ENV === 'production') {
   // (Cloudflare Pages on vidapulse.io), set MARKETING_ORIGIN on this service
   // and the app host 301s every public marketing path to the same path there.
   // Unset = today's behaviour (the app host serves the guide itself).
-  const marketingOrigin = env.MARKETING_ORIGIN;
+  // Production default is https://vidapulse.io: the landing hosts on this same
+  // service serve the guide (see below), so the app host hands every guide URL
+  // over with a 301. Staging keeps serving the guide on its app host too.
+  const marketingOrigin = env.MARKETING_ORIGIN
+    || (/orbitq|staging/i.test(env.APP_URL) ? '' : 'https://vidapulse.io');
   const sitemapUrl   = marketingOrigin
     ? `${marketingOrigin}/sitemap.xml`
     : `${env.APP_URL.replace(/\/+$/, '')}/sitemap.xml`;
@@ -353,14 +357,41 @@ if (env.NODE_ENV === 'production') {
     next();
   });
 
-  // Landing sitemap: the static file plus the comparison pages, whose <lastmod>
-  // comes from each page's updatedOn in src/content/comparisons.js, so bumping
-  // a page's date there updates the sitemap too. Must run before the static handler.
+  // The guide on the marketing hosts (vidapulse.io). Same files and URLs the
+  // app host used to serve, so every relative link inside the guide keeps
+  // working; the production app host 301s here (marketingOrigin above).
+  app.use((req, res, next) => {
+    if (!landingDomains.has(req.hostname)) return next();
+    let p = req.path;
+    if (p.length > 1) p = p.replace(/\/+$/, '');
+    if (KB_ALIASES.has(p)) return res.redirect(301, KB_HUB);
+    if (p.startsWith('/kb-assets/')) return kbAssets(req, res, next);
+    if (p === KB_HUB || p.startsWith(KB_HUB + '/')) {
+      const rel = (p === KB_HUB ? 'video-analytics-guide' : decodeURIComponent(p.slice(1))) + '.html';
+      const filePath = path.resolve(kbRoot, rel);
+      if (filePath !== kbRoot && !filePath.startsWith(kbRoot + path.sep)) return next();
+      return res.sendFile(filePath, (err) => {
+        if (err) res.status(404).type('text/plain').send('Not found');
+      });
+    }
+    next();
+  });
+
+  // Landing sitemap: the static file plus the comparison pages (lastmod = each
+  // page's updatedOn in src/content/comparisons.js) and every guide page.
+  // Must run before the static handler.
+  let kbSitemapXml = null;
   app.get('/sitemap.xml', (req, res, next) => {
     if (!landingDomains.has(req.hostname)) return next();
     fs.readFile(path.join(landingDir, 'sitemap.xml'), 'utf8', (err, xml) => {
       if (err) return next();
-      const entries = require('./content/comparisons').sitemapEntries();
+      if (kbSitemapXml === null) {
+        try {
+          kbSitemapXml = require('../../knowledge-base/generate').kbSitemapUrls().map((u) =>
+            `  <url>\n    <loc>${u.loc}</loc>\n    <lastmod>${u.mod}</lastmod>\n    <changefreq>${u.freq}</changefreq>\n    <priority>${u.pri}</priority>\n  </url>\n`).join('');
+        } catch (e) { kbSitemapXml = ''; }
+      }
+      const entries = require('./content/comparisons').sitemapEntries() + kbSitemapXml;
       res.type('application/xml').send(xml.replace(/^.*<!-- COMPARISONS:.*-->\r?\n/m, (m) => m + entries));
     });
   });
@@ -405,7 +436,7 @@ if (env.NODE_ENV === 'production') {
       priceAttrs  : (key) => landing.priceAttrs(all, key),
       currencyAuto: false,
       apiOrigin   : '',
-      kbBase      : marketingOrigin || `https://${prodAppHost}`,
+      kbBase      : '',                       // the guide is served on this same host
       chrome      : require('./content/siteChrome'),
       // Changes every deploy, so browsers fetch new asset files instead of cached ones.
       assetVersion: encodeURIComponent(require('./config/serverInfo').startedAt),
