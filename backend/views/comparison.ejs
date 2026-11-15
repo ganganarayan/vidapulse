@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-currency="<%= prices.currency %>"<% if (currencyAuto) { %> data-currency-auto<% } %>>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <script src="/assets/clarity.js"></script>
+  <%- chrome.head() %>
   <title><%= c.title %> | VidaPulse</title>
   <meta name="description" content="<%= c.description %>" />
   <meta name="robots" content="index, follow, max-snippet:-1" />
@@ -86,10 +86,10 @@
       <h2>VidaPulse pricing</h2>
       <p>One flat price per account, not per seat. Every plan starts free.</p>
       <ul class="ticks">
-        <li><strong>Free, <%= prices.symbol %>0 forever:</strong> 1 video, plays, play rate, unique visitors.</li>
-        <li><strong>Starter, <%= prices.plans.starter.monthly.label %>/mo:</strong> up to 10 videos, drop-off point, heatmap, geo and device.</li>
-        <li><strong>Growth, <%= prices.plans.pro.monthly.label %>/mo:</strong> up to 20 videos, UTM attribution, conversion tracking, server-side pixel forwarding, AI insights.</li>
-        <li><strong>Scale, <%= prices.plans.scale.monthly.label %>/mo:</strong> multi-user, API access, white-label reports.</li>
+        <li><strong>Free, <span class="js-cur"><%= prices.symbol %></span>0 forever:</strong> 1 video, plays, play rate, unique visitors.</li>
+        <li><strong>Starter, <span class="js-cur"><%= prices.symbol %></span><span <%- priceAttrs('starter') %>><%= prices.plans.starter.monthly.label.slice(1) %></span>/mo:</strong> up to 10 videos, drop-off point, heatmap, geo and device.</li>
+        <li><strong>Growth, <span class="js-cur"><%= prices.symbol %></span><span <%- priceAttrs('pro') %>><%= prices.plans.pro.monthly.label.slice(1) %></span>/mo:</strong> up to 20 videos, UTM attribution, conversion tracking, server-side pixel forwarding, AI insights.</li>
+        <li><strong>Scale, <span class="js-cur"><%= prices.symbol %></span><span <%- priceAttrs('scale') %>><%= prices.plans.scale.monthly.label.slice(1) %></span>/mo:</strong> multi-user, API access, white-label reports.</li>
       </ul>
     </section>
 
@@ -99,7 +99,7 @@
         <details class="faq"><summary><%= f.q %></summary><p><%= f.a %></p></details>
       <% }) %>
       <% if (c.kb) { %>
-        <p class="more">Longer write-up: <a href="https://app.vidapulse.io/video-analytics-guide/comparisons/<%= c.kb %>">VidaPulse vs <%= c.name %> in the video analytics guide</a>.</p>
+        <p class="more">Longer write-up: <a href="<%= kbBase %>/video-analytics-guide/comparisons/<%= c.kb %>">VidaPulse vs <%= c.name %> in the video analytics guide</a>.</p>
       <% } %>
     </section>
 
@@ -119,8 +119,11 @@
 
   <footer class="footer">
     <div class="container">
-      <p>&copy; 2026 VidaPulse &middot; <a href="/">Home</a> &middot; <a href="/#compare">Comparisons</a> &middot; <a href="/privacy-policy">Privacy</a> &middot; <a href="/terms-of-use">Terms</a> &middot; <a href="mailto:support@vidapulse.io">support@vidapulse.io</a></p>
+      <p>&copy; 2026 VidaPulse &middot; <a href="/">Home</a> &middot; <a href="/#compare">Comparisons</a> &middot; <a href="<%= kbBase %>/video-analytics-guide">Guide</a> &middot; <a href="/privacy-policy">Privacy</a> &middot; <a href="/terms-of-use">Terms</a> &middot; <a href="mailto:support@vidapulse.io">support@vidapulse.io</a></p>
     </div>
   </footer>
+  <script src="/assets/prices.js?v=<%= assetVersion %>" defer></script>
+  <!-- Shared end-of-body snippets: backend/src/content/siteChrome.js -->
+  <%- chrome.bodyEnd({ apiOrigin: apiOrigin, assetVersion: assetVersion }) %>
 </body>
 </html>

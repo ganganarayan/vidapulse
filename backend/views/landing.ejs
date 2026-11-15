@@ -1,32 +1,27 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-currency="<%= prices.currency %>"<% if (currencyAuto) { %> data-currency-auto<% } %> data-api="<%= apiOrigin %>">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Microsoft Clarity (external — CSP-clean, no inline script) -->
-  <script src="/assets/clarity.js"></script>
+  <!-- Shared head snippets (analytics): backend/src/content/siteChrome.js -->
+  <%- chrome.head() %>
 
-  <!-- ═══════════════════════════════════════════════════════════
-       PRIMARY SEO
-  ═══════════════════════════════════════════════════════════ -->
-  <title>VidaPulse — Know the exact second your sales video loses the buyer</title>
-  <meta name="description" content="VidaPulse shows the play rate, drop-off point, and engagement heatmap for the VSL, demo, or sales video you already have — no re-hosting, no code. Built for B2B SaaS teams, lead-gen agencies, and demand-gen marketers running paid traffic to a sales video." />
-  <meta name="keywords" content="VSL analytics, sales video analytics, video drop-off tracking, VSL heatmap, demo video analytics, video retention analytics, B2B video analytics, lead-gen video tracking, video engagement heatmap, no re-hosting video analytics, sales video conversion" />
+  <!-- Primary SEO. Title and description live in backend/src/content/landing.js -->
+  <title><%= seo.title %></title>
+  <meta name="description" content="<%= seo.description %>" />
   <meta name="author" content="VidaPulse" />
   <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
   <link rel="canonical" href="https://vidapulse.io/" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <!-- llms.txt: plain-text product description for AI crawlers -->
-  <link rel="alternate" type="text/plain" title="LLMs.txt — VidaPulse AI-readable description" href="/llms.txt" />
+  <link rel="alternate" type="text/plain" title="LLMs.txt: VidaPulse AI-readable description" href="/llms.txt" />
 
-  <!-- ═══════════════════════════════════════════════════════════
-       OPEN GRAPH — AI crawlers, Perplexity, social previews
-  ═══════════════════════════════════════════════════════════ -->
+  <!-- Open Graph: AI crawlers, Perplexity, social previews -->
   <meta property="og:type"        content="website" />
   <meta property="og:site_name"   content="VidaPulse" />
   <meta property="og:title"       content="Know the exact second your sales video loses the buyer" />
-  <meta property="og:description" content="VidaPulse shows play rate, drop-off point, and engagement heatmap for the VSL, demo, or sales video you already have. No re-hosting. No code. No per-seat bill." />
+  <meta property="og:description" content="<%= seo.description %>" />
   <meta property="og:url"         content="https://vidapulse.io/" />
   <meta property="og:image"       content="https://vidapulse.io/og-image.png" />
   <meta property="og:image:width"  content="1200" />
@@ -34,146 +29,17 @@
   <meta property="og:image:alt"    content="VidaPulse retention curve showing the exact second a sales video loses the buyer" />
   <meta property="og:locale"      content="en_US" />
 
-  <!-- ═══════════════════════════════════════════════════════════
-       TWITTER / X CARD
-  ═══════════════════════════════════════════════════════════ -->
+  <!-- Twitter / X card -->
   <meta name="twitter:card"        content="summary_large_image" />
   <meta name="twitter:title"       content="Know the exact second your sales video loses the buyer" />
-  <meta name="twitter:description" content="Play rate, drop-off point, and engagement heatmap for the sales video you already have. No re-hosting. No code. No per-seat bill." />
+  <meta name="twitter:description" content="<%= seo.description %>" />
   <meta name="twitter:image"       content="https://vidapulse.io/og-image.png" />
   <meta name="twitter:image:alt"   content="VidaPulse retention curve" />
 
-  <!-- ═══════════════════════════════════════════════════════════
-       JSON-LD STRUCTURED DATA
-       SoftwareApplication + Organization + WebSite + FAQPage
-       Read by Google, Bing, Perplexity, ChatGPT, Claude and other
-       AI-powered search engines to understand and cite this product.
-  ═══════════════════════════════════════════════════════════ -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "SoftwareApplication",
-        "@id": "https://vidapulse.io/#software",
-        "name": "VidaPulse",
-        "alternateName": ["VidaPulse Video Analytics", "VidaPulse VSL Analytics"],
-        "description": "VidaPulse is a sales-video analytics platform for businesses that run paid or owned traffic to a VSL, demo, or application video. Paste the link to the video you already have — YouTube, Amazon S3, Google Drive, Dropbox, or a direct MP4/HLS URL — and VidaPulse shows the play rate, the exact second buyers drop off, a second-level engagement heatmap, and whether viewers ever reach the offer. No re-hosting, no code, priced per account rather than per seat.",
-        "url": "https://vidapulse.io",
-        "applicationUrl": "https://app.vidapulse.io",
-        "applicationCategory": "BusinessApplication",
-        "applicationSubCategory": "Video Analytics",
-        "operatingSystem": "Web",
-        "browserRequirements": "Requires a modern browser with JavaScript enabled",
-        "inLanguage": "en",
-        "featureList": [
-          "Second-level engagement heatmaps",
-          "Exact drop-off point detection",
-          "Play rate and average watch time",
-          "Unique viewer tracking across sessions",
-          "UTM and traffic-source attribution",
-          "Conversion tracking to the offer",
-          "Works with YouTube, S3, Google Drive, Dropbox and direct video URLs",
-          "No re-hosting of your video",
-          "One flat price per account, not per seat",
-          "One-script embed for any website"
-        ],
-        "offers": [
-          {
-            "@type": "Offer",
-            "name": "Free",
-            "price": "0",
-            "priceCurrency": "USD",
-            "description": "1 video: plays, play rate, unique visitors, domain tracking, embed — free forever, no credit card required"
-          },
-          {
-            "@type": "Offer",
-            "name": "Starter",
-            "priceSpecification": { "@type": "UnitPriceSpecification", "price": "29", "priceCurrency": "USD", "unitCode": "MON", "billingDuration": "P1M" },
-            "description": "Up to 10 videos: adds drop-off, engagement heatmap, average time watched, geographic data, device and browser breakdown"
-          },
-          {
-            "@type": "Offer",
-            "name": "Growth",
-            "priceSpecification": { "@type": "UnitPriceSpecification", "price": "79", "priceCurrency": "USD", "unitCode": "MON", "billingDuration": "P1M" },
-            "description": "Up to 20 videos: adds UTM and source segmentation, conversion tracking, server-side pixel forwarding, video comparison, AI insights, priority support"
-          },
-          {
-            "@type": "Offer",
-            "name": "Scale",
-            "priceSpecification": { "@type": "UnitPriceSpecification", "price": "199", "priceCurrency": "USD", "unitCode": "MON", "billingDuration": "P1M" },
-            "description": "Multi-user, API access, and white-label reports for agencies"
-          }
-        ],
-        "creator": { "@id": "https://vidapulse.io/#organization" },
-        "publisher": { "@id": "https://vidapulse.io/#organization" }
-      },
-      {
-        "@type": "Organization",
-        "@id": "https://vidapulse.io/#organization",
-        "name": "VidaPulse",
-        "url": "https://vidapulse.io",
-        "email": "support@vidapulse.io",
-        "description": "VidaPulse provides sales-video analytics for B2B SaaS teams, lead-gen and performance agencies, and high-ticket service firms that run paid traffic to a VSL, demo, or application video. It measures engagement on the video you already have, without re-hosting.",
-        "contactPoint": {
-          "@type": "ContactPoint",
-          "email": "support@vidapulse.io",
-          "contactType": "customer support"
-        }
-      },
-      {
-        "@type": "WebSite",
-        "@id": "https://vidapulse.io/#website",
-        "url": "https://vidapulse.io",
-        "name": "VidaPulse",
-        "description": "Sales-video analytics — play rate, drop-off point, and engagement heatmap for the VSL, demo, or sales video you already have",
-        "inLanguage": "en",
-        "publisher": { "@id": "https://vidapulse.io/#organization" }
-      },
-      {
-        "@type": "FAQPage",
-        "@id": "https://vidapulse.io/#faq",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "Is VidaPulse really free?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Yes. VidaPulse is free forever on 1 video — no trial clock, no expiry, no credit card required. You only upgrade when you need more videos or deeper analytics such as heatmaps, source attribution, and conversion tracking." }
-          },
-          {
-            "@type": "Question",
-            "name": "Do I have to move my video to VidaPulse?",
-            "acceptedAnswer": { "@type": "Answer", "text": "No. VidaPulse is not a video host. It reads the video you already have — YouTube, Amazon S3, Google Drive, or your own player — so there is no re-uploading, no re-embedding, and no risk to a funnel that already works." }
-          },
-          {
-            "@type": "Question",
-            "name": "How does VidaPulse track my video without hosting it?",
-            "acceptedAnswer": { "@type": "Answer", "text": "You paste one lightweight script onto the page your video already sits on. It wraps your existing video, starts a viewer session, and streams play, drop-off, and re-watch events to VidaPulse in real time. The video never leaves where it lives." }
-          },
-          {
-            "@type": "Question",
-            "name": "Do I need to install anything?",
-            "acceptedAnswer": { "@type": "Answer", "text": "No. It is one script tag on the page your video already sits on. It works on custom sites, ClickFunnels, GoHighLevel, WordPress, Webflow, and plain HTML." }
-          },
-          {
-            "@type": "Question",
-            "name": "How is VidaPulse different from Wistia, Vidyard, or Vidalytics?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Those are video hosts: their analytics require moving your video onto their player, and they bill by storage, bandwidth, or per seat. VidaPulse sits on top of your existing video and shows where buyers drop off — at one flat price per account." }
-          },
-          {
-            "@type": "Question",
-            "name": "Is my viewers' data private?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Yes. All analytics data lives in your VidaPulse account, is never sold or shared, and the tracker identifies viewers by an anonymous ID — no personally identifiable information and no third-party cookies." }
-          },
-          {
-            "@type": "Question",
-            "name": "Who is VidaPulse for?",
-            "acceptedAnswer": { "@type": "Answer", "text": "B2B SaaS growth and demand-gen teams, lead-gen and performance agencies, and high-ticket B2B service firms running paid or owned traffic to a VSL, demo, or application video — anyone whose pipeline depends on a video converting." }
-          }
-        ]
-      }
-    ]
-  }
-  </script>
+  <!-- JSON-LD: Organization + SoftwareApplication (prices from the pricing
+       service) + FAQPage (built from the same FAQ array as the visible list).
+       Built in backend/src/content/landing.js. -->
+  <script type="application/ld+json"><%- jsonLd %></script>
 
   <style>
     /* ── Reset & base ── */
@@ -263,6 +129,7 @@
       background: #FEF3C7; border: 1px solid #FDE68A; padding: 6px 14px; border-radius: 100px;
       margin-bottom: 22px; line-height: 1.4;
     }
+    .hero-define { font-size: 15px; font-weight: 600; color: #92400E; margin-bottom: 18px; line-height: 1.5; max-width: 560px; }
     .hero h1 {
       font-size: clamp(34px, 5vw, 54px); font-weight: 800; color: #0F172A;
       line-height: 1.08; letter-spacing: -1.5px; margin-bottom: 20px;
@@ -347,11 +214,6 @@
 
     /* ══════════════════════════════════════════════ PRICING ══════════ */
     .pricing { background: #F8FAFC; text-align: center; }
-    .founding {
-      display: inline-flex; align-items: center; gap: 8px; margin: 32px auto 0;
-      background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A;
-      font-size: 13.5px; font-weight: 600; padding: 9px 18px; border-radius: 10px;
-    }
     .pricing-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 32px; align-items: start; text-align: left; }
     .pricing-card { border: 1.5px solid #E2E8F0; border-radius: 18px; padding: 28px 22px; position: relative; background: #ffffff; transition: box-shadow .2s; }
     .pricing-card:hover { box-shadow: 0 16px 40px rgba(15,23,42,.08); }
@@ -524,13 +386,13 @@
   <main id="main-content">
 
   <!-- ═══════════════════════════════════════ HERO ═══════════ -->
-  <section class="hero" aria-label="VidaPulse — sales-video analytics">
+  <section class="hero" aria-label="VidaPulse sales-video analytics">
     <div class="container hero-grid">
       <div class="hero-copy">
-        <span class="hero-eyebrow">For B2B SaaS teams, lead-gen agencies &amp; demand-gen marketers running paid traffic to a sales video</span>
+        <p class="hero-define"><%= definition %></p>
         <h1>Know the exact second your sales video <span class="highlight">loses the buyer.</span></h1>
         <p class="hero-sub">
-          You pay to get a prospect to your VSL, demo, or application video — then they leave before the offer.
+          You pay to get a prospect to your VSL, demo, or application video, then they leave before the offer.
           VidaPulse shows exactly where they drop, in the video you already have. No re-hosting, no code, no per-seat bill.
         </p>
         <div class="hero-actions">
@@ -540,7 +402,7 @@
         <p class="hero-reassure"><strong>Free forever on 1 video</strong> &nbsp;·&nbsp; No card &nbsp;·&nbsp; Works with the video you already have</p>
       </div>
 
-      <!-- Retention curve — the product's actual output -->
+      <!-- Retention curve: the product's actual output -->
       <div class="curve-card" aria-label="Retention curve showing 68% of viewers left at 0:42">
         <div class="curve-head">
           <span class="curve-title">Retention · your VSL</span>
@@ -594,19 +456,19 @@
     <div class="container">
       <p class="kicker">Every other tool shows you a play count. VidaPulse shows you the moment.</p>
       <h2>Not a range. Not an estimate. <em>The exact second.</em></h2>
-      <p class="sub">The second-by-second engagement heatmap for your sales video — green is held attention, red is where buyers walk.</p>
+      <p class="sub">The second-by-second engagement heatmap for your sales video: green is held attention, red is where buyers walk.</p>
       <div class="heatstrip">
         <div class="heatstrip-bars" id="heatstrip-bars" aria-hidden="true"></div>
         <div class="heatstrip-axis"><span>0:00</span><span>0:30</span><span>1:00</span><span>1:30</span><span>2:00</span></div>
       </div>
-      <div class="heatstrip-marker"><i></i> 68% of viewers dropped at 0:42 — right before the offer</div>
+      <div class="heatstrip-marker"><i></i> 68% of viewers dropped at 0:42, right before the offer</div>
     </div>
   </section>
 
   <!-- ═══════════════════════════════════════ SUPPORTED SOURCES ═══════════ -->
   <section class="sources">
     <div class="container">
-      <p class="sources-label">Reads the video you already run — from anywhere</p>
+      <p class="sources-label">Reads the video you already run, from anywhere</p>
       <div class="sources-grid">
         <div class="source-chip"><span class="source-icon">&#9654;</span> YouTube</div>
         <div class="source-chip"><span class="source-icon">&#9728;</span> Amazon S3</div>
@@ -628,16 +490,16 @@
         <div class="step">
           <div class="step-number">1</div>
           <h3>Paste your video link</h3>
-          <p>From anywhere — YouTube, S3, Google Drive, Dropbox, or a direct MP4. VidaPulse resolves it automatically.</p>
+          <p>From anywhere: YouTube, S3, Google Drive, Dropbox, or a direct MP4. VidaPulse resolves it automatically.</p>
         </div>
         <div class="step">
           <div class="step-number">2</div>
           <h3>Copy the embed code</h3>
-          <p>One script tag onto your VSL or landing page — ClickFunnels, GoHighLevel, WordPress, Webflow, or plain HTML.</p>
+          <p>One script tag onto your VSL or landing page: ClickFunnels, GoHighLevel, WordPress, Webflow, or plain HTML.</p>
         </div>
         <div class="step">
           <div class="step-number">3</div>
-          <h3>Drive traffic — watch live</h3>
+          <h3>Drive traffic, watch live</h3>
           <p>Retention, drop-off, and the heatmap fill in as your paid traffic lands. See where buyers leave, in real time.</p>
         </div>
       </div>
@@ -655,15 +517,15 @@
       <div class="wedge-grid">
         <div class="wedge-card">
           <h3><span class="wi">&#128260;</span> No migration</h3>
-          <p>Every other tool is a video host — to get their analytics you move your VSL onto their player and re-embed it. VidaPulse reads the video you already run: YouTube, S3, your own player. Nothing to migrate, nothing in your funnel to break.</p>
+          <p>Every other tool is a video host: to get their analytics you move your VSL onto their player and re-embed it. VidaPulse reads the video you already run: YouTube, S3, your own player. Nothing to migrate, nothing in your funnel to break.</p>
         </div>
         <div class="wedge-card">
           <h3><span class="wi">&#128176;</span> Priced per account, not per seat</h3>
-          <p>Sales-video tools charge $59–99 per user, per month. VidaPulse is one flat price for the whole team — everyone sees the same data without a per-login bill.</p>
+          <p>Sales-video tools charge $59–99 per user, per month. VidaPulse is one flat price for the whole team: everyone sees the same data without a per-login bill.</p>
         </div>
         <div class="wedge-card">
           <h3><span class="wi">&#9201;</span> The exact second, not a view count</h3>
-          <p>Views don't tell you why the sale didn't happen. VidaPulse shows the precise moment a buyer drops — and whether they ever reached your offer.</p>
+          <p>Views don't tell you why the sale didn't happen. VidaPulse shows the precise moment a buyer drops, and whether they ever reached your offer.</p>
         </div>
         <div class="wedge-card">
           <h3><span class="wi">&#128683;</span> No metering</h3>
@@ -678,7 +540,7 @@
     <div class="container">
       <span class="label">What You See</span>
       <h2 class="heading">Decision intelligence for sales videos</h2>
-      <p class="subtext">Deep insight into how your sales videos perform — where attention holds, where it breaks, and whether buyers ever reach the offer.</p>
+      <p class="subtext">Deep insight into how your sales videos perform: where attention holds, where it breaks, and whether buyers ever reach the offer.</p>
       <div class="features-grid">
         <div class="feature-card"><div class="feature-icon">&#9654;</div><h3>Total plays</h3><p>Every play, across every place your video is embedded.</p></div>
         <div class="feature-card"><div class="feature-icon">&#128293;</div><h3>Play rate</h3><p>What share of page visitors actually press play.</p></div>
@@ -686,7 +548,7 @@
         <div class="feature-card"><div class="feature-icon">&#9201;</div><h3>Avg. time watched</h3><p>How long viewers actually stay with the video.</p></div>
         <div class="feature-card"><div class="feature-icon">&#128100;</div><h3>Unique visitors</h3><p>Real people, de-duplicated across sessions.</p></div>
         <div class="feature-card"><div class="feature-icon">&#127760;</div><h3>Domain tracking</h3><p>Which pages and domains drive the most engagement.</p></div>
-        <div class="feature-card"><div class="feature-icon">&#128293;</div><h3>Heatmaps</h3><p>Second-level drop-off — see exactly where attention breaks.</p></div>
+        <div class="feature-card"><div class="feature-icon">&#128293;</div><h3>Heatmaps</h3><p>Second-level drop-off: see exactly where attention breaks.</p></div>
         <div class="feature-card"><div class="feature-icon">&#128241;</div><h3>Device &amp; browser</h3><p>What your buyers watch on, at a glance.</p></div>
       </div>
     </div>
@@ -699,8 +561,6 @@
       <h2 class="heading">One flat price per account</h2>
       <p class="subtext">Gated on capability, not per-seat. Every plan starts on the free plan.</p>
 
-      <div class="founding" id="founding-badge"><% if (foundingClosed) { %>&#128274; Founding-member pricing is closed &mdash; all <%= foundingLimit %> seats are taken.<% } else { %>&#128274; Founding members &mdash; <strong><%= foundingTaken %> of <%= foundingLimit %></strong> seats taken. Lock Growth at <%= foundingPrice %>/mo for life.<% } %></div>
-
       <div class="billing-toggle" role="group" aria-label="Billing period">
         <button type="button" class="bt-opt active" data-cycle="monthly" aria-pressed="true">Monthly</button>
         <button type="button" class="bt-opt" data-cycle="yearly" aria-pressed="false">Yearly <span class="bt-save">2 months free</span></button>
@@ -712,7 +572,7 @@
         <div class="pricing-card">
           <div class="plan-name">Free</div>
           <p class="plan-desc">Prove it on one video, forever.</p>
-          <div class="plan-price"><span class="cur"><%= prices.symbol %></span>0</div>
+          <div class="plan-price"><span class="cur js-cur"><%= prices.symbol %></span>0</div>
           <div class="plan-period">free forever</div>
           <div class="plan-divider"></div>
           <ul class="plan-features">
@@ -730,7 +590,7 @@
         <div class="pricing-card">
           <div class="plan-name">Starter</div>
           <p class="plan-desc">Find the drop-off on your funnel videos.</p>
-          <div class="plan-price" data-price-monthly="<%= prices.plans.starter.monthly.label.slice(1) %>" data-price-yearly="<%= prices.plans.starter.yearly.label.slice(1) %>"><span class="cur"><%= prices.symbol %></span><span class="amt"><%= prices.plans.starter.monthly.label.slice(1) %></span></div>
+          <div class="plan-price" <%- priceAttrs('starter') %>><span class="cur js-cur"><%= prices.symbol %></span><span class="amt"><%= prices.plans.starter.monthly.label.slice(1) %></span></div>
           <div class="plan-period" data-period>per month</div>
           <div class="plan-divider"></div>
           <ul class="plan-features">
@@ -750,7 +610,7 @@
           <div class="popular-badge">Most Popular</div>
           <div class="plan-name">Growth</div>
           <p class="plan-desc">Attribute the traffic that actually converts.</p>
-          <div class="plan-price" data-price-monthly="<%= prices.plans.pro.monthly.label.slice(1) %>" data-price-yearly="<%= prices.plans.pro.yearly.label.slice(1) %>"><span class="cur"><%= prices.symbol %></span><span class="amt"><%= prices.plans.pro.monthly.label.slice(1) %></span></div>
+          <div class="plan-price" <%- priceAttrs('pro') %>><span class="cur js-cur"><%= prices.symbol %></span><span class="amt"><%= prices.plans.pro.monthly.label.slice(1) %></span></div>
           <div class="plan-period" data-period>per month</div>
           <div class="plan-divider"></div>
           <ul class="plan-features">
@@ -769,7 +629,7 @@
         <div class="pricing-card">
           <div class="plan-name">Scale</div>
           <p class="plan-desc">For agencies running many client funnels.</p>
-          <div class="plan-price" data-price-monthly="<%= prices.plans.scale.monthly.label.slice(1) %>" data-price-yearly="<%= prices.plans.scale.yearly.label.slice(1) %>"><span class="cur"><%= prices.symbol %></span><span class="amt"><%= prices.plans.scale.monthly.label.slice(1) %></span></div>
+          <div class="plan-price" <%- priceAttrs('scale') %>><span class="cur js-cur"><%= prices.symbol %></span><span class="amt"><%= prices.plans.scale.monthly.label.slice(1) %></span></div>
           <div class="plan-period" data-period>per month</div>
           <div class="plan-divider"></div>
           <ul class="plan-features">
@@ -814,57 +674,14 @@
       <h2 class="heading" id="faq-heading">Questions, answered</h2>
       <p class="subtext">The wedge is the answer to most of these: we read your video, we don't host it.</p>
 
-      <div class="faq-grid" itemscope itemtype="https://schema.org/FAQPage">
-
-        <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
-          <summary class="faq-q" itemprop="name">Is VidaPulse really free?</summary>
-          <div class="faq-a" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-            <p itemprop="text">Yes. VidaPulse is free forever on 1 video — no trial clock, no expiry, no credit card required. You only upgrade when you need more videos or deeper analytics like heatmaps, source attribution, and conversion tracking.</p>
-          </div>
+      <!-- FAQ: same array as the FAQPage JSON-LD (backend/src/content/landing.js) -->
+      <div class="faq-grid">
+        <% faq.forEach(function (f) { %>
+        <details class="faq-item">
+          <summary class="faq-q"><%= f.q %></summary>
+          <div class="faq-a"><p><%= f.a %></p></div>
         </details>
-
-        <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
-          <summary class="faq-q" itemprop="name">Do I have to move my video to VidaPulse?</summary>
-          <div class="faq-a" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-            <p itemprop="text">No. VidaPulse isn't a video host. It reads the video you already have — YouTube, S3, Google Drive, or your own player — so there's no re-uploading, no re-embedding, and no risk to a funnel that already works.</p>
-          </div>
-        </details>
-
-        <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
-          <summary class="faq-q" itemprop="name">How does it track without hosting my video?</summary>
-          <div class="faq-a" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-            <p itemprop="text">You paste one lightweight script onto the page your video already sits on. It wraps your existing video, starts a viewer session, and streams play, drop-off, and re-watch events to VidaPulse in real time. The video never leaves where it lives.</p>
-          </div>
-        </details>
-
-        <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
-          <summary class="faq-q" itemprop="name">Do I need to install anything?</summary>
-          <div class="faq-a" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-            <p itemprop="text">No. It's one script tag on the page your video already sits on. It works on custom sites, ClickFunnels, GoHighLevel, WordPress, Webflow, and plain HTML.</p>
-          </div>
-        </details>
-
-        <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
-          <summary class="faq-q" itemprop="name">How is VidaPulse different from Wistia, Vidyard, or Vidalytics?</summary>
-          <div class="faq-a" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-            <p itemprop="text">Those are video hosts: their analytics require moving your video onto their player, and they bill by storage, bandwidth, or per seat. VidaPulse sits on top of your existing video and shows where buyers drop off — one flat price per account.</p>
-          </div>
-        </details>
-
-        <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
-          <summary class="faq-q" itemprop="name">Is my viewers' data private?</summary>
-          <div class="faq-a" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-            <p itemprop="text">Yes. All analytics data lives in your account, is never sold or shared, and the tracker identifies viewers by an anonymous ID — no personally identifiable information and no third-party cookies.</p>
-          </div>
-        </details>
-
-        <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
-          <summary class="faq-q" itemprop="name">Who is VidaPulse for?</summary>
-          <div class="faq-a" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-            <p itemprop="text">B2B SaaS teams, lead-gen and performance agencies, and high-ticket service firms running paid or owned traffic to a VSL, demo, or application video — anyone whose pipeline depends on a video converting.</p>
-          </div>
-        </details>
-
+        <% }) %>
       </div>
     </div>
   </section>
@@ -886,7 +703,7 @@
       <div class="footer-top">
         <div class="footer-brand">
           <div class="footer-logo">&#9654; VidaPulse</div>
-          <p>Decision intelligence for sales videos — not social-media view counts. Read the video you already have, and see the exact second buyers drop off.</p>
+          <p>Decision intelligence for sales videos, not social-media view counts. Read the video you already have, and see the exact second buyers drop off.</p>
         </div>
         <div class="footer-links">
           <div class="footer-col">
@@ -911,7 +728,14 @@
               <li><a href="/privacy-policy">Privacy Policy</a></li>
               <li><a href="/terms-of-use">Terms of Use</a></li>
               <li><a href="/refund-policy">Refund &amp; Cancellation</a></li>
-              <li><a href="/shipping-policy">Shipping Policy</a></li>
+            </ul>
+          </div>
+          <div class="footer-col">
+            <h4>Learn</h4>
+            <ul>
+              <li><a href="<%= kbBase %>/video-analytics-guide">Video analytics guide</a></li>
+              <li><a href="<%= kbBase %>/video-analytics-guide/vsl-optimization">VSL optimization</a></li>
+              <li><a href="<%= kbBase %>/video-analytics-guide/comparisons">Tool comparisons</a></li>
             </ul>
           </div>
           <div class="footer-col">
@@ -978,12 +802,14 @@
     </div>
   </div>
 
-  <!-- All landing behaviour (heatstrip, founding counter, signup + Google, page-view beacon) -->
-  <!-- lives in one external file — keeps the page free of inline scripts (CSP-clean). -->
+  <!-- Home page behaviour (heatstrip, signup + Google) and prices / billing toggle. -->
+  <!-- External files keep the page free of inline scripts (CSP-clean). -->
+  <script src="/assets/prices.js?v=<%= assetVersion %>" defer></script>
   <script src="/assets/landing.js?v=<%= assetVersion %>" defer></script>
 
-  <!-- Content-engine lead tracker — attributes DM-link visitors (?lc=) to their form submit -->
-  <script src="https://content-engine-production-230f.up.railway.app/api/v1/t/lead.js" async></script>
+  <!-- Shared end-of-body snippets (page-view beacon, content-engine lead tracker): -->
+  <!-- backend/src/content/siteChrome.js -->
+  <%- chrome.bodyEnd({ apiOrigin: apiOrigin, assetVersion: assetVersion }) %>
 
 </body>
 </html>

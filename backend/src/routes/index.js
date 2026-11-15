@@ -262,6 +262,9 @@ router.get('/wake', async (req, res) => {
 // image request here on load with path/referrer/utm/device. Cross-origin
 // safe (image GET, no CORS). Logs to page_views; flags bots via UA.
 router.get('/pageview', (req, res) => {
+  // The beacon is an <img> on other origins (the static site on Cloudflare
+  // Pages); let it load cross-origin instead of being blocked by helmet's CORP.
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
   res.status(204).end(); // respond instantly — it's a fire-and-forget beacon
   try {
     const db     = require('../config/database').pool;

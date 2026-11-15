@@ -342,4 +342,41 @@ function sitemapEntries() {
 `).join('');
 }
 
-module.exports = { COMPARISONS, BY_SLUG, sitemapEntries, displayDate };
+/**
+ * JSON-LD for one comparison page (WebPage + BreadcrumbList + FAQPage), as a
+ * string that is safe inside <script>. Shared by the Railway render
+ * (backend/src/index.js) and the static export (scripts/export-static.js).
+ */
+function jsonLdFor(c) {
+  const url = `https://vidapulse.io/${c.slug}`;
+  return JSON.stringify({
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'WebPage',
+        '@id': url,
+        url,
+        name: c.title,
+        description: c.description,
+        dateModified: c.updatedOn,
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'VidaPulse', item: 'https://vidapulse.io/' },
+          { '@type': 'ListItem', position: 2, name: 'Compare', item: 'https://vidapulse.io/#compare' },
+          { '@type': 'ListItem', position: 3, name: `VidaPulse vs ${c.name}`, item: url },
+        ],
+      },
+      {
+        '@type': 'FAQPage',
+        mainEntity: c.faqs.map((f) => ({
+          '@type': 'Question', name: f.q,
+          acceptedAnswer: { '@type': 'Answer', text: f.a },
+        })),
+      },
+    ],
+  }).replace(/</g, '\\u003c');
+}
+
+module.exports = { COMPARISONS, BY_SLUG, sitemapEntries, displayDate, jsonLdFor };

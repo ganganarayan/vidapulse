@@ -11,7 +11,9 @@
  * Razorpay plan from these numbers (see razorpayService.getOrCreatePlan).
  */
 
-const geoip = require('geoip-lite');
+// geoip-lite is required lazily (inside countryForReq) so this module can be
+// loaded without it, e.g. by scripts/export-static.js on Cloudflare Pages,
+// which installs only ejs.
 
 const MONTHLY = {
   USD: { starter: 29,   pro: 79,   scale: 199,  pro_founding: 59   },
@@ -36,7 +38,7 @@ function countryForReq(req) {
   if (cfCountry && /^[A-Z]{2}$/i.test(cfCountry) && cfCountry !== 'XX') return cfCountry.toUpperCase();
   const ip = clientIp(req);
   if (!ip) return null;
-  try { return geoip.lookup(ip.replace(/^::ffff:/i, ''))?.country || null; }
+  try { return require('geoip-lite').lookup(ip.replace(/^::ffff:/i, ''))?.country || null; }
   catch { return null; }
 }
 

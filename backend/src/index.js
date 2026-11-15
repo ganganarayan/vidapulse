@@ -74,7 +74,11 @@ function buildAllowedOrigins() {
   }
 }
 
-const allowedOrigins = env.NODE_ENV === 'production' ? buildAllowedOrigins() : '*';
+// The static marketing site on Cloudflare Pages (project vidapulse-site) calls
+// the app API for the signup form; its *.pages.dev preview hosts are allowed
+// too so a preview build can be tested end to end against staging.
+const PAGES_ORIGIN = /^https:\/\/([a-z0-9-]+\.)?vidapulse-site\.pages\.dev$/;
+const allowedOrigins = env.NODE_ENV === 'production' ? [...buildAllowedOrigins(), PAGES_ORIGIN] : '*';
 
 app.use(cors({
   origin     : allowedOrigins,
@@ -190,7 +194,7 @@ if (env.NODE_ENV === 'production') {
   // (backend/views/landing.ejs) with all behaviour in external JS files under
   // landing/assets/. This replaces the old static landing/index.html so the
   // page carries no inline scripts (structurally CSP-clean) and can inject
-  // live server data (the founding-members count) at render time.
+  // live server data (prices in the visitor's currency) at render time.
   app.set('view engine', 'ejs');
   app.set('views', path.join(__dirname, '../views'));
   // Build landing domains from APP_URL (e.g. vidapulse.io + www.vidapulse.io)
@@ -223,9 +227,10 @@ if (env.NODE_ENV === 'production') {
     .forEach((h) => landingDomains.add(h));
 
   // ── Landing-page CSP override ──────────────────────────────────────────────
-  // The marketing landing (landingDomains) relies on inline <script> blocks —
-  // the signup modal, the founding-members counter, and the page-view beacon —
-  // plus a cross-origin beacon image to the app API. helmet's default production
+  // The marketing pages (landingDomains) load the signup modal, the page-view
+  // beacon, Clarity and the lead tracker, plus a beacon image to the app API.
+  // The policy itself lives in config/landingCsp.js (shared with the static
+  // Cloudflare build). helmet's default production
   // CSP (script-src 'self'; img-src 'self' data:) SILENTLY blocks all of that,
   // so none of the landing's JS runs (modal dead, counter stuck on the static
   // fallback, beacon dropped). Give landing hosts a landing-appropriate CSP that
@@ -233,22 +238,7 @@ if (env.NODE_ENV === 'production') {
   // CSP untouched. (A marketing page reflects no user input, so 'unsafe-inline'
   // here is a low risk; moving the scripts to an external file would let us drop
   // it later.)
-  const LANDING_CSP = [
-    "default-src 'self'",
-    // 'unsafe-inline' for the landing's own inline scripts; clarity.ms for the
-    // Microsoft Clarity tag; content-engine for the DM-link lead tracker (lead.js).
-    "script-src 'self' 'unsafe-inline' https://www.clarity.ms https://*.clarity.ms https://content-engine-production-230f.up.railway.app",
-    "style-src 'self' 'unsafe-inline' https:",
-    "img-src 'self' data: https:",
-    "font-src 'self' https: data:",
-    // https: covers the page-view beacon to the app API + Clarity's beacons.
-    "connect-src 'self' https:",
-    "form-action 'self'",
-    "base-uri 'self'",
-    "frame-ancestors 'self'",
-    "object-src 'none'",
-    "upgrade-insecure-requests",
-  ].join(';');
+  const { LANDING_CSP } = require('./config/landingCsp');
   app.use((req, res, next) => {
     if (landingDomains.has(req.hostname)) {
       res.setHeader('Content-Security-Policy', LANDING_CSP);
@@ -277,7 +267,14 @@ if (env.NODE_ENV === 'production') {
   const prodAppHost  = `app.${_appHost}`;            // e.g. app.vidapulse.io
   const KB_HUB       = '/video-analytics-guide';
   const KB_ALIASES   = new Set(['/questions', '/learn']);
-  const sitemapUrl   = `${env.APP_URL.replace(/\/+$/, '')}/sitemap.xml`;
+  // Once the marketing site (home, comparisons, guide) is served elsewhere
+  // (Cloudflare Pages on vidapulse.io), set MARKETING_ORIGIN on this service
+  // and the app host 301s every public marketing path to the same path there.
+  // Unset = today's behaviour (the app host serves the guide itself).
+  const marketingOrigin = env.MARKETING_ORIGIN;
+  const sitemapUrl   = marketingOrigin
+    ? `${marketingOrigin}/sitemap.xml`
+    : `${env.APP_URL.replace(/\/+$/, '')}/sitemap.xml`;
 
   function kbRobotsTxt(indexable) {
     if (!indexable) return 'User-agent: *\nDisallow: /\n';
@@ -308,6 +305,18 @@ if (env.NODE_ENV === 'production') {
     if (p === '/robots.txt') {
       return res.type('text/plain').send(kbRobotsTxt(indexable));
     }
+    // Marketing moved off this host: 301 public pages to MARKETING_ORIGIN, same
+    // path + query. App, auth, API, /embed, /cta.js and /tracker.js are never
+    // matched here, so customer embeds keep working untouched.
+    if (marketingOrigin) {
+      const qs = req.originalUrl.slice(req.path.length);   // '' or '?...'
+      if (KB_ALIASES.has(p)) return res.redirect(301, `${marketingOrigin}${KB_HUB}`);
+      if (p === '/sitemap.xml' || p === KB_HUB || p.startsWith(KB_HUB + '/') || p.startsWith('/kb-assets/')
+          || p === '/llms.txt' || require('./content/comparisons').BY_SLUG.has(p.slice(1).toLowerCase())) {
+        return res.redirect(301, `${marketingOrigin}${p}${qs}`);
+      }
+    }
+
     // Alternate hub URLs 301 → the canonical guide hub.
     if (KB_ALIASES.has(p)) return res.redirect(301, KB_HUB);
 
@@ -384,6 +393,25 @@ if (env.NODE_ENV === 'production') {
     next();
   });
 
+  // Locals shared by landing.ejs and comparison.ejs. The static export
+  // (scripts/export-static.js) passes the same set, with currencyAuto on,
+  // apiOrigin = the app URL and kbBase = '' (guide on the same host).
+  function marketingLocals(req) {
+    const pricing = require('./services/pricing');
+    const landing = require('./content/landing');
+    const all     = landing.allPrices();
+    return {
+      prices      : pricing.table(pricing.currencyForReq(req)),
+      priceAttrs  : (key) => landing.priceAttrs(all, key),
+      currencyAuto: false,
+      apiOrigin   : '',
+      kbBase      : marketingOrigin || `https://${prodAppHost}`,
+      chrome      : require('./content/siteChrome'),
+      // Changes every deploy, so browsers fetch new asset files instead of cached ones.
+      assetVersion: encodeURIComponent(require('./config/serverInfo').startedAt),
+    };
+  }
+
   // Catch-all: serve the correct index.html based on the domain.
   // For React Router — any unmatched path on the app subdomain serves
   // index.html so client-side routing works (e.g. /login, /dashboard/videos).
@@ -395,64 +423,26 @@ if (env.NODE_ENV === 'production') {
       const cmpSlug = req.path.replace(/^\/+|\/+$/g, '').toLowerCase();
       const c = cmp.BY_SLUG.get(cmpSlug);
       if (c) {
-        const pricing = require('./services/pricing');
-        const prices  = pricing.table(pricing.currencyForReq(req));
-        const url = `https://vidapulse.io/${c.slug}`;
-        const jsonLd = JSON.stringify({
-          '@context': 'https://schema.org',
-          '@graph': [
-            {
-              '@type': 'WebPage',
-              '@id': url,
-              url,
-              name: c.title,
-              description: c.description,
-              dateModified: c.updatedOn,
-            },
-            {
-              '@type': 'BreadcrumbList',
-              itemListElement: [
-                { '@type': 'ListItem', position: 1, name: 'VidaPulse', item: 'https://vidapulse.io/' },
-                { '@type': 'ListItem', position: 2, name: 'Compare', item: 'https://vidapulse.io/#compare' },
-                { '@type': 'ListItem', position: 3, name: `VidaPulse vs ${c.name}`, item: url },
-              ],
-            },
-            {
-              '@type': 'FAQPage',
-              mainEntity: c.faqs.map((f) => ({
-                '@type': 'Question', name: f.q,
-                acceptedAnswer: { '@type': 'Answer', text: f.a },
-              })),
-            },
-          ],
-        }).replace(/</g, '\\u003c');
         res.setHeader('Cache-Control', 'private, no-cache');
         return res.render('comparison', {
+          ...marketingLocals(req),
           c,
           others: cmp.COMPARISONS.filter((o) => o.slug !== c.slug),
-          prices,
-          jsonLd,
-          assetVersion: encodeURIComponent(require('./config/serverInfo').startedAt),
+          jsonLd: cmp.jsonLdFor(c),
         });
       }
 
-      // Server-render the landing view with the live founding-members count
-      // injected (falls back to an empty cohort if the lookup fails).
-      let f = { taken: 0, limit: 100, price_usd: 59, closed: false };
-      try { f = await require('./services/foundingService').getStatus(); } catch (e) { /* fall back */ }
-      // Prices in the visitor's currency: INR in India (by IP), USD elsewhere.
-      const pricing = require('./services/pricing');
-      const prices  = pricing.table(pricing.currencyForReq(req));
+      // Server-render the home page. Prices in the visitor's currency: INR in
+      // India (by IP), USD elsewhere. SEO, FAQ and JSON-LD: content/landing.js.
+      const landing = require('./content/landing');
       res.setHeader('Cache-Control', 'private, no-cache');
       return res.render('landing', {
-        foundingTaken : f.taken,
-        foundingLimit : f.limit,
-        foundingPrice : prices.plans.pro_founding.monthly.label,
-        foundingClosed: f.closed,
-        prices,
-        comparisons   : require('./content/comparisons').COMPARISONS,
-        // Changes every deploy, so browsers fetch the new landing.js instead of a cached one.
-        assetVersion  : encodeURIComponent(require('./config/serverInfo').startedAt),
+        ...marketingLocals(req),
+        seo        : landing.SEO,
+        definition : landing.DEFINITION,
+        faq        : landing.FAQ,
+        jsonLd     : landing.jsonLd(),
+        comparisons: cmp.COMPARISONS,
       });
     } else {
       // No-cache so users always get the freshest entry point after a deploy

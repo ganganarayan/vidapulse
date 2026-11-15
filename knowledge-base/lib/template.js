@@ -9,6 +9,8 @@
  */
 
 const site = require('../data/site');
+// Shared head / end-of-body snippets for every public page (analytics etc.).
+const chrome = require('../../backend/src/content/siteChrome');
 
 // ── Small utilities ───────────────────────────────────────────────
 
@@ -168,7 +170,8 @@ function renderHead({ title, description, canonicalPath, graph }) {
   <meta name="twitter:title" content="${escapeHtml(title)}" />
   <meta name="twitter:description" content="${escapeHtml(description)}" />
   <meta name="twitter:image" content="${escapeHtml(site.ogImage)}" />
-  <link rel="stylesheet" href="/kb-assets/kb.css" />${ld}`;
+  <link rel="stylesheet" href="/kb-assets/kb.css" />${ld}
+  ${chrome.head()}`;
 }
 
 // ── Header / footer ───────────────────────────────────────────────
@@ -191,7 +194,7 @@ function renderFooter() {
       <div class="kb-footer-links">
         ${links}
       </div>
-      <div class="kb-footer-tag">${escapeHtml(site.brand)} — ${escapeHtml(site.tagline)} · video analytics on any video, no re-hosting.</div>
+      <div class="kb-footer-tag">${escapeHtml(site.brand)}: ${escapeHtml(site.tagline)} · video analytics on any video, no re-hosting.</div>
     </div>
   </footer>`;
 }
@@ -233,9 +236,6 @@ function renderPager(prev, next) {
 
 // ── Full document ─────────────────────────────────────────────────
 
-// VidaPulse page-view beacon — fires an image request to /api/pageview on
-// load with path/referrer/utm/device so human vs bot traffic is tracked.
-const PAGEVIEW_BEACON = `<script>(function(){try{var q=new URLSearchParams(location.search),p=new URLSearchParams();p.set('path',location.pathname);p.set('host',location.hostname);if(document.referrer)p.set('ref',document.referrer);['utm_source','utm_medium','utm_campaign','utm_term','utm_content'].forEach(function(k){var v=q.get(k);if(v)p.set(k,v);});p.set('dt',innerWidth<768?'mobile':innerWidth<1024?'tablet':'desktop');new Image().src='https://app.vidapulse.io/api/pageview?'+p.toString()+'&t='+Date.now();}catch(e){}})();</script>`;
 
 function renderPage({ title, description, canonicalPath, graph, body, bodyScript, bodyClass, pager }) {
   const script = bodyScript ? `\n  ${bodyScript}` : '';
@@ -254,7 +254,7 @@ ${body}
     </div>
   </main>${pagerHtml}
   ${renderFooter()}${script}
-  ${PAGEVIEW_BEACON}
+  ${chrome.bodyEnd({ apiOrigin: site.apiOrigin, assetVersion: process.env.VP_ASSET_VERSION || '' })}
 </body>
 </html>
 `;

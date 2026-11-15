@@ -43,3 +43,6 @@ ehthumbs.db
 # ── Coverage ──────────────────────────────────
 coverage/
 .nyc_output/
+
+# Static marketing export (built by Cloudflare Pages)
+dist-static/

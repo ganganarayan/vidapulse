@@ -8,13 +8,16 @@
  * generator (../generate.js) needs that is NOT category- or question-
  * specific lives here.
  *
- * IMPORTANT: `originUrl` is ALWAYS the production origin, even when the
- * generated HTML is served on staging (orbitq). Canonical / OG / sitemap
- * URLs must always point at production so that, if staging is ever
- * crawled, search engines consolidate on the real pages.
+ * IMPORTANT: `originUrl` is ALWAYS the production marketing origin
+ * (https://vidapulse.io), even when the generated HTML is served on a preview
+ * host. Canonical / OG / sitemap URLs must always point there so search
+ * engines consolidate on one host. The guide is published on vidapulse.io by
+ * scripts/export-static.js (Cloudflare Pages); the app host only redirects.
+ * Sign-up and log-in links go to the app (APP below).
  */
 
-const ORIGIN = 'https://app.vidapulse.io';
+const ORIGIN = 'https://vidapulse.io';
+const APP    = 'https://app.vidapulse.io';
 
 module.exports = {
   brand: 'VidaPulse',
@@ -29,9 +32,13 @@ module.exports = {
   // Bare paths that 301-redirect to the hub (handled in backend/src/index.js).
   hubAliases: ['/questions', '/learn'],
 
-  // Where the "Start free" call-to-action sends a reader.
-  ctaUrl: `${ORIGIN}/register`,
-  loginUrl: `${ORIGIN}/login`,
+  // Where the "Start free" call-to-action sends a reader (the app).
+  ctaUrl: `${APP}/register`,
+  loginUrl: `${APP}/login`,
+
+  // Origin the page-view beacon reports to. The static export overrides it
+  // per build (staging API for preview builds) via VP_API_ORIGIN.
+  apiOrigin: process.env.VP_API_ORIGIN || APP,
 
   // Default social-share image (re-uses the landing OG image).
   ogImage: 'https://vidapulse.io/og-image.png',
@@ -54,7 +61,7 @@ module.exports = {
   footerLinks: [
     { label: 'VidaPulse home', href: 'https://vidapulse.io/' },
     { label: 'Pricing',        href: 'https://vidapulse.io/#pricing' },
-    { label: 'Start free',     href: `${ORIGIN}/register` },
-    { label: 'Log in',         href: `${ORIGIN}/login` },
+    { label: 'Start free',     href: `${APP}/register` },
+    { label: 'Log in',         href: `${APP}/login` },
   ],
 };

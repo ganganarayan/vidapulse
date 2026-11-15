@@ -6,8 +6,12 @@
  * Run:  node knowledge-base/generate.js
  *
  * Reads data/{site,categories,questions}.js, writes fully static,
- * AI-crawlable HTML into knowledge-base/public/. That directory is
- * committed and served by Express on the app domain (see backend/src/index.js).
+ * AI-crawlable HTML into knowledge-base/public/ (the copy Express serves on
+ * the app domain until the marketing cutover, see backend/src/index.js).
+ *
+ * The same pages are published on vidapulse.io by scripts/export-static.js,
+ * which calls run({ outDir, clean: false, sitemap: false }) and builds one
+ * combined sitemap from kbSitemapUrls().
  *
  * Phase 1 emits: the hub, the 7 category pages, kb.css, sitemap.xml and a
  * client-side search index. Articles (status:'published') are emitted in
@@ -23,7 +27,7 @@ const questions  = require('./data/questions');
 const T          = require('./lib/template');
 const D          = require('./lib/diagrams');
 
-const PUBLIC = path.join(__dirname, 'public');
+let PUBLIC = path.join(__dirname, 'public');   // output dir; run() can override
 const HUB    = site.hubPath; // /video-analytics-guide
 const ARTICLES_DIR = path.join(__dirname, 'data', 'articles');
 const PUBLISH_DATE = '2026-06-22';
@@ -419,33 +423,27 @@ function buildSearch() {
 
 // ── sitemap.xml (live pages only) ─────────────────────────────────
 
-function buildSitemap() {
-  const lastmod = new Date().toISOString().slice(0, 10);
-
-  // Marketing / landing pages live on the apex host (vidapulse.io), which is
-  // served OFF-Railway and has no sitemap of its own. We list them here so a
-  // single submitted sitemap (app.vidapulse.io/sitemap.xml) covers the whole
-  // site — valid because Search Console is a DOMAIN property
-  // (sc-domain:vidapulse.io) that spans every subdomain. `abs:true` = use the
-  // loc verbatim (apex host) instead of prefixing the app origin. Fragment
-  // anchors (#pricing, #faq …) are intentionally omitted — Google collapses
-  // them onto the base page. `mod` = the pages' last real edit (not today's
-  // generation date, since this generator doesn't touch them).
-  const marketing = [
-    { loc: 'https://vidapulse.io/',               pri: '1.0', freq: 'weekly', mod: '2026-05-24', abs: true },
-    { loc: 'https://vidapulse.io/privacy-policy', pri: '0.3', freq: 'yearly', mod: '2026-05-24', abs: true },
-    { loc: 'https://vidapulse.io/terms-of-use',   pri: '0.3', freq: 'yearly', mod: '2026-05-24', abs: true },
-    { loc: 'https://vidapulse.io/refund-policy',  pri: '0.2', freq: 'yearly', mod: '2026-05-24', abs: true },
-  ];
-
-  const urls = [...marketing, { loc: HUB, pri: '1.0', freq: 'weekly' }];
+// Guide URLs for a sitemap: hub, categories, published articles. Absolute
+// (site.originUrl). lastmod = PUBLISH_DATE, the same date the pages' JSON-LD
+// dateModified carries, so it does not churn on every build.
+function kbSitemapUrls() {
+  const urls = [{ loc: HUB, pri: '1.0', freq: 'weekly' }];
   categories.forEach((c) => urls.push({ loc: `${HUB}/${c.slug}`, pri: '0.8', freq: 'weekly' }));
   resolved.filter((r) => r.status === 'published')
     .forEach((r) => urls.push({ loc: r.path, pri: '0.7', freq: 'monthly' }));
+  return urls.map((u) => ({ ...u, loc: T.absUrl(u.loc), mod: PUBLISH_DATE }));
+}
 
+function buildSitemap() {
+  // Marketing pages first (home), then the guide. Policy pages are not listed:
+  // they do not exist yet (see the cutover report).
+  const urls = [
+    { loc: 'https://vidapulse.io/', pri: '1.0', freq: 'weekly', mod: '2026-11-15' },
+    ...kbSitemapUrls(),
+  ];
   const body = urls.map((u) => `  <url>
-    <loc>${u.abs ? u.loc : T.absUrl(u.loc)}</loc>
-    <lastmod>${u.mod || lastmod}</lastmod>
+    <loc>${u.loc}</loc>
+    <lastmod>${u.mod}</lastmod>
     <changefreq>${u.freq}</changefreq>
     <priority>${u.pri}</priority>
   </url>`).join('\n');
@@ -459,8 +457,9 @@ ${body}
 
 // ── Run ───────────────────────────────────────────────────────────
 
-function run() {
-  fs.rmSync(PUBLIC, { recursive: true, force: true });
+function run({ outDir = PUBLIC, clean = true, sitemap = true } = {}) {
+  PUBLIC = outDir;
+  if (clean) fs.rmSync(PUBLIC, { recursive: true, force: true });
   fs.mkdirSync(PUBLIC, { recursive: true });
 
   write('kb-assets/kb.css', T.buildCss());
@@ -468,12 +467,15 @@ function run() {
   categories.forEach(buildCategory);
   publishedOrdered.forEach(buildArticle);
   buildSearch();
-  buildSitemap();
+  if (sitemap) buildSitemap();
 
   const published = resolved.filter((r) => r.status === 'published').length;
   console.log(`[kb] generated: hub + ${categories.length} categories + ${published} articles`);
   console.log(`[kb] roadmap: ${resolved.length} questions mapped (${resolved.length - published} planned)`);
-  console.log(`[kb] output: knowledge-base/public/`);
+  console.log(`[kb] output: ${path.relative(process.cwd(), PUBLIC) || PUBLIC}`);
+  return { categories: categories.length, articles: published };
 }
 
-run();
+module.exports = { run, kbSitemapUrls };
+
+if (require.main === module) run();

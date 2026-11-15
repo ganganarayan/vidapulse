@@ -44,6 +44,12 @@ module.exports = {
   // e.g. LANDING_HOSTS="vidapulse-staging.up.railway.app,preview.vidapulse.io"
   LANDING_HOSTS: process.env.LANDING_HOSTS || '',
 
+  // Where the public marketing site (home, comparisons, video-analytics-guide)
+  // is served once it has moved off Railway, e.g. "https://vidapulse.io"
+  // (Cloudflare Pages). When set, the app host 301s those public paths there.
+  // Unset (default) = the app host keeps serving the guide itself.
+  MARKETING_ORIGIN: (process.env.MARKETING_ORIGIN || '').trim().replace(/\/+$/, '') || null,
+
   // Database
   DATABASE_URL: process.env.DATABASE_URL,
 
