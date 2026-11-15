@@ -22,6 +22,7 @@ const { fetchDuration }          = require('../services/durationService');
 const { DEFAULT_EVENT_MAPPING }  = require('../tracking/trackingService');
 const { normalizeMetaEvents }    = require('../tracking/metaEvents');
 const trackingRegistry           = require('../events/registry');
+const videoAnalytics             = require('../services/videoAnalytics');
 
 // ─────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -296,100 +297,114 @@ router.post('/', requireAuth, videoLimitGate, async (req, res, next) => {
       });
     }
 
-    const { url, title } = parseResult.data;
-    const sourceType     = detectSourceType(url);
-    const videoTitle     = (title?.trim()) || generateDefaultTitle(url);
-
-    // Sources that need no server-side processing — mark as completed
-    // immediately so the frontend skips the animation and shows the dashboard.
-    const isIframe   = IFRAME_SOURCES.has(sourceType);
-    const isDirect   = DIRECT_SOURCES.has(sourceType);
-    const isResolve  = RESOLVE_SOURCES.has(sourceType);
-
-    let processingStatus = 'pending';
-    let processingError  = null;
-    let playableUrl      = null;
-    let usingIframe      = isIframe;
-
-    if (isIframe || isDirect) {
-      processingStatus = 'completed';
-      playableUrl      = url;
-    } else if (isResolve) {
-      const resolved = sourceType === 'veed'
-        ? await resolveVeedUrl(url)
-        : resolveMegaUrl(url);
-
-      playableUrl      = resolved.playableUrl;
-      processingStatus = resolved.notPublic ? 'failed' : 'completed';
-      processingError  = resolved.notPublic ? 'not_public' : null;
-      usingIframe      = !resolved.notPublic;
-    }
-
-    // ── Fetch duration (non-blocking, best-effort) ────────────────────────
-    // Run before the INSERT so the value is available immediately in the
-    // response. Times out at 6 s and returns null — never blocks on failure.
-    const durationSeconds = await fetchDuration(url, sourceType);
-    if (durationSeconds) {
-      logger.info(`[videos] Fetched duration ${durationSeconds}s for ${sourceType} (${url})`);
-    }
-
-    // ── Insert video ──────────────────────────────────────────────────────
-    const { rows: [video] } = await pool.query(
-      `INSERT INTO videos
-         (user_id, title, original_url, source_type,
-          processing_status, processing_error, using_iframe_fallback, playable_url,
-          duration_seconds,
-          insight_status, story_status)
-       VALUES
-         ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', 'pending')
-       RETURNING
-         id, title, original_url, source_type, playable_url, thumbnail_url,
-         duration_seconds,
-         total_plays, unique_viewers, avg_watch_pct,
-         processing_status, processing_error, using_iframe_fallback,
-         insight_status, story_status,
-         created_at`,
-      [req.user.id, videoTitle, url, sourceType, processingStatus, processingError,
-       usingIframe, playableUrl, durationSeconds ?? null]
-    );
-
-    logger.info(`[videos] Created video ${video.id} (${sourceType}) for user ${req.user.id}`);
-
-    // ── Queue processing job (non-blocking) ───────────────────────────────
-    // A future background worker will resolve the playable URL + metadata.
-    pool.query(
-      `INSERT INTO video_processing_jobs (video_id, job_type, status)
-       VALUES ($1, 'initial_resolve', 'pending')`,
-      [video.id]
-    ).catch(err =>
-      logger.error(`[videos] Failed to queue processing job for ${video.id}: ${err.message}`)
-    );
-
-    // ── Stamp first_video_id on the user (non-blocking) ───────────────────
-    pool.query(
-      `UPDATE users
-       SET first_video_id = $1, updated_at = NOW()
-       WHERE id = $2 AND first_video_id IS NULL`,
-      [video.id, req.user.id]
-    ).then(({ rowCount }) => {
-      if (rowCount > 0) {
-        // This IS the user's first video — emit the behavioral event
-        emitEvent(req.user.id, 'first_video_added', video.id, {
-          video_id   : video.id,
-          video_url  : url,
-          source_type: sourceType,
-          title      : videoTitle,
-        });
-      }
-    }).catch(err =>
-      logger.error(`[videos] first_video_id stamp failed for user ${req.user.id}: ${err.message}`)
-    );
-
+    const video = await createVideoForUser(req.user.id, parseResult.data);
     return res.status(201).json({ video });
   } catch (err) {
     next(err);
   }
 });
+
+/**
+ * Create a video for a user: source detection, URL resolution, duration,
+ * insert, processing job, first-video stamp + event. Input must already have
+ * passed createVideoSchema and the plan's video limit. Shared by
+ * POST /api/videos and the internal MCP add_video tool.
+ *
+ * @param {string} userId
+ * @param {{url:string, title?:string}} data
+ * @returns {Promise<object>} the inserted video row
+ */
+async function createVideoForUser(userId, { url, title }) {
+  const sourceType     = detectSourceType(url);
+  const videoTitle     = (title?.trim()) || generateDefaultTitle(url);
+
+  // Sources that need no server-side processing: mark as completed
+  // immediately so the frontend skips the animation and shows the dashboard.
+  const isIframe   = IFRAME_SOURCES.has(sourceType);
+  const isDirect   = DIRECT_SOURCES.has(sourceType);
+  const isResolve  = RESOLVE_SOURCES.has(sourceType);
+
+  let processingStatus = 'pending';
+  let processingError  = null;
+  let playableUrl      = null;
+  let usingIframe      = isIframe;
+
+  if (isIframe || isDirect) {
+    processingStatus = 'completed';
+    playableUrl      = url;
+  } else if (isResolve) {
+    const resolved = sourceType === 'veed'
+      ? await resolveVeedUrl(url)
+      : resolveMegaUrl(url);
+
+    playableUrl      = resolved.playableUrl;
+    processingStatus = resolved.notPublic ? 'failed' : 'completed';
+    processingError  = resolved.notPublic ? 'not_public' : null;
+    usingIframe      = !resolved.notPublic;
+  }
+
+  // ── Fetch duration (non-blocking, best-effort) ────────────────────────
+  // Run before the INSERT so the value is available immediately in the
+  // response. Times out at 6 s and returns null: never blocks on failure.
+  const durationSeconds = await fetchDuration(url, sourceType);
+  if (durationSeconds) {
+    logger.info(`[videos] Fetched duration ${durationSeconds}s for ${sourceType} (${url})`);
+  }
+
+  // ── Insert video ──────────────────────────────────────────────────────
+  const { rows: [video] } = await pool.query(
+    `INSERT INTO videos
+       (user_id, title, original_url, source_type,
+        processing_status, processing_error, using_iframe_fallback, playable_url,
+        duration_seconds,
+        insight_status, story_status)
+     VALUES
+       ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', 'pending')
+     RETURNING
+       id, title, original_url, source_type, playable_url, thumbnail_url,
+       duration_seconds,
+       total_plays, unique_viewers, avg_watch_pct,
+       processing_status, processing_error, using_iframe_fallback,
+       insight_status, story_status,
+       created_at`,
+    [userId, videoTitle, url, sourceType, processingStatus, processingError,
+     usingIframe, playableUrl, durationSeconds ?? null]
+  );
+
+  logger.info(`[videos] Created video ${video.id} (${sourceType}) for user ${userId}`);
+
+  // ── Queue processing job (non-blocking) ───────────────────────────────
+  // A future background worker will resolve the playable URL + metadata.
+  pool.query(
+    `INSERT INTO video_processing_jobs (video_id, job_type, status)
+     VALUES ($1, 'initial_resolve', 'pending')`,
+    [video.id]
+  ).catch(err =>
+    logger.error(`[videos] Failed to queue processing job for ${video.id}: ${err.message}`)
+  );
+
+  // ── Stamp first_video_id on the user (non-blocking) ───────────────────
+  pool.query(
+    `UPDATE users
+     SET first_video_id = $1, updated_at = NOW()
+     WHERE id = $2 AND first_video_id IS NULL`,
+    [video.id, userId]
+  ).then(({ rowCount }) => {
+    if (rowCount > 0) {
+      // This IS the user's first video: emit the behavioral event
+      emitEvent(userId, 'first_video_added', video.id, {
+        video_id   : video.id,
+        video_url  : url,
+        source_type: sourceType,
+        title      : videoTitle,
+      });
+    }
+  }).catch(err =>
+    logger.error(`[videos] first_video_id stamp failed for user ${userId}: ${err.message}`)
+  );
+
+  return video;
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // POST /api/videos/:id/embed-generated
@@ -599,22 +614,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
     // Attach extra session-aggregate stats (non-fatal if sessions table is empty)
     let extraStats = { play_rate_pct: 0, completed_views: 0, total_watch_seconds_sum: 0, unique_viewers_who_played: 0 };
     try {
-      const { rows: [stats] } = await pool.query(
-        `SELECT
-           COALESCE(
-             ROUND(
-               COUNT(CASE WHEN play_count > 0 THEN 1 END)::numeric
-               / NULLIF(COUNT(*), 0) * 100, 1
-             ), 0
-           )::float                                                              AS play_rate_pct,
-           COUNT(CASE WHEN reached_end AND play_count > 0 THEN 1 END)::int      AS completed_views,
-           COALESCE(SUM(total_watch_seconds) FILTER (WHERE play_count > 0), 0)::bigint
-                                                                                AS total_watch_seconds_sum,
-           COUNT(DISTINCT viewer_id) FILTER (WHERE play_count > 0)::int         AS unique_viewers_who_played
-         FROM analytics_sessions
-         WHERE video_id = $1`,
-        [video.id]
-      );
+      const stats = await videoAnalytics.getSessionStats(pool, video.id);
       if (stats) extraStats = stats;
     } catch (err) {
       logger.warn(`[videos] extra stats query failed for ${video.id}: ${err.message}`);
@@ -622,7 +622,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
 
     // unique_viewers_who_played is a live-computed value that overrides the cached
     // videos.unique_viewers (which may lag or have been computed without the play filter).
-    const { unique_viewers_who_played, ...coreStats } = extraStats;
+    const { unique_viewers_who_played, played_sessions: _ps, ...coreStats } = extraStats;
     return res.json({ video: { ...video, ...coreStats, unique_viewers: Number(unique_viewers_who_played) || 0, is_promo: video.is_promo ?? false } });
   } catch (err) {
     next(err);
@@ -1002,14 +1002,7 @@ router.get('/:id/heatmap', requireAuth, planGate('heatmap'), async (req, res, ne
     // (max_watch_pct). This is the basis for the monotonic retention curve —
     // immune to the per-second re-count / seek-fill inflation that made the old
     // first_watches curve spike upward (a survival curve can only fall).
-    const { rows: pctRows } = await pool.query(
-      `SELECT FLOOR(LEAST(GREATEST(max_watch_pct, 0), 100))::int AS bucket,
-              COUNT(*)::int                                       AS cnt
-       FROM   analytics_sessions
-       WHERE  video_id = $1 AND play_count > 0
-       GROUP  BY 1`,
-      [req.params.id]
-    );
+    const pctRows = await videoAnalytics.getMaxPctCounts(pool, req.params.id);
 
     // If duration_seconds isn't stored yet, derive it from the highest observed
     // second bucket so the heatmap can still render for existing videos.
@@ -1024,20 +1017,7 @@ router.get('/:id/heatmap', requireAuth, planGate('heatmap'), async (req, res, ne
     // whose furthest point reached at least i% of the video — non-increasing by
     // construction, so it never rises or sawtooths.
     const totalPlayers = Number(video.total_players) || 0;
-    const counts = new Array(101).fill(0);
-    for (const r of pctRows) {
-      const b = Math.max(0, Math.min(100, Number(r.bucket) || 0));
-      counts[b] += Number(r.cnt) || 0;
-    }
-    const retention_curve = [];
-    let cum = 0;
-    for (let i = 100; i >= 0; i--) {
-      cum += counts[i];
-      retention_curve[i] = {
-        second: durationSeconds ? (i / 100) * durationSeconds : i,
-        pct   : totalPlayers > 0 ? Math.round((cum / totalPlayers) * 1000) / 10 : 0,
-      };
-    }
+    const retention_curve = videoAnalytics.buildRetentionCurve(pctRows, totalPlayers, durationSeconds);
 
     return res.json({
       heatmap,
@@ -1816,3 +1796,5 @@ router.put('/:id/tracking-settings', requireAuth, planGate('video_tracking'), as
 });
 
 module.exports = router;
+module.exports.createVideoForUser = createVideoForUser;
+module.exports.createVideoSchema  = createVideoSchema;

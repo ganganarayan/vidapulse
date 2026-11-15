@@ -159,6 +159,14 @@ app.use(crawlerLogger);
 app.use('/embed', embedRoutes);
 
 // ─────────────────────────────────────────────────────────────
+// Internal MCP endpoint: service-to-service only (X-Service-Secret =
+// GATEWAY_SERVICE_SECRET). Mounted on every host, ahead of host routing and
+// the SPA catch-all. See src/mcp/index.js.
+// ─────────────────────────────────────────────────────────────
+
+app.use('/mcp-internal', require('./mcp').createMcpRouter());
+
+// ─────────────────────────────────────────────────────────────
 // CTA id stamper — public, no auth, cached.
 // GET /cta.js → the one-line snippet site owners paste on any page so its
 // CTA tracking links carry the viewer id in the URL (see routes/ctaScript.js

@@ -58,6 +58,10 @@ module.exports = {
   JWT_SECRET     : process.env.JWT_SECRET     || null,
   JWT_EXPIRES_IN : process.env.JWT_EXPIRES_IN || '7d',
 
+  // Shared secret for the internal MCP endpoint (/mcp-internal). Sent by the
+  // gateway as X-Service-Secret. Unset = the endpoint rejects every call.
+  GATEWAY_SERVICE_SECRET: process.env.GATEWAY_SERVICE_SECRET || null,
+
   // OAuth — Google login + signup (free plan self-serve entry point)
   // Add these to Railway env vars when ready. Login page works without them
   // (falls back to email/password only) but the Google button will not appear.

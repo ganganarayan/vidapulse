@@ -153,59 +153,65 @@ function planGate(featureName) {
 // not on read requests.
 // ─────────────────────────────────────────────────────────────────────────
 
-async function videoLimitGate(req, res, next) {
-  try {
-    // admin_lifetime has no video cap
-    if (req.user.plan === 'admin_lifetime') {
-      return next();
-    }
+/**
+ * Pure video-limit check (no event, no response). Shared by videoLimitGate and
+ * the internal MCP add_video tool.
+ * @returns {Promise<null | {feature, required_plan, current_plan, current_count, video_limit}>}
+ *   null when the user may add another video.
+ */
+async function checkVideoLimit(db, user) {
+  if (user.plan === 'admin_lifetime') return null;            // no cap
+  const limit = VIDEO_LIMIT[user.plan];
+  if (limit === null || limit === undefined) return null;     // unlimited / unknown plan
 
-    const limit = VIDEO_LIMIT[req.user.plan];
+  const { rows } = await db.query(
+    `SELECT COUNT(*) AS video_count
+     FROM   videos
+     WHERE  user_id     = $1
+       AND  is_active   = TRUE
+       AND  is_archived = FALSE`,
+    [user.id]
+  );
+  const currentCount = parseInt(rows[0].video_count, 10);
+  if (currentCount < limit) return null;
 
-    // Null limit = unlimited (safety net for any future plan)
-    if (limit === null || limit === undefined) return next();
-
-    const { rows } = await pool.query(
-      `SELECT COUNT(*) AS video_count
-       FROM   videos
-       WHERE  user_id     = $1
-         AND  is_active   = TRUE
-         AND  is_archived = FALSE`,
-      [req.user.id]
-    );
-
-    const currentCount = parseInt(rows[0].video_count, 10);
-
-    // Under the limit — allow
-    if (currentCount < limit) return next();
-
-    // At or over the limit — emit event + deny
-    emitEvent(req.user.id, 'free_limit_hit', null, {
-      feature      : 'video_upload',
-      required_plan: req.user.plan === 'free' ? 'starter' : 'pro',
-      video_count  : currentCount,
-      video_limit  : limit,
-    });
-
-    logger.debug(
-      `[videoLimitGate] Denied — user ${req.user.id} (${req.user.plan}) at limit (${currentCount}/${limit})`
-    );
-
-    return res.status(403).json({
-      error        : 'plan_limit',
-      feature      : 'video_upload',
-      required_plan: req.user.plan === 'free' ? 'starter' : 'pro',
-      current_plan : req.user.plan,
-      current_count: currentCount,
-      video_limit  : limit,
-      upgrade_url  : `${env.APP_URL}/upgrade`,
-    });
-
-  } catch (err) {
-    // Never block an upload due to a gate check failure — log and pass through
-    logger.error(`[videoLimitGate] DB error for user ${req.user.id}: ${err.message}`);
-    next();
-  }
+  return {
+    feature      : 'video_upload',
+    required_plan: user.plan === 'free' ? 'starter' : 'pro',
+    current_plan : user.plan,
+    current_count: currentCount,
+    video_limit  : limit,
+  };
 }
 
-module.exports = { planGate, videoLimitGate, PLAN_RANK, FEATURE_PLAN_REQUIREMENTS };
+async function videoLimitGate(req, res, next) {
+  let denied;
+  try {
+    denied = await checkVideoLimit(pool, req.user);
+  } catch (err) {
+    // Never block an upload due to a gate check failure: log and pass through
+    logger.error(`[videoLimitGate] DB error for user ${req.user.id}: ${err.message}`);
+    return next();
+  }
+  if (!denied) return next();
+
+  // At or over the limit: emit event + deny
+  emitEvent(req.user.id, 'free_limit_hit', null, {
+    feature      : 'video_upload',
+    required_plan: denied.required_plan,
+    video_count  : denied.current_count,
+    video_limit  : denied.video_limit,
+  });
+
+  logger.debug(
+    `[videoLimitGate] Denied: user ${req.user.id} (${req.user.plan}) at limit (${denied.current_count}/${denied.video_limit})`
+  );
+
+  return res.status(403).json({
+    error      : 'plan_limit',
+    ...denied,
+    upgrade_url: `${env.APP_URL}/upgrade`,
+  });
+}
+
+module.exports = { planGate, videoLimitGate, checkVideoLimit, PLAN_RANK, FEATURE_PLAN_REQUIREMENTS, VIDEO_LIMIT };
